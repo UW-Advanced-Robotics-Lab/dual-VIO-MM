@@ -4,16 +4,17 @@ model_type: PINHOLE
 camera_name: camera
 image_width: 1280
 image_height: 720
+# calibrated with cam_imu on [5_DEMO_14_2023-02-03]
 distortion_parameters:
-    k1: 0.0
-    k2: 0.0
-    p1: 0.0
-    p2: 0.0
+    k1:  0.05846473876757286 
+    k2: -0.11619235455145874 
+    p1: -0.009113065947159856 
+    p2:  0.000422478882918157
 projection_parameters:
-    fx: 905.930419921875
-    fy: 905.91552734375
-    cx: 652.3206176757812
-    cy: 350.43377685546875
+    fx: 839.7032036365418
+    fy: 835.2855838968724
+    cx: 697.8696218758661
+    cy: 373.36166812061487
 
 ####### L515 #######
 # distortion_model: "plumb_bob"
