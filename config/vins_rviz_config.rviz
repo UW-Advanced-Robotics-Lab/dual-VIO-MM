@@ -5,6 +5,7 @@ Panels:
     Property Tree Widget:
       Expanded:
         - /Global Options1
+        - /Axes1
         - /VIOGroup1
         - /GlobalGroup1/CarModel1
       Splitter Ratio: 0.4651159942150116
@@ -64,7 +65,7 @@ Visualization Manager:
       Enabled: true
       Length: 0.5
       Name: Axes
-      Radius: 0.05000000074505806
+      Radius: 0.009999999776482582
       Reference Frame: <Fixed Frame>
       Show Trail: false
       Value: true
@@ -75,7 +76,7 @@ Visualization Manager:
           Marker Topic: /loop_fusion/pose_graph
           Name: loopLink
           Namespaces:
-            {}
+            CameraPoseVisualization: true
           Queue Size: 100
           Value: true
         - Class: rviz/MarkerArray
@@ -370,7 +371,7 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/ThirdPersonFollower
-      Distance: 22.856342315673828
+      Distance: 4.9327473640441895
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
@@ -378,23 +379,23 @@ Visualization Manager:
         Value: false
       Field of View: 0.7853981852531433
       Focal Point:
-        X: -1.0367262363433838
-        Y: -2.150775909423828
-        Z: 0.3814445734024048
+        X: -0.3647400140762329
+        Y: -0.7302563190460205
+        Z: 0.38144463300704956
       Focal Shape Fixed Size: true
       Focal Shape Size: 0.05000000074505806
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 0.30979615449905396
+      Pitch: 0.49479609727859497
       Target Frame: world
-      Yaw: 4.020633697509766
+      Yaw: 4.340639114379883
     Saved: ~
 Window Geometry:
   Displays:
     collapsed: false
   Height: 1313
-  Hide Left Dock: true
+  Hide Left Dock: false
   Hide Right Dock: true
   Image:
     collapsed: false
