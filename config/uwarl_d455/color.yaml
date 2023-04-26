@@ -1,0 +1,27 @@
+%YAML 1.0
+---
+model_type: PINHOLE
+camera_name: camera
+image_width: 1280
+image_height: 720
+distortion_parameters:
+   k1: 0.0
+   k2: 0.0
+   p1: 0.0
+   p2: 0.0
+projection_parameters:
+   fx: 643.586181640625
+   fy: 642.72314453125
+   cx: 641.830078125
+   cy: 365.755981445312
+
+#  Intrinsic of "Color" / 1280x720 / {YUYV/RGB8/BGR8/RGBA8/BGRA8/Y16}
+# Widt        1280
+# Heigh       720
+# PP          641.830078125
+# PP          365.755981445312
+# F           643.586181640625
+# F           642.72314453125
+# Distortio   Inverse Brown Conrady
+# Coeff       -0.0563112646341324 0.067516140639782 -0.000693127105478197 0.000673658214509487  -0.0216354988515377  
+# FOV (deg)   89.68 x 58.5

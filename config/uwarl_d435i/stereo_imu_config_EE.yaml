@@ -1,5 +1,5 @@
-%YAML:1.0
-
+%YAML 1.0
+---
 #common parameters
 #support: 1 imu 1 cam; 1 imu 2 cam: 2 cam; 
 imu: 1
@@ -24,18 +24,18 @@ body_T_cam0: !!opencv-matrix
     rows: 4
     cols: 4
     dt: d
-    data: [ 1, 0, 0, -0.00552000012248755,
-            0, 1, 0, 0.00510000018402934,
-            0, 0, 1, 0.011739999987185,
+    data: [ 1, 0, 0, 0,
+            0, 1, 0, 0,
+            0, 0, 1, 0,
             0., 0., 0., 1. ]
 
 body_T_cam1: !!opencv-matrix
     rows: 4
     cols: 4
     dt: d
-    data: [ 1, 0, 0, 0.0446839071810246,
-            0, 1, 0, 0.00510000018402934,
-            0, 0, 1, 0.011739999987185,
+    data: [ 1, 0, 0,  0.0502039082348347,
+            0, 1, 0,   0,
+            0, 0, 1,   0,
             0., 0., 0., 1. ]
 
 #Multiple thread support
@@ -46,7 +46,7 @@ max_cnt: 150            # max feature number in feature tracking
 min_dist: 30            # min distance between two features 
 freq: 10                # frequence (Hz) of publish tracking result. At least 10Hz for good estimation. If set 0, the frequence will be same as raw image 
 F_threshold: 1.0        # ransac threshold (pixel)
-show_track: 0           # publish tracking image as topic
+show_track: 1           # publish tracking image as topic
 flow_back: 1            # perform forward and backward optical flow to improve feature tracking accuracy
 
 #optimization parameters
