@@ -9,7 +9,7 @@ imu_topic: "/cam_base/imu"
 image0_topic: "/cam_base/color/image_raw"
 output_path: "output/"
 
-cam0_calib: "color.yaml"
+cam0_calib: "color_base_mei.yaml"
 image_width: 1280
 image_height: 720
 
@@ -22,11 +22,10 @@ body_T_cam0: !!opencv-matrix
     rows: 4
     cols: 4
     dt: d
-    data: [     0.999996    ,-0.00212717  ,0.00160005 , -0.0289779994636774  ,   
-                0.00212487  , 0.999997    ,0.00143687 , -0.00748532311990857 ,      
-               -0.00160311  ,-0.00143346  ,0.999998   , -0.0155542176216841  ,
-            0., 0., 0., 1. ]
-
+    data: [   0.99986745    ,-0.00044118 ,0.01627528    ,0.03129583,
+              0.00058522    ,0.9999607   ,-0.00884648   ,-0.00384721,
+             -0.01627074    ,0.00885484  ,0.99982841    ,0.02117902,
+              0., 0., 0., 1.] # T_ic (cam0 to imu0)
 #Multiple thread support
 multiple_thread: 1
 
@@ -44,14 +43,14 @@ max_num_iterations: 8   # max solver itrations, to guarantee real time
 keyframe_parallax: 10.0 # keyframe selection threshold (pixel)
 
 #imu parameters       The more accurate parameters you provide, the better performance
-acc_n: 0.1           # accelerometer measurement noise standard deviation. #0.2   0.04
+acc_n: 0.176           # accelerometer measurement noise standard deviation. #0.2   0.04
 acc_w: 0.008         # accelerometer bias random work noise standard deviation.  #0.002
-gyr_n: 0.02          # gyroscope measurement noise standard deviation.     #0.05  0.004
-gyr_w: 0.0002        # gyroscope bias random work noise standard deviation.     #4.0e-5
-g_norm: 9.67         # gravity magnitude
+gyr_n: 0.029          # gyroscope measurement noise standard deviation.     #0.05  0.004
+gyr_w: 0.0001655        # gyroscope bias random work noise standard deviation.     #4.0e-5
+g_norm: 9.8         # gravity magnitude
 
 #unsynchronization parameters
-estimate_td: 0.6          # online estimate time offset between camera and imu
+estimate_td: 0.00019300728985425925         # online estimate time offset between camera and imu
 td: 0 # initial value of time offset. unit: s. readed image clock + td = real image clock (IMU clock)
 
 #loop closure parameters
