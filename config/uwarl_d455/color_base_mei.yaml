@@ -4,6 +4,7 @@ model_type: MEI
 camera_name: camera
 image_width: 1280
 image_height: 720
+# T_ic [kalibr 100Hz, 200Hz on 200Hz calibration data]:
 mirror_parameters:
    xi: 0.11629399441007729 # 0.11888497637840516
 distortion_parameters:
