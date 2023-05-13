@@ -4,16 +4,17 @@ model_type: MEI
 camera_name: camera
 image_width: 1280
 image_height: 720
-# T_ic [kalibr 100Hz, 200Hz on 200Hz calibration data]:
+# T_ic [kalibr 200Hz, 200Hz on 200Hz calibration data]:
+#### based on [2023-05-11-15-43-17_EE_rgb_mei-results-imucam]
 mirror_parameters:
-   xi: 0.07942563639969441
+   xi: 0.16032526151323875 
 distortion_parameters:
-   k1: -0.022012393472248693
-   k2: 0.04302871135618162
-   p1: -0.0005106798843991701
-   p2: 0.00636513144622183
+   k1: 0.01818980491453005
+   k2: 0.04896232274295983 
+   p1: -0.002234744505812313
+   p2: 0.002600266470087707
 projection_parameters:
-   gamma1: 684.4540098253294
-   gamma2: 682.0491348926236
-   u0: 653.5498285538563
-   v0: 366.11693263954766
+   gamma1: 734.3776679117653
+   gamma2: 732.2170774337844
+   u0: 643.6277127157528
+   v0: 362.3537262028298

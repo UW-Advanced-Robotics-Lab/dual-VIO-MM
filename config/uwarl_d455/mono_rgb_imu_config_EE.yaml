@@ -24,15 +24,20 @@ body_T_cam0: !!opencv-matrix
     dt: d
     data: [ 
         # T_ic [kalibr 100Hz, 200Hz on 200Hz calibration data]:
-             0.99985705,  0.00078789, 0.01688968, 0.04100968,
-            -0.00084251,  0.99999444, 0.0032268 , 0.00218682,
-            -0.01688704, -0.00324057, 0.99985215, 0.03792703,
-             0., 0., 0., 1.]
+            #  0.99985705,  0.00078789, 0.01688968, 0.04100968,
+            # -0.00084251,  0.99999444, 0.0032268 , 0.00218682,
+            # -0.01688704, -0.00324057, 0.99985215, 0.03792703,
+            #  0., 0., 0., 1.]
         # T_ic [kalibr 200Hz sampling on 200Hz calibration data]:
             #  0.99991385, 0.00086815, 0.01309728, 0.03721934,
             # -0.00089894, 0.99999685, 0.00234506, 0.00264814,
             # -0.01309521, -0.00235664, 0.99991148, 0.03293071,
             #  0., 0., 0., 1.]
+        #### based on [2023-05-11-15-43-17_EE_rgb_mei-results-imucam]
+                0.99998975,  0.00059731,  0.0044877 ,  0.03276503,
+               -0.00059713,  0.99999982, -0.00004132, -0.00029959,
+               -0.00448772,  0.00003864,  0.99998993,  0.04621308,
+                0.,          0.,          0.,          1.        ]
         # T_ic: Extrinsic from "Color" To "Gyro" [Manufacture]
             #    0.999996    ,     0.00212487   ,   -0.00160311    , 0.0289688687771559 ,
             #   -0.00212717  ,     0.999997     ,   -0.00143346    , 0.00740136113017797 ,
@@ -65,7 +70,7 @@ multiple_thread: 1
 #feature traker paprameters
 max_cnt: 150            # max feature number in feature tracking
 min_dist: 30            # min distance between two features 
-freq: 0                 # frequence (Hz) of publish tracking result. At least 10Hz for good estimation. If set 0, the frequence will be same as raw image 
+freq: 0                # frequence (Hz) of publish tracking result. At least 10Hz for good estimation. If set 0, the frequence will be same as raw image 
 F_threshold: 1.0        # ransac threshold (pixel)
 show_track: 1           # publish tracking image as topic
 flow_back: 1            # perform forward and backward optical flow to improve feature tracking accuracy
@@ -75,26 +80,33 @@ max_solver_time: 0.04  # max solver itration time (ms), to guarantee real time
 max_num_iterations: 8   # max solver itrations, to guarantee real time
 keyframe_parallax: 10.0 # keyframe selection threshold (pixel)
 
-# NOTE: fine tuned on May 9 , 11 pm
 #imu parameters       The more accurate parameters you provide, the better performance
-acc_n: 0.147          # accelerometer measurement noise standard deviation. #0.2   0.04
-acc_w: 0.0033        # accelerometer bias random work noise standard deviation.  #0.002
-gyr_n: 0.0234          # gyroscope measurement noise standard deviation.     #0.05  0.004
-gyr_w: 0.00029       # gyroscope bias random work noise standard deviation.     #4.0e-5
+acc_n: 0.280          # accelerometer measurement noise standard deviation. #0.2   0.04
+acc_w: 0.00212        # accelerometer bias random work noise standard deviation.  #0.002
+gyr_n: 0.00646      # gyroscope measurement noise standard deviation.     #0.05  0.004
+gyr_w: 0.0000267      # gyroscope bias random work noise standard deviation.     #4.0e-5
 g_norm: 9.8         # gravity magnitude
-
-# Accelerometer:
-# Noise density: 0.00103795711950302                x 100 = 0.104
-# Noise density (discrete): 0.014678930355628823    x 10 = 0.147
-# Random walk: 3.2656995585435125e-05               x 100 = 0.0033
-# Gyroscope:
-# Noise density: 0.0001655154510187148                  x100 = 0.0166
-# Noise density (discrete): 0.002340741956129662Random  x10 = 0.0234
-# walk: 2.848286811512562e-06                           x100 = 0.00029
+# acc_n: 0.283          # accelerometer measurement noise standard deviation. #0.2   0.04
+# acc_w: 0.00212        # accelerometer bias random work noise standard deviation.  #0.002
+# gyr_n: 0.01292      # gyroscope measurement noise standard deviation.     #0.05  0.004
+# gyr_w: 0.000052      # gyroscope bias random work noise standard deviation.     #4.0e-5
+# g_norm: 9.8         # gravity magnitude
+#### based on [2023-05-11-15-43-17_EE_rgb_mei-results-imucam]
+#   Model: calibrated
+#   Update rate: 200.0
+#   Accelerometer:
+#     Noise density: 0.009998222535561607 
+#     Noise density (discrete): 0.1413962190941554 
+#     Random walk: 0.0010572240682889056
+#   Gyroscope:
+#     Noise density: 0.00045700146412701916
+#     Noise density (discrete): 0.00646297668592792 
+#     Random walk: 2.672307981517485e-06
+#   T_ib (imu0 to imu0)
 
 #unsynchronization parameters
 estimate_td: 0         # online estimate time offset between camera and imu
-td: 0.0002208283734187728 # initial value of time offset. unit: s. readed image clock + td = real image clock (IMU clock)
+td: 0.0003475970005734179 # initial value of time offset. unit: s. readed image clock + td = real image clock (IMU clock)
 
 #loop closure parameters
 load_previous_pose_graph: 0        # load and reuse previous pose graph; load from 'pose_graph_save_path'
