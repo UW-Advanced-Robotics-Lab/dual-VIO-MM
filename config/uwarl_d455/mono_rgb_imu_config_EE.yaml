@@ -33,11 +33,16 @@ body_T_cam0: !!opencv-matrix
             # -0.00089894, 0.99999685, 0.00234506, 0.00264814,
             # -0.01309521, -0.00235664, 0.99991148, 0.03293071,
             #  0., 0., 0., 1.]
-        #### based on [2023-05-11-15-43-17_EE_rgb_mei-results-imucam]
-                0.99998975,  0.00059731,  0.0044877 ,  0.03276503,
-               -0.00059713,  0.99999982, -0.00004132, -0.00029959,
-               -0.00448772,  0.00003864,  0.99998993,  0.04621308,
-                0.,          0.,          0.,          1.        ]
+        #### based on [2023-05-11-15-42-14_EE_rgb_mei-results-imucam]
+            #     0.99998975,  0.00059731,  0.0044877 ,  0.03276503,
+            #    -0.00059713,  0.99999982, -0.00004132, -0.00029959,
+            #    -0.00448772,  0.00003864,  0.99998993,  0.04621308,
+            #     0.,          0.,          0.,          1.        ]
+        # #### based on [2023-05-11-15-43-1_EE_rgb_mei-results-imucam]
+             0.99999713,  0.00184888, -0.00152691,  0.03679528,
+            -0.00184825,  0.99999821,  0.00041351,  0.0029463 ,
+             0.00152767, -0.00041069,  0.99999875,  0.03515003,
+             0.        ,  0.        ,  0.        ,  1.         ]
         # T_ic: Extrinsic from "Color" To "Gyro" [Manufacture]
             #    0.999996    ,     0.00212487   ,   -0.00160311    , 0.0289688687771559 ,
             #   -0.00212717  ,     0.999997     ,   -0.00143346    , 0.00740136113017797 ,
@@ -81,16 +86,12 @@ max_num_iterations: 8   # max solver itrations, to guarantee real time
 keyframe_parallax: 10.0 # keyframe selection threshold (pixel)
 
 #imu parameters       The more accurate parameters you provide, the better performance
-acc_n: 0.280          # accelerometer measurement noise standard deviation. #0.2   0.04
+acc_n: 0.283          # accelerometer measurement noise standard deviation. #0.2   0.04
 acc_w: 0.00212        # accelerometer bias random work noise standard deviation.  #0.002
-gyr_n: 0.00646      # gyroscope measurement noise standard deviation.     #0.05  0.004
+gyr_n: 0.006463      # gyroscope measurement noise standard deviation.     #0.05  0.004
 gyr_w: 0.0000267      # gyroscope bias random work noise standard deviation.     #4.0e-5
 g_norm: 9.8         # gravity magnitude
-# acc_n: 0.283          # accelerometer measurement noise standard deviation. #0.2   0.04
-# acc_w: 0.00212        # accelerometer bias random work noise standard deviation.  #0.002
-# gyr_n: 0.01292      # gyroscope measurement noise standard deviation.     #0.05  0.004
-# gyr_w: 0.000052      # gyroscope bias random work noise standard deviation.     #4.0e-5
-# g_norm: 9.8         # gravity magnitude
+
 #### based on [2023-05-11-15-43-17_EE_rgb_mei-results-imucam]
 #   Model: calibrated
 #   Update rate: 200.0
