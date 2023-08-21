@@ -4,6 +4,7 @@ model_type: PINHOLE
 camera_name: camera
 image_width: 1280
 image_height: 720
+# [2023-04-28-10-06-24_light_base_ir-report-imucam.pdf]
 distortion_parameters:
    k1: 9.874110116075039e-05
    k2: -0.0029481185296347814
