@@ -94,9 +94,9 @@ int main(int argc, char** argv)
 	registerPub(n);
 
 	FILE* outFile;
-	outFile = fopen((OUTPUT_FOLDER + "/vio.txt").c_str(),"w");
+	outFile = fopen((DEV_CONFIG.OUTPUT_FOLDER + "/vio.txt").c_str(),"w");
 	if(outFile == NULL)
-		printf("Output path dosen't exist: %s\n", OUTPUT_FOLDER.c_str());
+		printf("Output path dosen't exist: %s\n", DEV_CONFIG.OUTPUT_FOLDER.c_str());
 	string leftImagePath, rightImagePath;
 	cv::Mat imLeft, imRight;
 	double baseTime;

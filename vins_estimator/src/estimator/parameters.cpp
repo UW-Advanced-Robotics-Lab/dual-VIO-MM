@@ -8,45 +8,50 @@
  *******************************************************/
 
 #include "parameters.h"
+// ----------------------------------------------------------------
+// : ARCHIVES :
+// ----------------------------------------------------------------
+// double INIT_DEPTH;
+// double MIN_PARALLAX;
+// double ACC_N, ACC_W;
+// double GYR_N, GYR_W;
 
-double INIT_DEPTH;
-double MIN_PARALLAX;
-double ACC_N, ACC_W;
-double GYR_N, GYR_W;
+// std::vector<Eigen::Matrix3d> RIC;
+// std::vector<Eigen::Vector3d> TIC;
 
-std::vector<Eigen::Matrix3d> RIC;
-std::vector<Eigen::Vector3d> TIC;
+// Eigen::Vector3d G{0.0, 0.0, 9.8};
 
-Eigen::Vector3d G{0.0, 0.0, 9.8};
+// double BIAS_ACC_THRESHOLD;
+// double BIAS_GYR_THRESHOLD;
+// double SOLVER_TIME;
+// int NUM_ITERATIONS;
+// int ESTIMATE_EXTRINSIC;
+// int ESTIMATE_TD;
+// int ROLLING_SHUTTER;
+// std::string EX_CALIB_RESULT_PATH;
+// std::string VINS_RESULT_PATH;
+// std::string OUTPUT_FOLDER;
+// std::string IMU_TOPIC;
+// int ROW, COL;
+// double TD;
+// int NUM_OF_CAM;
+// int STEREO;
+// int USE_IMU;
+// int MULTIPLE_THREAD;
+map<int, Eigen::Vector3d> pts_gt; // debug information
+// std::string IMAGE0_TOPIC, IMAGE1_TOPIC;
+// std::string FISHEYE_MASK;
+// std::vector<std::string> CAM_NAMES;
+// int MAX_CNT;
+// int MIN_DIST;
+// double F_THRESHOLD;
+// int SHOW_TRACK;
+// int FLOW_BACK;
 
-double BIAS_ACC_THRESHOLD;
-double BIAS_GYR_THRESHOLD;
-double SOLVER_TIME;
-int NUM_ITERATIONS;
-int ESTIMATE_EXTRINSIC;
-int ESTIMATE_TD;
-int ROLLING_SHUTTER;
-std::string EX_CALIB_RESULT_PATH;
-std::string VINS_RESULT_PATH;
-std::string OUTPUT_FOLDER;
-std::string IMU_TOPIC;
-int ROW, COL;
-double TD;
-int NUM_OF_CAM;
-int STEREO;
-int USE_IMU;
-int MULTIPLE_THREAD;
-map<int, Eigen::Vector3d> pts_gt;
-std::string IMAGE0_TOPIC, IMAGE1_TOPIC;
-std::string FISHEYE_MASK;
-std::vector<std::string> CAM_NAMES;
-int MAX_CNT;
-int MIN_DIST;
-double F_THRESHOLD;
-int SHOW_TRACK;
-int FLOW_BACK;
-
-
+// ----------------------------------------------------------------
+// : IMPLEMENTATION :
+// ----------------------------------------------------------------
+DeviceConfig_t      DEV_CONFIG;
 template <typename T>
 T readParam(ros::NodeHandle &n, std::string name)
 {
@@ -79,70 +84,74 @@ void readParameters(std::string config_file)
         std::cerr << "ERROR: Wrong path to settings" << std::endl;
     }
 
-    fsSettings["image0_topic"] >> IMAGE0_TOPIC;
-    fsSettings["image1_topic"] >> IMAGE1_TOPIC;
-    MAX_CNT = fsSettings["max_cnt"];
-    MIN_DIST = fsSettings["min_dist"];
-    F_THRESHOLD = fsSettings["F_threshold"];
-    SHOW_TRACK = fsSettings["show_track"];
-    FLOW_BACK = fsSettings["flow_back"];
+    fsSettings["image0_topic"] >> DEV_CONFIG.IMAGE0_TOPIC;
+    fsSettings["image1_topic"] >> DEV_CONFIG.IMAGE1_TOPIC;
+    DEV_CONFIG.MAX_CNT        = fsSettings["max_cnt"];
+    DEV_CONFIG.MIN_DIST       = fsSettings["min_dist"];
+    DEV_CONFIG.F_THRESHOLD    = fsSettings["F_threshold"];
+    DEV_CONFIG.SHOW_TRACK     = fsSettings["show_track"];
+    DEV_CONFIG.FLOW_BACK      = fsSettings["flow_back"];
 
-    MULTIPLE_THREAD = fsSettings["multiple_thread"];
+    DEV_CONFIG.MULTIPLE_THREAD = fsSettings["multiple_thread"];
 
-    USE_IMU = fsSettings["imu"];
-    printf("USE_IMU: %d\n", USE_IMU);
-    if(USE_IMU)
+    DEV_CONFIG.USE_IMU = fsSettings["imu"];
+    printf("DEV_CONFIG.USE_IMU: %d\n", DEV_CONFIG.USE_IMU);
+    if(DEV_CONFIG.USE_IMU)
     {
-        fsSettings["imu_topic"] >> IMU_TOPIC;
-        printf("IMU_TOPIC: %s\n", IMU_TOPIC.c_str());
-        ACC_N = fsSettings["acc_n"];
-        ACC_W = fsSettings["acc_w"];
-        GYR_N = fsSettings["gyr_n"];
-        GYR_W = fsSettings["gyr_w"];
-        G.z() = fsSettings["g_norm"];
+        fsSettings["imu_topic"] >> DEV_CONFIG.IMU_TOPIC;
+        printf("DEV_CONFIG.IMU_TOPIC: %s\n", DEV_CONFIG.IMU_TOPIC.c_str());
+        DEV_CONFIG.ACC_N = fsSettings["acc_n"];
+        DEV_CONFIG.ACC_W = fsSettings["acc_w"];
+        DEV_CONFIG.GYR_N = fsSettings["gyr_n"];
+        DEV_CONFIG.GYR_W = fsSettings["gyr_w"];
+        DEV_CONFIG.G.z() = fsSettings["g_norm"];
     }
 
-    SOLVER_TIME = fsSettings["max_solver_time"];
-    NUM_ITERATIONS = fsSettings["max_num_iterations"];
-    MIN_PARALLAX = fsSettings["keyframe_parallax"];
-    MIN_PARALLAX = MIN_PARALLAX / FOCAL_LENGTH;
+    DEV_CONFIG.SOLVER_TIME = fsSettings["max_solver_time"];
+    DEV_CONFIG.NUM_ITERATIONS = fsSettings["max_num_iterations"];
+    DEV_CONFIG.MIN_PARALLAX = fsSettings["keyframe_parallax"];
+    DEV_CONFIG.MIN_PARALLAX = DEV_CONFIG.MIN_PARALLAX / FOCAL_LENGTH;
 
-    fsSettings["output_path"] >> OUTPUT_FOLDER;
-    VINS_RESULT_PATH = OUTPUT_FOLDER + "/vio.csv";
-    std::cout << "result path " << VINS_RESULT_PATH << std::endl;
-    std::ofstream fout(VINS_RESULT_PATH, std::ios::out);
+    fsSettings["output_path"] >> DEV_CONFIG.OUTPUT_FOLDER;
+    DEV_CONFIG.VINS_RESULT_PATH = DEV_CONFIG.OUTPUT_FOLDER + "/vio.csv";
+    std::cout << "result path " << DEV_CONFIG.VINS_RESULT_PATH << std::endl;
+    std::ofstream fout(DEV_CONFIG.VINS_RESULT_PATH, std::ios::out);
     fout.close();
 
-    ESTIMATE_EXTRINSIC = fsSettings["estimate_extrinsic"];
-    if (ESTIMATE_EXTRINSIC == 2)
+    DEV_CONFIG.ESTIMATE_EXTRINSIC = fsSettings["estimate_extrinsic"];
+    if (DEV_CONFIG.ESTIMATE_EXTRINSIC == 2)
     {
         ROS_WARN("have no prior about extrinsic param, calibrate extrinsic param");
-        RIC.push_back(Eigen::Matrix3d::Identity());
-        TIC.push_back(Eigen::Vector3d::Zero());
-        EX_CALIB_RESULT_PATH = OUTPUT_FOLDER + "/extrinsic_parameter.csv";
+        DEV_CONFIG.RIC.push_back(Eigen::Matrix3d::Identity());
+        DEV_CONFIG.TIC.push_back(Eigen::Vector3d::Zero());
+        // DEV_CONFIG.RIC[0] = (Eigen::Matrix3d::Identity());
+        // DEV_CONFIG.TIC[0] = (Eigen::Vector3d::Zero());
+        DEV_CONFIG.EX_CALIB_RESULT_PATH = DEV_CONFIG.OUTPUT_FOLDER + "/extrinsic_parameter.csv";
     }
     else 
     {
-        if ( ESTIMATE_EXTRINSIC == 1)
+        if (DEV_CONFIG.ESTIMATE_EXTRINSIC == 1)
         {
             ROS_WARN(" Optimize extrinsic param around initial guess!");
-            EX_CALIB_RESULT_PATH = OUTPUT_FOLDER + "/extrinsic_parameter.csv";
+            DEV_CONFIG.EX_CALIB_RESULT_PATH = DEV_CONFIG.OUTPUT_FOLDER + "/extrinsic_parameter.csv";
         }
-        if (ESTIMATE_EXTRINSIC == 0)
+        if (DEV_CONFIG.ESTIMATE_EXTRINSIC == 0)
             ROS_WARN(" fix extrinsic param ");
 
         cv::Mat cv_T;
         fsSettings["body_T_cam0"] >> cv_T;
         Eigen::Matrix4d T;
         cv::cv2eigen(cv_T, T);
-        RIC.push_back(T.block<3, 3>(0, 0));
-        TIC.push_back(T.block<3, 1>(0, 3));
+        DEV_CONFIG.RIC.push_back(T.block<3, 3>(0, 0));
+        DEV_CONFIG.TIC.push_back(T.block<3, 1>(0, 3));
+        // DEV_CONFIG.RIC[0] = (T.block<3, 3>(0, 0));
+        // DEV_CONFIG.TIC[0] = (T.block<3, 1>(0, 3));
     } 
     
-    NUM_OF_CAM = fsSettings["num_of_cam"];
-    printf("camera number %d\n", NUM_OF_CAM);
+    DEV_CONFIG.NUM_OF_CAM = fsSettings["num_of_cam"];
+    printf("camera number %d\n", DEV_CONFIG.NUM_OF_CAM);
 
-    if(NUM_OF_CAM != 1 && NUM_OF_CAM != 2)
+    if(DEV_CONFIG.NUM_OF_CAM != 1 && DEV_CONFIG.NUM_OF_CAM != 2)
     {
         printf("num_of_cam should be 1 or 2\n");
         assert(0);
@@ -155,44 +164,49 @@ void readParameters(std::string config_file)
     std::string cam0Calib;
     fsSettings["cam0_calib"] >> cam0Calib;
     std::string cam0Path = configPath + "/" + cam0Calib;
-    CAM_NAMES.push_back(cam0Path);
+    DEV_CONFIG.CAM_NAMES.push_back(cam0Path);
+    printf("%s cam0 path\n", cam0Path.c_str() );
+    // DEV_CONFIG.CAM_NAMES[0] = (cam0Path);
 
-    if(NUM_OF_CAM == 2)
+    if(DEV_CONFIG.NUM_OF_CAM == 2)
     {
-        STEREO = 1;
+        DEV_CONFIG.STEREO = 1;
         std::string cam1Calib;
         fsSettings["cam1_calib"] >> cam1Calib;
         std::string cam1Path = configPath + "/" + cam1Calib; 
-        //printf("%s cam1 path\n", cam1Path.c_str() );
-        CAM_NAMES.push_back(cam1Path);
+        printf("%s cam1 path\n", cam1Path.c_str() );
+        DEV_CONFIG.CAM_NAMES.push_back(cam1Path);
+        // DEV_CONFIG.CAM_NAMES[1] = (cam1Path);
         
         cv::Mat cv_T;
         fsSettings["body_T_cam1"] >> cv_T;
         Eigen::Matrix4d T;
         cv::cv2eigen(cv_T, T);
-        RIC.push_back(T.block<3, 3>(0, 0));
-        TIC.push_back(T.block<3, 1>(0, 3));
+        DEV_CONFIG.RIC.push_back(T.block<3, 3>(0, 0));
+        DEV_CONFIG.TIC.push_back(T.block<3, 1>(0, 3));
+        // DEV_CONFIG.RIC[1] = (T.block<3, 3>(0, 0));
+        // DEV_CONFIG.TIC[1] = (T.block<3, 1>(0, 3));
     }
 
-    INIT_DEPTH = 5.0;
-    BIAS_ACC_THRESHOLD = 0.1;
-    BIAS_GYR_THRESHOLD = 0.1;
+    DEV_CONFIG.INIT_DEPTH = 5.0;
+    DEV_CONFIG.BIAS_ACC_THRESHOLD = 0.1;
+    DEV_CONFIG.BIAS_GYR_THRESHOLD = 0.1;
 
-    TD = fsSettings["td"];
-    ESTIMATE_TD = fsSettings["estimate_td"];
-    if (ESTIMATE_TD)
-        ROS_INFO_STREAM("Unsynchronized sensors, online estimate time offset, initial td: " << TD);
+    DEV_CONFIG.TD = fsSettings["td"];
+    DEV_CONFIG.ESTIMATE_TD = fsSettings["estimate_td"];
+    if (DEV_CONFIG.ESTIMATE_TD)
+        ROS_INFO_STREAM("Unsynchronized sensors, online estimate time offset, initial td: " << DEV_CONFIG.TD);
     else
-        ROS_INFO_STREAM("Synchronized sensors, fix time offset: " << TD);
+        ROS_INFO_STREAM("Synchronized sensors, fix time offset: " << DEV_CONFIG.TD);
 
-    ROW = fsSettings["image_height"];
-    COL = fsSettings["image_width"];
-    ROS_INFO("ROW: %d COL: %d ", ROW, COL);
+    DEV_CONFIG.ROW = fsSettings["image_height"];
+    DEV_CONFIG.COL = fsSettings["image_width"];
+    ROS_INFO("ROW: %d COL: %d ", DEV_CONFIG.ROW, DEV_CONFIG.COL);
 
-    if(!USE_IMU)
+    if(!DEV_CONFIG.USE_IMU)
     {
-        ESTIMATE_EXTRINSIC = 0;
-        ESTIMATE_TD = 0;
+        DEV_CONFIG.ESTIMATE_EXTRINSIC = 0;
+        DEV_CONFIG.ESTIMATE_TD = 0;
         printf("no imu, fix extrinsic param; no time offset calibration\n");
     }
 

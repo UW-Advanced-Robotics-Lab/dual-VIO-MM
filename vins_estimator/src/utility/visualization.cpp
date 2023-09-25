@@ -85,10 +85,10 @@ void printStatistics(const Estimator &estimator, double t)
     //printf("position: %f, %f, %f\r", estimator.Ps[WINDOW_SIZE].x(), estimator.Ps[WINDOW_SIZE].y(), estimator.Ps[WINDOW_SIZE].z());
     ROS_DEBUG_STREAM("position: " << estimator.Ps[WINDOW_SIZE].transpose());
     ROS_DEBUG_STREAM("orientation: " << estimator.Vs[WINDOW_SIZE].transpose());
-    if (ESTIMATE_EXTRINSIC)
+    if (DEV_CONFIG.ESTIMATE_EXTRINSIC)
     {
-        cv::FileStorage fs(EX_CALIB_RESULT_PATH, cv::FileStorage::WRITE);
-        for (int i = 0; i < NUM_OF_CAM; i++)
+        cv::FileStorage fs(DEV_CONFIG.EX_CALIB_RESULT_PATH, cv::FileStorage::WRITE);
+        for (int i = 0; i < DEV_CONFIG.NUM_OF_CAM; i++)
         {
             //ROS_DEBUG("calibration result for camera %d", i);
             ROS_DEBUG_STREAM("extirnsic tic: " << estimator.tic[i].transpose());
@@ -117,7 +117,7 @@ void printStatistics(const Estimator &estimator, double t)
     sum_of_path += (estimator.Ps[WINDOW_SIZE] - last_path).norm();
     last_path = estimator.Ps[WINDOW_SIZE];
     ROS_DEBUG("sum of path %f", sum_of_path);
-    if (ESTIMATE_TD)
+    if (DEV_CONFIG.ESTIMATE_TD)
         ROS_INFO("td %f", estimator.td);
 }
 
@@ -153,7 +153,7 @@ void pubOdometry(const Estimator &estimator, const std_msgs::Header &header)
         pub_path.publish(path);
 
         // write result to file
-        ofstream foutC(VINS_RESULT_PATH, ios::app);
+        ofstream foutC(DEV_CONFIG.VINS_RESULT_PATH, ios::app);
         foutC.setf(ios::fixed, ios::floatfield);
         foutC.precision(0);
         foutC << header.stamp.toSec() * 1e9 << ",";
@@ -234,7 +234,7 @@ void pubCameraPose(const Estimator &estimator, const std_msgs::Header &header)
 
         cameraposevisual.reset();
         cameraposevisual.add_pose(P, R);
-        if(STEREO)
+        if(DEV_CONFIG.STEREO)
         {
             Vector3d P = estimator.Ps[i] + estimator.Rs[i] * estimator.tic[1];
             Quaterniond R = Quaterniond(estimator.Rs[i] * estimator.ric[1]);

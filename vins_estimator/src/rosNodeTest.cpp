@@ -72,7 +72,7 @@ void sync_process()
 {
     while(1)
     {
-        if(STEREO)
+        if(DEV_CONFIG.STEREO)
         {
             cv::Mat image0, image1;
             std_msgs::Header header;
@@ -196,12 +196,12 @@ void imu_switch_callback(const std_msgs::BoolConstPtr &switch_msg)
     if (switch_msg->data == true)
     {
         //ROS_WARN("use IMU!");
-        estimator.changeSensorType(1, STEREO);
+        estimator.changeSensorType(1, DEV_CONFIG.STEREO);
     }
     else
     {
         //ROS_WARN("disable IMU!");
-        estimator.changeSensorType(0, STEREO);
+        estimator.changeSensorType(0, DEV_CONFIG.STEREO);
     }
     return;
 }
@@ -211,12 +211,12 @@ void cam_switch_callback(const std_msgs::BoolConstPtr &switch_msg)
     if (switch_msg->data == true)
     {
         //ROS_WARN("use stereo!");
-        estimator.changeSensorType(USE_IMU, 1);
+        estimator.changeSensorType(DEV_CONFIG.USE_IMU, 1);
     }
     else
     {
         //ROS_WARN("use mono camera (left)!");
-        estimator.changeSensorType(USE_IMU, 0);
+        estimator.changeSensorType(DEV_CONFIG.USE_IMU, 0);
     }
     return;
 }
@@ -249,11 +249,11 @@ int main(int argc, char **argv)
 
     registerPub(n);
 
-    ros::Subscriber sub_imu = n.subscribe(IMU_TOPIC, 100, imu_callback, ros::TransportHints().tcpNoDelay());
+    ros::Subscriber sub_imu = n.subscribe(DEV_CONFIG.IMU_TOPIC, 100, imu_callback, ros::TransportHints().tcpNoDelay());
     ros::Subscriber sub_feature = n.subscribe("/feature_tracker/feature", 100, feature_callback);
-    printf("Image Topic: %s\n", IMAGE0_TOPIC.c_str());
-    ros::Subscriber sub_img0 = n.subscribe(IMAGE0_TOPIC, 30, img0_callback);
-    ros::Subscriber sub_img1 = n.subscribe(IMAGE1_TOPIC, 30, img1_callback);
+    printf("Image Topic: %s\n", DEV_CONFIG.IMAGE0_TOPIC.c_str());
+    ros::Subscriber sub_img0 = n.subscribe(DEV_CONFIG.IMAGE0_TOPIC, 30, img0_callback);
+    ros::Subscriber sub_img1 = n.subscribe(DEV_CONFIG.IMAGE1_TOPIC, 30, img1_callback);
     ros::Subscriber sub_restart = n.subscribe("/vins_restart", 100, restart_callback);
     ros::Subscriber sub_imu_switch = n.subscribe("/vins_imu_switch", 100, imu_switch_callback);
     ros::Subscriber sub_cam_switch = n.subscribe("/vins_cam_switch", 100, cam_switch_callback);
