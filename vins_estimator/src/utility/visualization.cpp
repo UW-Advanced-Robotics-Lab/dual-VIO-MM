@@ -234,12 +234,15 @@ void pubCameraPose(const Estimator &estimator, const std_msgs::Header &header)
 
         cameraposevisual.reset();
         cameraposevisual.add_pose(P, R);
+        
+#if (FEATURE_ENABLE_STEREO_SUPPORT) // for stereo camera pose
         if(DEV_CONFIGS[BASE_DEV].STEREO)
         {
             Vector3d P = estimator.Ps[i] + estimator.Rs[i] * estimator.tic[1];
             Quaterniond R = Quaterniond(estimator.Rs[i] * estimator.ric[1]);
             cameraposevisual.add_pose(P, R);
         }
+#endif
         cameraposevisual.publish_by(pub_camera_pose_visual, odometry.header);
     }
 }

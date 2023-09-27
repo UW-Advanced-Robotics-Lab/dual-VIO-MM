@@ -72,6 +72,7 @@ void sync_process()
 {
     while(1)
     {
+#if (FEATURE_ENABLE_STEREO_SUPPORT)
         if(DEV_CONFIGS[BASE_DEV].STEREO)
         {
             cv::Mat image0, image1;
@@ -109,7 +110,9 @@ void sync_process()
                 estimator.inputImage(time, image0, image1);
         }
         else
+#endif
         {
+            // Monocular Camera:
             cv::Mat image;
             std_msgs::Header header;
             double time = 0;
@@ -191,6 +194,7 @@ void restart_callback(const std_msgs::BoolConstPtr &restart_msg)
     return;
 }
 
+#if (FEATURE_ENABLE_STEREO_SUPPORT)
 void imu_switch_callback(const std_msgs::BoolConstPtr &switch_msg)
 {
     if (switch_msg->data == true)
@@ -220,12 +224,14 @@ void cam_switch_callback(const std_msgs::BoolConstPtr &switch_msg)
     }
     return;
 }
+#endif
 
 int main(int argc, char **argv)
 {
+    // Initialization:
     ros::init(argc, argv, "vins_estimator");
     ros::NodeHandle n("~");
-    ros::console::set_logger_level(ROSCONSOLE_DEFAULT_NAME, ros::console::levels::Info);
+    ros::console::set_logger_level(ROSCONSOLE_DEFAULT_NAME, ros::console::levels::Info); //TODO: need some sort of verbosity flag
 
     if(argc != 2)
     {
@@ -244,23 +250,29 @@ int main(int argc, char **argv)
 #ifdef EIGEN_DONT_PARALLELIZE
     ROS_DEBUG("EIGEN_DONT_PARALLELIZE");
 #endif
-
+    ////////// BEGIN HERE //////////////////////////////////
     ROS_WARN("waiting for image and imu...");
 
     registerPub(n);
 
     ros::Subscriber sub_imu = n.subscribe(DEV_CONFIGS[BASE_DEV].IMU_TOPIC, 100, imu_callback, ros::TransportHints().tcpNoDelay());
     ros::Subscriber sub_feature = n.subscribe("/feature_tracker/feature", 100, feature_callback);
+    
     printf("Image Topic 0: %s\n", DEV_CONFIGS[BASE_DEV].IMAGE_TOPICS[0].c_str());
-    printf("Image Topic 1: %s\n", DEV_CONFIGS[BASE_DEV].IMAGE_TOPICS[1].c_str());
+    
     ros::Subscriber sub_img0 = n.subscribe(DEV_CONFIGS[BASE_DEV].IMAGE_TOPICS[0], 30, img0_callback);
-    ros::Subscriber sub_img1 = n.subscribe(DEV_CONFIGS[BASE_DEV].IMAGE_TOPICS[1], 30, img1_callback);
     ros::Subscriber sub_restart = n.subscribe("/vins_restart", 100, restart_callback);
-    ros::Subscriber sub_imu_switch = n.subscribe("/vins_imu_switch", 100, imu_switch_callback);
-    ros::Subscriber sub_cam_switch = n.subscribe("/vins_cam_switch", 100, cam_switch_callback);
+    
+#if (FEATURE_ENABLE_STEREO_SUPPORT) // NOTE: stereo need to be implemented per device
+    printf("Image Topic 1: %s\n", DEV_CONFIGS[BASE_DEV].IMAGE_TOPICS[1].c_str());
+    ros::Subscriber sub_img1 = n.subscribe(DEV_CONFIGS[BASE_DEV].IMAGE_TOPICS[1], 30, img1_callback);
+    ros::Subscriber sub_imu_switch = n.subscribe("/vins_imu_switch", 100, imu_switch_callback); // UNUSED
+    ros::Subscriber sub_cam_switch = n.subscribe("/vins_cam_switch", 100, cam_switch_callback); // UNUSED
+#endif
 
     std::thread sync_thread{sync_process};
     ros::spin();
+    ////////// ENDS HERE //////////////////////////////////
 
     return 0;
 }

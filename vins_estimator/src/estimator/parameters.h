@@ -35,6 +35,14 @@ using namespace std;
 
 
 // ----------------------------------------------------------------
+// : Feature Definitions :
+// ----------------------------------------------------------------
+#define ENABLED             (1U)
+#define DISABLED            (0U)
+
+#define FEATURE_ENABLE_STEREO_SUPPORT        (DISABLED) // allow stereo support per device [TODO: let's study stereo later]
+
+// ----------------------------------------------------------------
 // : ARCHIVES :
 // ----------------------------------------------------------------
 // extern double INIT_DEPTH;

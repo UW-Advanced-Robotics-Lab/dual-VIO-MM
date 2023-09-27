@@ -306,6 +306,7 @@ void FeatureManager::triangulate(int frameCnt, Vector3d Ps[], Matrix3d Rs[], Vec
         if (it_per_id.estimated_depth > 0)
             continue;
 
+#if (FEATURE_ENABLE_STEREO_SUPPORT) // stereo support TODO: dual-cam stereo fusion support can happen here
         if(DEV_CONFIGS[BASE_DEV].STEREO && it_per_id.feature_per_frame[0].is_stereo)
         {
             int imu_i = it_per_id.start_frame;
@@ -346,6 +347,9 @@ void FeatureManager::triangulate(int frameCnt, Vector3d Ps[], Matrix3d Rs[], Vec
             continue;
         }
         else if(it_per_id.feature_per_frame.size() > 1)
+#else 
+        if(it_per_id.feature_per_frame.size() > 1) // monocular between frames triangulation
+#endif
         {
             int imu_i = it_per_id.start_frame;
             Eigen::Matrix<double, 3, 4> leftPose;

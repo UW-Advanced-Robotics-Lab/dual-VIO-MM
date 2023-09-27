@@ -220,10 +220,11 @@ void readParameters(std::string config_file)
         
         // - cache:
         cfg->CAM_NAMES[0] = cam0Path_;
-        cfg->NUM_OF_CAM = n0_cam;
-
-        // debug:
         printf("%s cam0 path\n", cam0Path_.c_str() );
+
+#if (FEATURE_ENABLE_STEREO_SUPPORT)
+        // stereo?
+        cfg->NUM_OF_CAM = n0_cam;
         cfg->STEREO = (n0_cam == 2)?1:0;
         if(cfg->STEREO)
         {
@@ -244,6 +245,10 @@ void readParameters(std::string config_file)
             cfg->RIC[1] = T.block<3, 3>(0, 0);
             cfg->TIC[1] = T.block<3, 1>(0, 3);
         }
+#else
+        cfg->NUM_OF_CAM = 1;    // Forcing monocular camera
+        cfg->STEREO = 0;        // Disable stereo support
+#endif
     }
 
     ////////////////////////////////////////////////////////////////

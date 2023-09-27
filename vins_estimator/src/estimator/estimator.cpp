@@ -119,6 +119,7 @@ void Estimator::setParameter()
     mProcess.unlock();
 }
 
+#if (FEATURE_ENABLE_STEREO_SUPPORT)
 void Estimator::changeSensorType(int use_imu, int use_stereo)
 {
     bool restart = false;
@@ -156,6 +157,7 @@ void Estimator::changeSensorType(int use_imu, int use_stereo)
         setParameter();
     }
 }
+#endif
 
 void Estimator::inputImage(double t, const cv::Mat &_img, const cv::Mat &_img1)
 {
@@ -454,7 +456,9 @@ void Estimator::processImage(const map<int, vector<pair<int, Eigen::Matrix<doubl
     if (solver_flag == INITIAL)
     {
         // monocular + IMU initilization
-        if (!DEV_CONFIGS[BASE_DEV].STEREO && DEV_CONFIGS[BASE_DEV].USE_IMU)
+#if (FEATURE_ENABLE_STEREO_SUPPORT) // condition only necessary for stereo support 
+        if (!DEV_CONFIGS[BASE_DEV].STEREO && DEV_CONFIGS[BASE_DEV].USE_IMU) 
+#endif
         {
             if (frame_count == WINDOW_SIZE)
             {
@@ -477,6 +481,7 @@ void Estimator::processImage(const map<int, vector<pair<int, Eigen::Matrix<doubl
             }
         }
 
+#if (FEATURE_ENABLE_STEREO_SUPPORT)
         // stereo + IMU initilization
         if(DEV_CONFIGS[BASE_DEV].STEREO && DEV_CONFIGS[BASE_DEV].USE_IMU)
         {
@@ -521,6 +526,7 @@ void Estimator::processImage(const map<int, vector<pair<int, Eigen::Matrix<doubl
                 ROS_INFO("Initialization finish!");
             }
         }
+#endif
 
         if(frame_count < WINDOW_SIZE)
         {
@@ -1086,6 +1092,7 @@ void Estimator::optimization()
                 problem.AddResidualBlock(f_td, loss_function, para_Pose[imu_i], para_Pose[imu_j], para_Ex_Pose[0], para_Feature[feature_index], para_Td[0]);
             }
 
+#if (FEATURE_ENABLE_STEREO_SUPPORT) // stereo only
             if(DEV_CONFIGS[BASE_DEV].STEREO && it_per_frame.is_stereo)
             {                
                 Vector3d pts_j_right = it_per_frame.pointRight;
@@ -1103,6 +1110,8 @@ void Estimator::optimization()
                 }
                
             }
+#endif
+
             f_m_cnt++;
         }
     }
@@ -1200,6 +1209,7 @@ void Estimator::optimization()
                                                                                         vector<int>{0, 3});
                         marginalization_info->addResidualBlockInfo(residual_block_info);
                     }
+#if (FEATURE_ENABLE_STEREO_SUPPORT) // stereo only
                     if(DEV_CONFIGS[BASE_DEV].STEREO && it_per_frame.is_stereo)
                     {
                         Vector3d pts_j_right = it_per_frame.pointRight;
@@ -1222,6 +1232,7 @@ void Estimator::optimization()
                             marginalization_info->addResidualBlockInfo(residual_block_info);
                         }
                     }
+#endif
                 }
             }
         }
@@ -1536,6 +1547,7 @@ void Estimator::outliersRejection(set<int> &removeIndex)
                 errCnt++;
                 //printf("tmp_error %f\n", FOCAL_LENGTH / 1.5 * tmp_error);
             }
+#if (FEATURE_ENABLE_STEREO_SUPPORT) // stereo only
             // need to rewrite projecton factor.........
             if(DEV_CONFIGS[BASE_DEV].STEREO && it_per_frame.is_stereo)
             {
@@ -1560,6 +1572,7 @@ void Estimator::outliersRejection(set<int> &removeIndex)
                     //printf("tmp_error %f\n", FOCAL_LENGTH / 1.5 * tmp_error);
                 }       
             }
+#endif
         }
         double ave_err = err / errCnt;
         if(ave_err * FOCAL_LENGTH > 3)
