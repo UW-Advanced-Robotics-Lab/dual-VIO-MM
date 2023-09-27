@@ -78,7 +78,7 @@ void FeatureTracker::setMask()
             cur_pts.push_back(it.second.first);
             ids.push_back(it.second.second);
             track_cnt.push_back(it.first);
-            cv::circle(mask, it.second.first, DEV_CONFIG.MIN_DIST, 0, -1);
+            cv::circle(mask, it.second.first, DEV_CONFIGS[BASE_DEV].MIN_DIST, 0, -1);
         }
     }
 }
@@ -132,7 +132,7 @@ map<int, vector<pair<int, Eigen::Matrix<double, 7, 1>>>> FeatureTracker::trackIm
         else
             cv::calcOpticalFlowPyrLK(prev_img, cur_img, prev_pts, cur_pts, status, err, cv::Size(21, 21), 3);
         // reverse check
-        if(DEV_CONFIG.FLOW_BACK)
+        if(DEV_CONFIGS[BASE_DEV].FLOW_BACK)
         {
             vector<uchar> reverse_status;
             vector<cv::Point2f> reverse_pts = prev_pts;
@@ -174,14 +174,14 @@ map<int, vector<pair<int, Eigen::Matrix<double, 7, 1>>>> FeatureTracker::trackIm
 
         ROS_DEBUG("detect feature begins");
         TicToc t_t;
-        int n_max_cnt = DEV_CONFIG.MAX_CNT - static_cast<int>(cur_pts.size());
+        int n_max_cnt = DEV_CONFIGS[BASE_DEV].MAX_CNT - static_cast<int>(cur_pts.size());
         if (n_max_cnt > 0)
         {
             if(mask.empty())
                 cout << "mask is empty " << endl;
             if (mask.type() != CV_8UC1)
                 cout << "mask type wrong " << endl;
-            cv::goodFeaturesToTrack(cur_img, n_pts, DEV_CONFIG.MAX_CNT - cur_pts.size(), 0.01, DEV_CONFIG.MIN_DIST, mask);
+            cv::goodFeaturesToTrack(cur_img, n_pts, DEV_CONFIGS[BASE_DEV].MAX_CNT - cur_pts.size(), 0.01, DEV_CONFIGS[BASE_DEV].MIN_DIST, mask);
         }
         else
             n_pts.clear();
@@ -215,7 +215,7 @@ map<int, vector<pair<int, Eigen::Matrix<double, 7, 1>>>> FeatureTracker::trackIm
             // cur left ---- cur right
             cv::calcOpticalFlowPyrLK(cur_img, rightImg, cur_pts, cur_right_pts, status, err, cv::Size(21, 21), 3);
             // reverse check cur right ---- cur left
-            if(DEV_CONFIG.FLOW_BACK)
+            if(DEV_CONFIGS[BASE_DEV].FLOW_BACK)
             {
                 cv::calcOpticalFlowPyrLK(rightImg, cur_img, cur_right_pts, reverseLeftPts, statusRightLeft, err, cv::Size(21, 21), 3);
                 for(size_t i = 0; i < status.size(); i++)
@@ -243,7 +243,7 @@ map<int, vector<pair<int, Eigen::Matrix<double, 7, 1>>>> FeatureTracker::trackIm
         }
         prev_un_right_pts_map = cur_un_right_pts_map;
     }
-    if(DEV_CONFIG.SHOW_TRACK)
+    if(DEV_CONFIGS[BASE_DEV].SHOW_TRACK)
         drawTrack(cur_img, rightImg, ids, cur_pts, cur_right_pts, prevLeftPtsMap);
 
     prev_img = cur_img;
@@ -327,7 +327,7 @@ void FeatureTracker::rejectWithF()
         }
 
         vector<uchar> status;
-        cv::findFundamentalMat(un_cur_pts, un_prev_pts, cv::FM_RANSAC, DEV_CONFIG.F_THRESHOLD, 0.99, status);
+        cv::findFundamentalMat(un_cur_pts, un_prev_pts, cv::FM_RANSAC, DEV_CONFIGS[BASE_DEV].F_THRESHOLD, 0.99, status);
         int size_a = cur_pts.size();
         reduceVector(prev_pts, status);
         reduceVector(cur_pts, status);
@@ -348,6 +348,18 @@ void FeatureTracker::readIntrinsicParameter(const vector<string> &calib_file)
         m_camera.push_back(camera);
     }
     if (calib_file.size() == 2)
+        stereo_cam = 1;
+}
+
+void FeatureTracker::readIntrinsicParameterArray(const string calib_file[], const int n_cameras)
+{
+    for (uint8_t i = 0; i < n_cameras; i++)
+    {
+        ROS_INFO("reading parameter of camera %s", calib_file[i].c_str());
+        camodocal::CameraPtr camera = CameraFactory::instance()->generateCameraFromYamlFile(calib_file[i]);
+        m_camera.push_back(camera);
+    }
+    if (n_cameras == 2)
         stereo_cam = 1;
 }
 

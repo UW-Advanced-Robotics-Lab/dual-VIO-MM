@@ -28,12 +28,12 @@ class IntegrationBase
 
     {
         noise = Eigen::Matrix<double, 18, 18>::Zero();
-        noise.block<3, 3>(0, 0) =  (DEV_CONFIG.ACC_N * DEV_CONFIG.ACC_N) * Eigen::Matrix3d::Identity();
-        noise.block<3, 3>(3, 3) =  (DEV_CONFIG.GYR_N * DEV_CONFIG.GYR_N) * Eigen::Matrix3d::Identity();
-        noise.block<3, 3>(6, 6) =  (DEV_CONFIG.ACC_N * DEV_CONFIG.ACC_N) * Eigen::Matrix3d::Identity();
-        noise.block<3, 3>(9, 9) =  (DEV_CONFIG.GYR_N * DEV_CONFIG.GYR_N) * Eigen::Matrix3d::Identity();
-        noise.block<3, 3>(12, 12) =  (DEV_CONFIG.ACC_W * DEV_CONFIG.ACC_W) * Eigen::Matrix3d::Identity();
-        noise.block<3, 3>(15, 15) =  (DEV_CONFIG.GYR_W * DEV_CONFIG.GYR_W) * Eigen::Matrix3d::Identity();
+        noise.block<3, 3>(0, 0) =  (DEV_CONFIGS[BASE_DEV].ACC_N * DEV_CONFIGS[BASE_DEV].ACC_N) * Eigen::Matrix3d::Identity();
+        noise.block<3, 3>(3, 3) =  (DEV_CONFIGS[BASE_DEV].GYR_N * DEV_CONFIGS[BASE_DEV].GYR_N) * Eigen::Matrix3d::Identity();
+        noise.block<3, 3>(6, 6) =  (DEV_CONFIGS[BASE_DEV].ACC_N * DEV_CONFIGS[BASE_DEV].ACC_N) * Eigen::Matrix3d::Identity();
+        noise.block<3, 3>(9, 9) =  (DEV_CONFIGS[BASE_DEV].GYR_N * DEV_CONFIGS[BASE_DEV].GYR_N) * Eigen::Matrix3d::Identity();
+        noise.block<3, 3>(12, 12) =  (DEV_CONFIGS[BASE_DEV].ACC_W * DEV_CONFIGS[BASE_DEV].ACC_W) * Eigen::Matrix3d::Identity();
+        noise.block<3, 3>(15, 15) =  (DEV_CONFIGS[BASE_DEV].GYR_W * DEV_CONFIGS[BASE_DEV].GYR_W) * Eigen::Matrix3d::Identity();
     }
 
     void push_back(double dt, const Eigen::Vector3d &acc, const Eigen::Vector3d &gyr)
@@ -186,9 +186,9 @@ class IntegrationBase
         Eigen::Vector3d corrected_delta_v = delta_v + dv_dba * dba + dv_dbg * dbg;
         Eigen::Vector3d corrected_delta_p = delta_p + dp_dba * dba + dp_dbg * dbg;
 
-        residuals.block<3, 1>(O_P, 0) = Qi.inverse() * (0.5 * DEV_CONFIG.G * sum_dt * sum_dt + Pj - Pi - Vi * sum_dt) - corrected_delta_p;
+        residuals.block<3, 1>(O_P, 0) = Qi.inverse() * (0.5 * DEV_CONFIGS[BASE_DEV].G * sum_dt * sum_dt + Pj - Pi - Vi * sum_dt) - corrected_delta_p;
         residuals.block<3, 1>(O_R, 0) = 2 * (corrected_delta_q.inverse() * (Qi.inverse() * Qj)).vec();
-        residuals.block<3, 1>(O_V, 0) = Qi.inverse() * (DEV_CONFIG.G * sum_dt + Vj - Vi) - corrected_delta_v;
+        residuals.block<3, 1>(O_V, 0) = Qi.inverse() * (DEV_CONFIGS[BASE_DEV].G * sum_dt + Vj - Vi) - corrected_delta_v;
         residuals.block<3, 1>(O_BA, 0) = Baj - Bai;
         residuals.block<3, 1>(O_BG, 0) = Bgj - Bgi;
         return residuals;
@@ -267,10 +267,10 @@ class IntegrationBase
 
             // put outside
             Eigen::Matrix<double, 12, 12> noise = Eigen::Matrix<double, 12, 12>::Zero();
-            noise.block<3, 3>(0, 0) =  (DEV_CONFIG.ACC_N * DEV_CONFIG.ACC_N) * Eigen::Matrix3d::Identity();
-            noise.block<3, 3>(3, 3) =  (DEV_CONFIG.GYR_N * DEV_CONFIG.GYR_N) * Eigen::Matrix3d::Identity();
-            noise.block<3, 3>(6, 6) =  (DEV_CONFIG.ACC_W * DEV_CONFIG.ACC_W) * Eigen::Matrix3d::Identity();
-            noise.block<3, 3>(9, 9) =  (DEV_CONFIG.GYR_W * DEV_CONFIG.GYR_W) * Eigen::Matrix3d::Identity();
+            noise.block<3, 3>(0, 0) =  (DEV_CONFIGS[BASE_DEV].ACC_N * DEV_CONFIGS[BASE_DEV].ACC_N) * Eigen::Matrix3d::Identity();
+            noise.block<3, 3>(3, 3) =  (DEV_CONFIGS[BASE_DEV].GYR_N * DEV_CONFIGS[BASE_DEV].GYR_N) * Eigen::Matrix3d::Identity();
+            noise.block<3, 3>(6, 6) =  (DEV_CONFIGS[BASE_DEV].ACC_W * DEV_CONFIGS[BASE_DEV].ACC_W) * Eigen::Matrix3d::Identity();
+            noise.block<3, 3>(9, 9) =  (DEV_CONFIGS[BASE_DEV].GYR_W * DEV_CONFIGS[BASE_DEV].GYR_W) * Eigen::Matrix3d::Identity();
 
             //write F directly
             MatrixXd F, V;

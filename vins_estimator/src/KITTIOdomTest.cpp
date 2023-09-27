@@ -75,9 +75,9 @@ int main(int argc, char** argv)
 	string leftImagePath, rightImagePath;
 	cv::Mat imLeft, imRight;
 	FILE* outFile;
-	outFile = fopen((DEV_CONFIG.OUTPUT_FOLDER + "/vio.txt").c_str(),"w");
+	outFile = fopen((DEV_CONFIGS[BASE_DEV].OUTPUT_FOLDER + "/vio.txt").c_str(),"w");
 	if(outFile == NULL)
-		printf("Output path dosen't exist: %s\n", DEV_CONFIG.OUTPUT_FOLDER.c_str());
+		printf("Output path dosen't exist: %s\n", DEV_CONFIGS[BASE_DEV].OUTPUT_FOLDER.c_str());
 
 	for (size_t i = 0; i < imageTimeList.size(); i++)
 	{	

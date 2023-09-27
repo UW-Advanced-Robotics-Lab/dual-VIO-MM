@@ -424,6 +424,7 @@ int main(int argc, char **argv)
     {
         std::cerr << "ERROR: Wrong path to settings" << std::endl;
     }
+    std::string pre_ = "d0_";
 
     cameraposevisual.setScale(0.1);
     cameraposevisual.setLineWidth(0.01);
@@ -444,22 +445,22 @@ int main(int argc, char **argv)
     int pn = config_file.find_last_of('/');
     std::string configPath = config_file.substr(0, pn);
     std::string cam0Calib;
-    fsSettings["cam0_calib"] >> cam0Calib;
+    fsSettings[pre_+"cam0_calib"] >> cam0Calib;
     std::string cam0Path = configPath + "/" + cam0Calib;
     printf("cam calib path: %s\n", cam0Path.c_str());
     m_camera = camodocal::CameraFactory::instance()->generateCameraFromYamlFile(cam0Path.c_str());
 
-    fsSettings["image0_topic"] >> IMAGE_TOPIC;        
-    fsSettings["pose_graph_save_path"] >> POSE_GRAPH_SAVE_PATH;
-    fsSettings["output_path"] >> VINS_RESULT_PATH;
-    fsSettings["save_image"] >> DEBUG_IMAGE;
+    fsSettings[pre_+"image0_topic"] >> IMAGE_TOPIC;        
+    fsSettings[pre_+"pose_graph_save_path"] >> POSE_GRAPH_SAVE_PATH;
+    fsSettings[pre_+"output_path"] >> VINS_RESULT_PATH;
+    fsSettings[pre_+"save_image"] >> DEBUG_IMAGE;
 
-    LOAD_PREVIOUS_POSE_GRAPH = fsSettings["load_previous_pose_graph"];
+    LOAD_PREVIOUS_POSE_GRAPH = fsSettings[pre_+"load_previous_pose_graph"];
     VINS_RESULT_PATH = VINS_RESULT_PATH + "/vio_loop.csv";
     std::ofstream fout(VINS_RESULT_PATH, std::ios::out);
     fout.close();
 
-    int USE_IMU = fsSettings["imu"];
+    int USE_IMU = fsSettings[pre_+"imu"];
     posegraph.setIMUFlag(USE_IMU);
     fsSettings.release();
 

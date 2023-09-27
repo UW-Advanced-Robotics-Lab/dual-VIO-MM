@@ -24,6 +24,10 @@ using namespace std;
 // : Parameters :
 // ----------------------------------------------------------------
 #define MAX_NUM_CAMERAS     (2U) // 2: stereo, 1: mono
+#define MAX_NUM_DEVICES     (2U) // 2: dual, 1: standalone
+#define BASE_DEV            (0U)
+#define EE_DEV              (1U)
+
 #define FOCAL_LENGTH        ((double)   (460.0))
 #define WINDOW_SIZE         ((int)      (10))
 #define NUM_OF_F            ((int)      (1000))
@@ -104,11 +108,19 @@ enum NoiseOrder
     O_GW = 9
 };
 
+enum CalibVersion
+{
+    CALIB_NO_PRIOR    = (2),
+    CALIB_INIT_GUESS  = (1),
+    CALIB_EXACT       = (0),
+};
+
+
 typedef struct{
 // [Imaging Cameras]:
     std::string         IMAGE0_TOPIC, IMAGE1_TOPIC; // ros topic
-    std::vector<std::string> CAM_NAMES;
-    // std::string         CAM_NAMES[MAX_NUM_CAMERAS]; // cameras intrinsic
+    // std::vector<std::string> CAM_NAMES;
+    std::string         CAM_NAMES[MAX_NUM_CAMERAS]; // cameras intrinsic
     // - camera parameters:
     int                 NUM_OF_CAM;     // number of cameras
     int                 STEREO;         // auto-assign stereo: if n_cam = 2
@@ -124,10 +136,10 @@ typedef struct{
     double              TD;                             //
     int                 ESTIMATE_TD;                    //
     int                 ESTIMATE_EXTRINSIC;             //
-    std::vector<Eigen::Matrix3d> RIC;                   //
-    std::vector<Eigen::Vector3d> TIC;                   //
-    // Eigen::Matrix3d     RIC[MAX_NUM_CAMERAS];
-    // Eigen::Vector3d     TIC[MAX_NUM_CAMERAS];
+    // std::vector<Eigen::Matrix3d> RIC;                   //
+    // std::vector<Eigen::Vector3d> TIC;                   //
+    Eigen::Matrix3d     RIC[MAX_NUM_CAMERAS];
+    Eigen::Vector3d     TIC[MAX_NUM_CAMERAS];
 
 // [Output]:
     std::string         EX_CALIB_RESULT_PATH;           //
@@ -155,4 +167,6 @@ typedef struct{
 // ----------------------------------------------------------------
 // : Global Data Placeholder:
 // ----------------------------------------------------------------
-extern DeviceConfig_t   DEV_CONFIG;
+// extern DeviceConfig_t   DEV_CONFIG;
+extern int              N_DEVICES;
+extern DeviceConfig_t   DEV_CONFIGS[MAX_NUM_DEVICES];
