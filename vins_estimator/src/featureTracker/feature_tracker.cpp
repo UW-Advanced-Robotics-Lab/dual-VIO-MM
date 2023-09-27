@@ -196,7 +196,7 @@ map<int, vector<pair<int, Eigen::Matrix<double, 7, 1>>>> FeatureTracker::trackIm
         //printf("feature cnt after add %d\n", (int)ids.size());
     }
 
-    cur_un_pts = undistortedPts(cur_pts, m_camera[0]);
+    cur_un_pts = undistortedPts(cur_pts, m_camera[0]); // <---- FIXME:BUG?
     pts_velocity = ptsVelocity(ids, cur_un_pts, cur_un_pts_map, prev_un_pts_map);
 
     if(!_img1.empty() && stereo_cam)
@@ -351,11 +351,11 @@ void FeatureTracker::readIntrinsicParameter(const vector<string> &calib_file)
         stereo_cam = 1;
 }
 
-void FeatureTracker::readIntrinsicParameterArray(const string calib_file[], const int n_cameras)
+void FeatureTracker::readIntrinsicParameterArray(string calib_file[], const int n_cameras)
 {
     for (uint8_t i = 0; i < n_cameras; i++)
     {
-        ROS_INFO("reading parameter of camera %s", calib_file[i].c_str());
+        ROS_WARN("reading parameter of camera %s", calib_file[i].c_str());
         camodocal::CameraPtr camera = CameraFactory::instance()->generateCameraFromYamlFile(calib_file[i]);
         m_camera.push_back(camera);
     }

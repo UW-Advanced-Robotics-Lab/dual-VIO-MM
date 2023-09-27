@@ -40,7 +40,7 @@ public:
     map<int, vector<pair<int, Eigen::Matrix<double, 7, 1>>>> trackImage(double _cur_time, const cv::Mat &_img, const cv::Mat &_img1 = cv::Mat());
     void setMask();
     void readIntrinsicParameter(const vector<string> &calib_file);
-    void readIntrinsicParameterArray(const string calib_file[], const int n_cameras);
+    void readIntrinsicParameterArray(string calib_file[], const int n_cameras);
     void showUndistortion(const string &name);
     void rejectWithF();
     void undistortedPoints();

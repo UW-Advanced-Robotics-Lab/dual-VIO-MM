@@ -219,8 +219,8 @@ void readParameters(std::string config_file)
         cam0Path_ = configPath_ + "/" + cam0Calib_;
         
         // - cache:
-        cfg->CAM_NAMES[0] = configPath_;
-        
+        cfg->CAM_NAMES[0] = cam0Path_;
+        cfg->NUM_OF_CAM = n0_cam;
 
         // debug:
         printf("%s cam0 path\n", cam0Path_.c_str() );
@@ -229,9 +229,9 @@ void readParameters(std::string config_file)
         {
             // cam1 path:
             fsSettings[pre_+"cam1_calib"] >> cam0Calib_;
-            configPath_ = cam0Path_ + "/" + cam0Calib_; 
+            cam0Path_ = configPath_ + "/" + cam0Calib_; 
             printf("%s cam1 path\n", configPath_.c_str() );
-            cfg->CAM_NAMES[1] = configPath_;
+            cfg->CAM_NAMES[1] = cam0Path_;
             
             // - transformation:
             cv::Mat cv_T;
@@ -240,7 +240,6 @@ void readParameters(std::string config_file)
             cv::cv2eigen(cv_T, T);
 
             // cache:
-            cfg->NUM_OF_CAM = n0_cam;
             cfg->CAM_NAMES[0] = cam0Path_;
             cfg->RIC[1] = T.block<3, 3>(0, 0);
             cfg->TIC[1] = T.block<3, 1>(0, 3);
