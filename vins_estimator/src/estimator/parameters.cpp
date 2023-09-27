@@ -102,8 +102,8 @@ void readParameters(std::string config_file)
         printf("=== [Indexing %scameras_imu ]", pre_.c_str());
         
         // # Camera topic
-        fsSettings[pre_+"image0_topic"] >> cfg->IMAGE0_TOPIC;
-        fsSettings[pre_+"image1_topic"] >> cfg->IMAGE1_TOPIC;
+        fsSettings[pre_+"image0_topic"] >> cfg->IMAGE_TOPICS[0];
+        fsSettings[pre_+"image1_topic"] >> cfg->IMAGE_TOPICS[1];
 
         // # feature traker paprameters
         cfg->MAX_CNT         = fsSettings["max_cnt"];

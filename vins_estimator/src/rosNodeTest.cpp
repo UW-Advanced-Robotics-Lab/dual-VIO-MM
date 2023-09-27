@@ -251,9 +251,10 @@ int main(int argc, char **argv)
 
     ros::Subscriber sub_imu = n.subscribe(DEV_CONFIGS[BASE_DEV].IMU_TOPIC, 100, imu_callback, ros::TransportHints().tcpNoDelay());
     ros::Subscriber sub_feature = n.subscribe("/feature_tracker/feature", 100, feature_callback);
-    printf("Image Topic: %s\n", DEV_CONFIGS[BASE_DEV].IMAGE0_TOPIC.c_str());
-    ros::Subscriber sub_img0 = n.subscribe(DEV_CONFIGS[BASE_DEV].IMAGE0_TOPIC, 30, img0_callback);
-    ros::Subscriber sub_img1 = n.subscribe(DEV_CONFIGS[BASE_DEV].IMAGE1_TOPIC, 30, img1_callback);
+    printf("Image Topic 0: %s\n", DEV_CONFIGS[BASE_DEV].IMAGE_TOPICS[0].c_str());
+    printf("Image Topic 1: %s\n", DEV_CONFIGS[BASE_DEV].IMAGE_TOPICS[1].c_str());
+    ros::Subscriber sub_img0 = n.subscribe(DEV_CONFIGS[BASE_DEV].IMAGE_TOPICS[0], 30, img0_callback);
+    ros::Subscriber sub_img1 = n.subscribe(DEV_CONFIGS[BASE_DEV].IMAGE_TOPICS[1], 30, img1_callback);
     ros::Subscriber sub_restart = n.subscribe("/vins_restart", 100, restart_callback);
     ros::Subscriber sub_imu_switch = n.subscribe("/vins_imu_switch", 100, imu_switch_callback);
     ros::Subscriber sub_cam_switch = n.subscribe("/vins_cam_switch", 100, cam_switch_callback);

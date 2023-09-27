@@ -118,7 +118,7 @@ enum CalibVersion
 
 typedef struct{
 // [Imaging Cameras]:
-    std::string         IMAGE0_TOPIC, IMAGE1_TOPIC; // ros topic
+    std::string         IMAGE_TOPICS[MAX_NUM_CAMERAS]; // ros topic
     // std::vector<std::string> CAM_NAMES;
     std::string         CAM_NAMES[MAX_NUM_CAMERAS]; // cameras intrinsic
     // - camera parameters:
