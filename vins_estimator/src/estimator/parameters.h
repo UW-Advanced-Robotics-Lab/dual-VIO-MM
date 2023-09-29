@@ -44,9 +44,8 @@ using namespace std;
 
 #define FEATURE_ENABLE_STEREO_SUPPORT        (NOT_IMPLEMENTED) // allow stereo support per device [TODO: let's study stereo later]
 #define FEATURE_ENABLE_PT_CLOUD_SUPPORT      (NOT_IMPLEMENTED) // allow stereo support per device [TODO: let's study stereo later]
-
-#define FEATURE_ENABLE_8UC1_IMAGE_SUPPORT    (DISABLED) // allow 8UC1 image support per device [opt out for runtime]
-#define FEATURE_ENABLE_STANDALONE_SUPPORT    (DISABLED) // allow standalone support for one device [opt out for runtime]
+#define FEATURE_ENABLE_8UC1_IMAGE_SUPPORT    (NOT_IMPLEMENTED) // allow 8UC1 image support per device [opt out for runtime]
+#define FEATURE_ENABLE_STANDALONE_SUPPORT    (NOT_IMPLEMENTED) // allow standalone support for one device [opt out for runtime]
 
 // ----------------------------------------------------------------
 // : ARCHIVES :
