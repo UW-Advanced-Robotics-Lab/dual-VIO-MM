@@ -147,13 +147,16 @@ void sync_process_IMG()
 
 double process_IMU_from_msg(const sensor_msgs::ImuConstPtr &imu_msg, Vector3d &acc, Vector3d &gyr)
 {
-    double t = imu_msg->header.stamp.toSec();
-    acc[1] = (double)(imu_msg->linear_acceleration.x);
-    acc[2] = (double)(imu_msg->linear_acceleration.y);
-    acc[3] = (double)(imu_msg->linear_acceleration.z);
-    gyr[1] = (double)(imu_msg->angular_velocity.x);
-    gyr[2] = (double)(imu_msg->angular_velocity.y);
-    gyr[3] = (double)(imu_msg->angular_velocity.z);
+    double t, x, y, z;
+    t = imu_msg->header.stamp.toSec();
+    x = (double)(imu_msg->linear_acceleration.x);
+    y = (double)(imu_msg->linear_acceleration.y);
+    z = (double)(imu_msg->linear_acceleration.z);
+    acc = Vector3d(x, y, z);
+    x = (double)(imu_msg->angular_velocity.x);
+    y = (double)(imu_msg->angular_velocity.y);
+    z = (double)(imu_msg->angular_velocity.z);
+    gyr = Vector3d(x, y, z);
     return t;
 }
 void d0_imu_callback(const sensor_msgs::ImuConstPtr &imu_msg)
