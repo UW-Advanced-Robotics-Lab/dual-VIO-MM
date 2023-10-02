@@ -28,8 +28,9 @@
 #define SUB_IMU_BUFFER_SIZE         (100U)
 #define SUB_FEAT_BUFFER_SIZE        (100U)
 
-#define IMAGE_SYNCHRONIZATION_TIME_DELTA_MAX    (double)(0.003) // 0.003s sync tolerance [33Hz]
-#define IMU_SYNCHRONIZATION_TIME_DELTA_MAX      (double)(0.001) // 0.0001s sync tolerance [100Hz]
+#define IMAGE_FPS           (float)(30) // --> implies the frame difference between two cameras can be up to 0.015~0.03333 ms
+#define IMAGE_SYNCHRONIZATION_TIME_DELTA_MAX    (double)(0.03) // 0.03-0.003s sync tolerance [100Hz]
+#define IMU_SYNCHRONIZATION_TIME_DELTA_MAX      (double)(0.001) // 0.0001s sync tolerance 
 
 typedef struct{
     // buffer:
@@ -109,11 +110,11 @@ void sync_process_IMG()
                 d1_time = pB1->img0_buf.front()->header.stamp.toSec();
                 // time delta = t_d0 - t_d1 = base - ee
                 d01_delta = (d0_time - d1_time);
-                // 0.003s sync tolerance
+                // sync tolerance
                 if(d01_delta < (- IMAGE_SYNCHRONIZATION_TIME_DELTA_MAX)) // img0 is ahead of img1
                 {
                     pB0->img0_buf.pop();
-                    printf("throw img0\n");
+                    printf("throw img0 dt=%f \n",d01_delta);
                 }
                 else if(d01_delta > (+ IMAGE_SYNCHRONIZATION_TIME_DELTA_MAX)) // img1 is ahead of img0
                 {

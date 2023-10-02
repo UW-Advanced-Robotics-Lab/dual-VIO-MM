@@ -174,7 +174,7 @@ void Estimator::inputImage(double t, const cv::Mat &_img, const cv::Mat &_img1)
     if (pCfg->SHOW_TRACK)
     {
         cv::Mat imgTrack = featureTracker.getTrackImage();
-        pubTrackImage(imgTrack, t);
+        pubTrackImage(imgTrack, t, pCfg->DEVICE_ID);
     }
     
     if(pCfg->MULTIPLE_THREAD)  
@@ -210,7 +210,7 @@ void Estimator::inputIMU(double t, const Vector3d &linearAcceleration, const Vec
     {
         mPropagate.lock();
         fastPredictIMU(t, linearAcceleration, angularVelocity);
-        pubLatestOdometry(latest_P, latest_Q, latest_V, t);
+        pubLatestOdometry(latest_P, latest_Q, latest_V, t, pCfg->DEVICE_ID);
         mPropagate.unlock();
     }
 }
@@ -316,7 +316,7 @@ void Estimator::processMeasurements()
                     processIMU(accVector[i].first, dt, accVector[i].second, gyrVector[i].second);
                 }
             }
-            if (pCfg->DEVICE_ID == BASE_DEV) // TODO: both EE and Base
+            // Publish:
             {
                 mProcess.lock();
                 processImage(feature.second, feature.first);
