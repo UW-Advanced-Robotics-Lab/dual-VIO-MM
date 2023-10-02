@@ -20,10 +20,11 @@
 #include "estimator/estimator.h"
 #include "utility/visualization.h"
 
+#if(NOT_IMPLEMENTED)
 using namespace std;
 using namespace Eigen;
 
-Estimator estimator;
+Estimator estimator();
 
 Eigen::Matrix3d c1Rc0, c0Rc1;
 Eigen::Vector3d c1Tc0, c0Tc1;
@@ -123,3 +124,10 @@ int main(int argc, char** argv)
 		fclose (outFile);
 	return 0;
 }
+#else
+int main(int argc, char** argv)
+{
+	assert("Not implemented");
+	return 0;
+}
+#endif

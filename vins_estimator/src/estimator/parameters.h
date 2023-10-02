@@ -130,6 +130,7 @@ enum CalibVersion
 
 
 typedef struct{
+    int                 DEVICE_ID;
 // [Imaging Cameras]:
     std::string         IMAGE_TOPICS[MAX_NUM_CAMERAS]; // ros topic
     // std::vector<std::string> CAM_NAMES;

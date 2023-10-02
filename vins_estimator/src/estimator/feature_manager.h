@@ -80,7 +80,7 @@ class FeaturePerId
 class FeatureManager
 {
   public:
-    FeatureManager(Matrix3d _Rs[]);
+    FeatureManager(Matrix3d _Rs[], DeviceConfig_t *const _pCfg);
 
     void setRic(Matrix3d _ric[]);
     void clearState();
@@ -112,6 +112,7 @@ class FeatureManager
     double compensatedParallax2(const FeaturePerId &it_per_id, int frame_count);
     const Matrix3d *Rs;
     Matrix3d ric[2];
+    DeviceConfig_t *const pCfg;
 };
 
 #endif

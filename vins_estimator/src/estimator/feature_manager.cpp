@@ -14,16 +14,15 @@ int FeaturePerId::endFrame()
     return start_frame + feature_per_frame.size() - 1;
 }
 
-FeatureManager::FeatureManager(Matrix3d _Rs[])
-    : Rs(_Rs)
+FeatureManager::FeatureManager(Matrix3d _Rs[], DeviceConfig_t *const _pCfg):Rs(_Rs), pCfg{_pCfg}
 {
-    for (int i = 0; i < DEV_CONFIGS[BASE_DEV].NUM_OF_CAM; i++)
+    for (int i = 0; i < pCfg->NUM_OF_CAM; i++)
         ric[i].setIdentity();
 }
 
 void FeatureManager::setRic(Matrix3d _ric[])
 {
-    for (int i = 0; i < DEV_CONFIGS[BASE_DEV].NUM_OF_CAM; i++)
+    for (int i = 0; i < pCfg->NUM_OF_CAM; i++)
     {
         ric[i] = _ric[i];
     }
@@ -114,7 +113,7 @@ bool FeatureManager::addFeatureCheckParallax(int frame_count, const map<int, vec
         ROS_DEBUG("parallax_sum: %lf, parallax_num: %d", parallax_sum, parallax_num);
         ROS_DEBUG("current parallax: %lf", parallax_sum / parallax_num * FOCAL_LENGTH);
         last_average_parallax = parallax_sum / parallax_num * FOCAL_LENGTH;
-        return parallax_sum / parallax_num >= DEV_CONFIGS[BASE_DEV].MIN_PARALLAX;
+        return parallax_sum / parallax_num >= pCfg->MIN_PARALLAX;
     }
 }
 
@@ -307,7 +306,7 @@ void FeatureManager::triangulate(int frameCnt, Vector3d Ps[], Matrix3d Rs[], Vec
             continue;
 
 #if (FEATURE_ENABLE_STEREO_SUPPORT) // stereo support TODO: dual-cam stereo fusion support can happen here
-        if(DEV_CONFIGS[BASE_DEV].STEREO && it_per_id.feature_per_frame[0].is_stereo)
+        if(pCfg->STEREO && it_per_id.feature_per_frame[0].is_stereo)
         {
             int imu_i = it_per_id.start_frame;
             Eigen::Matrix<double, 3, 4> leftPose;
@@ -338,7 +337,7 @@ void FeatureManager::triangulate(int frameCnt, Vector3d Ps[], Matrix3d Rs[], Vec
             if (depth > 0)
                 it_per_id.estimated_depth = depth;
             else
-                it_per_id.estimated_depth = DEV_CONFIGS[BASE_DEV].INIT_DEPTH;
+                it_per_id.estimated_depth = pCfg->INIT_DEPTH;
             /*
             Vector3d ptsGt = pts_gt[it_per_id.feature_id];
             printf("stereo %d pts: %f %f %f gt: %f %f %f \n",it_per_id.feature_id, point3d.x(), point3d.y(), point3d.z(),
@@ -376,7 +375,7 @@ void FeatureManager::triangulate(int frameCnt, Vector3d Ps[], Matrix3d Rs[], Vec
             if (depth > 0)
                 it_per_id.estimated_depth = depth;
             else
-                it_per_id.estimated_depth = DEV_CONFIGS[BASE_DEV].INIT_DEPTH;
+                it_per_id.estimated_depth = pCfg->INIT_DEPTH;
             /*
             Vector3d ptsGt = pts_gt[it_per_id.feature_id];
             printf("motion  %d pts: %f %f %f gt: %f %f %f \n",it_per_id.feature_id, point3d.x(), point3d.y(), point3d.z(),
@@ -424,11 +423,11 @@ void FeatureManager::triangulate(int frameCnt, Vector3d Ps[], Matrix3d Rs[], Vec
         //it_per_id->estimated_depth = svd_V[2] / svd_V[3];
 
         it_per_id.estimated_depth = svd_method;
-        //it_per_id->estimated_depth = DEV_CONFIGS[BASE_DEV].INIT_DEPTH;
+        //it_per_id->estimated_depth = pCfg->INIT_DEPTH;
 
         if (it_per_id.estimated_depth < 0.1)
         {
-            it_per_id.estimated_depth = DEV_CONFIGS[BASE_DEV].INIT_DEPTH;
+            it_per_id.estimated_depth = pCfg->INIT_DEPTH;
         }
 
     }
@@ -478,7 +477,7 @@ void FeatureManager::removeBackShiftDepth(Eigen::Matrix3d marg_R, Eigen::Vector3
                 if (dep_j > 0)
                     it->estimated_depth = dep_j;
                 else
-                    it->estimated_depth = DEV_CONFIGS[BASE_DEV].INIT_DEPTH;
+                    it->estimated_depth = pCfg->INIT_DEPTH;
             }
         }
         // remove tracking-lost feature after marginalize

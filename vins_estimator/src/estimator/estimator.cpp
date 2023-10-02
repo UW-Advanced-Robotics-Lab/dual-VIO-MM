@@ -10,7 +10,7 @@
 #include "estimator.h"
 #include "../utility/visualization.h"
 
-Estimator::Estimator(): f_manager{Rs}
+Estimator::Estimator(DeviceConfig_t *const _pCfg): pCfg{_pCfg}, f_manager{Rs,_pCfg}, featureTracker{_pCfg}
 {
     ROS_INFO("init begins");
     initThreadFlag = false;
@@ -19,7 +19,7 @@ Estimator::Estimator(): f_manager{Rs}
 
 Estimator::~Estimator()
 {
-    if (DEV_CONFIGS[BASE_DEV].MULTIPLE_THREAD)
+    if (pCfg->MULTIPLE_THREAD)
     {
         processThread.join();
         printf("join thread \n");
@@ -62,7 +62,7 @@ void Estimator::clearState()
         pre_integrations[i] = nullptr;
     }
 
-    for (int i = 0; i < DEV_CONFIGS[BASE_DEV].NUM_OF_CAM; i++)
+    for (int i = 0; i < pCfg->NUM_OF_CAM; i++)
     {
         tic[i] = Vector3d::Zero();
         ric[i] = Matrix3d::Identity();
@@ -95,23 +95,23 @@ void Estimator::clearState()
 void Estimator::setParameter()
 {
     mProcess.lock();
-    for (int i = 0; i < DEV_CONFIGS[BASE_DEV].NUM_OF_CAM; i++)
+    for (int i = 0; i < pCfg->NUM_OF_CAM; i++)
     {
-        tic[i] = DEV_CONFIGS[BASE_DEV].TIC[i];
-        ric[i] = DEV_CONFIGS[BASE_DEV].RIC[i];
+        tic[i] = pCfg->TIC[i];
+        ric[i] = pCfg->RIC[i];
         cout << " exitrinsic cam " << i << endl  << ric[i] << endl << tic[i].transpose() << endl;
     }
     f_manager.setRic(ric);
     ProjectionTwoFrameOneCamFactor::sqrt_info = FOCAL_LENGTH / 1.5 * Matrix2d::Identity();
     ProjectionTwoFrameTwoCamFactor::sqrt_info = FOCAL_LENGTH / 1.5 * Matrix2d::Identity();
     ProjectionOneFrameTwoCamFactor::sqrt_info = FOCAL_LENGTH / 1.5 * Matrix2d::Identity();
-    td = DEV_CONFIGS[BASE_DEV].TD;
-    g = DEV_CONFIGS[BASE_DEV].G;
+    td = pCfg->TD;
+    g = pCfg->G;
     cout << "set g " << g.transpose() << endl;
-    featureTracker.readIntrinsicParameterArray(DEV_CONFIGS[BASE_DEV].CAM_NAMES, DEV_CONFIGS[BASE_DEV].NUM_OF_CAM);
+    featureTracker.readIntrinsicParameterArray(pCfg->CAM_NAMES, pCfg->NUM_OF_CAM);
 
-    std::cout << "DEV_CONFIGS[BASE_DEV].MULTIPLE_THREAD is " << DEV_CONFIGS[BASE_DEV].MULTIPLE_THREAD << '\n';
-    if (DEV_CONFIGS[BASE_DEV].MULTIPLE_THREAD && !initThreadFlag)
+    std::cout << "pCfg->MULTIPLE_THREAD is " << pCfg->MULTIPLE_THREAD << '\n';
+    if (pCfg->MULTIPLE_THREAD && !initThreadFlag)
     {
         initThreadFlag = true;
         processThread = std::thread(&Estimator::processMeasurements, this);
@@ -128,10 +128,10 @@ void Estimator::changeSensorType(int use_imu, int use_stereo)
         printf("at least use two sensors! \n");
     else
     {
-        if(DEV_CONFIGS[BASE_DEV].USE_IMU != use_imu)
+        if(pCfg->USE_IMU != use_imu)
         {
-            DEV_CONFIGS[BASE_DEV].USE_IMU = use_imu;
-            if(DEV_CONFIGS[BASE_DEV].USE_IMU)
+            pCfg->USE_IMU = use_imu;
+            if(pCfg->USE_IMU)
             {
                 // reuse imu; restart system
                 restart = true;
@@ -147,8 +147,8 @@ void Estimator::changeSensorType(int use_imu, int use_stereo)
             }
         }
         
-        DEV_CONFIGS[BASE_DEV].STEREO = use_stereo;
-        printf("use imu %d use stereo %d\n", DEV_CONFIGS[BASE_DEV].USE_IMU, DEV_CONFIGS[BASE_DEV].STEREO);
+        pCfg->STEREO = use_stereo;
+        printf("use imu %d use stereo %d\n", pCfg->USE_IMU, pCfg->STEREO);
     }
     mProcess.unlock();
     if(restart)
@@ -171,13 +171,13 @@ void Estimator::inputImage(double t, const cv::Mat &_img, const cv::Mat &_img1)
         featureFrame = featureTracker.trackImage(t, _img, _img1);
     //printf("featureTracker time: %f\n", featureTrackerTime.toc());
 
-    if (DEV_CONFIGS[BASE_DEV].SHOW_TRACK)
+    if (pCfg->SHOW_TRACK)
     {
         cv::Mat imgTrack = featureTracker.getTrackImage();
         pubTrackImage(imgTrack, t);
     }
     
-    if(DEV_CONFIGS[BASE_DEV].MULTIPLE_THREAD)  
+    if(pCfg->MULTIPLE_THREAD)  
     {     
         if(inputImageCnt % 2 == 0)
         {
@@ -221,7 +221,7 @@ void Estimator::inputFeature(double t, const map<int, vector<pair<int, Eigen::Ma
     featureBuf.push(make_pair(t, featureFrame));
     mBuf.unlock();
 
-    if(!DEV_CONFIGS[BASE_DEV].MULTIPLE_THREAD)
+    if(!pCfg->MULTIPLE_THREAD)
         processMeasurements();
 }
 
@@ -282,25 +282,25 @@ void Estimator::processMeasurements()
             curTime = feature.first + td;
             while(1)
             {
-                if ((!DEV_CONFIGS[BASE_DEV].USE_IMU  || IMUAvailable(feature.first + td)))
+                if ((!pCfg->USE_IMU  || IMUAvailable(feature.first + td)))
                     break;
                 else
                 {
                     printf("wait for imu ... \n");
-                    if (! DEV_CONFIGS[BASE_DEV].MULTIPLE_THREAD)
+                    if (! pCfg->MULTIPLE_THREAD)
                         return;
                     std::chrono::milliseconds dura(5);
                     std::this_thread::sleep_for(dura);
                 }
             }
             mBuf.lock();
-            if(DEV_CONFIGS[BASE_DEV].USE_IMU)
+            if(pCfg->USE_IMU)
                 getIMUInterval(prevTime, curTime, accVector, gyrVector);
 
             featureBuf.pop();
             mBuf.unlock();
 
-            if(DEV_CONFIGS[BASE_DEV].USE_IMU)
+            if(pCfg->USE_IMU)
             {
                 if(!initFirstPoseFlag)
                     initFirstIMUPose(accVector);
@@ -316,26 +316,31 @@ void Estimator::processMeasurements()
                     processIMU(accVector[i].first, dt, accVector[i].second, gyrVector[i].second);
                 }
             }
-            mProcess.lock();
-            processImage(feature.second, feature.first);
-            prevTime = curTime;
+            if (pCfg->DEVICE_ID == BASE_DEV) // TODO: both EE and Base
+            {
+                mProcess.lock();
+                processImage(feature.second, feature.first);
+                prevTime = curTime;
 
-            printStatistics(*this, 0);
+                printStatistics(*this, 0);
 
-            std_msgs::Header header;
-            header.frame_id = "world";
-            header.stamp = ros::Time(feature.first);
-
-            pubOdometry(*this, header);
-            pubKeyPoses(*this, header);
-            pubCameraPose(*this, header);
-            pubPointCloud(*this, header);
-            pubKeyframe(*this);
-            pubTF(*this, header);
-            mProcess.unlock();
+                // publish
+                std_msgs::Header header;
+                header.frame_id = "world";
+                header.stamp = ros::Time(feature.first);
+                    pubOdometry(*this, header);
+                    pubKeyPoses(*this, header);
+                    pubCameraPose(*this, header);
+                    pubPointCloud(*this, header);
+                    pubKeyframe(*this);
+                    pubTF(*this, header);
+                mProcess.unlock();
+                
+                // printf("Plotting ... \n");
+            }
         }
 
-        if (! DEV_CONFIGS[BASE_DEV].MULTIPLE_THREAD)
+        if (! pCfg->MULTIPLE_THREAD)
             break;
 
         std::chrono::milliseconds dura(2);
@@ -385,7 +390,7 @@ void Estimator::processIMU(double t, double dt, const Vector3d &linear_accelerat
 
     if (!pre_integrations[frame_count])
     {
-        pre_integrations[frame_count] = new IntegrationBase{acc_0, gyr_0, Bas[frame_count], Bgs[frame_count]};
+        pre_integrations[frame_count] = new IntegrationBase{acc_0, gyr_0, Bas[frame_count], Bgs[frame_count], pCfg};
     }
     if (frame_count != 0)
     {
@@ -433,9 +438,9 @@ void Estimator::processImage(const map<int, vector<pair<int, Eigen::Matrix<doubl
     ImageFrame imageframe(image, header);
     imageframe.pre_integration = tmp_pre_integration;
     all_image_frame.insert(make_pair(header, imageframe));
-    tmp_pre_integration = new IntegrationBase{acc_0, gyr_0, Bas[frame_count], Bgs[frame_count]};
+    tmp_pre_integration = new IntegrationBase{acc_0, gyr_0, Bas[frame_count], Bgs[frame_count], pCfg};
 
-    if(DEV_CONFIGS[BASE_DEV].ESTIMATE_EXTRINSIC == 2)
+    if(pCfg->ESTIMATE_EXTRINSIC == 2)
     {
         ROS_INFO("calibrating extrinsic param, rotation movement is needed");
         if (frame_count != 0)
@@ -447,8 +452,8 @@ void Estimator::processImage(const map<int, vector<pair<int, Eigen::Matrix<doubl
                 ROS_WARN("initial extrinsic rotation calib success");
                 ROS_WARN_STREAM("initial extrinsic rotation: " << endl << calib_ric);
                 ric[0] = calib_ric;
-                DEV_CONFIGS[BASE_DEV].RIC[0] = calib_ric;
-                DEV_CONFIGS[BASE_DEV].ESTIMATE_EXTRINSIC = 1;
+                pCfg->RIC[0] = calib_ric;
+                pCfg->ESTIMATE_EXTRINSIC = 1;
             }
         }
     }
@@ -457,13 +462,13 @@ void Estimator::processImage(const map<int, vector<pair<int, Eigen::Matrix<doubl
     {
         // monocular + IMU initilization
 #if (FEATURE_ENABLE_STEREO_SUPPORT) // condition only necessary for stereo support 
-        if (!DEV_CONFIGS[BASE_DEV].STEREO && DEV_CONFIGS[BASE_DEV].USE_IMU) 
+        if (!pCfg->STEREO && pCfg->USE_IMU) 
 #endif
         {
             if (frame_count == WINDOW_SIZE)
             {
                 bool result = false;
-                if(DEV_CONFIGS[BASE_DEV].ESTIMATE_EXTRINSIC != 2 && (header - initial_timestamp) > 0.1)
+                if(pCfg->ESTIMATE_EXTRINSIC != 2 && (header - initial_timestamp) > 0.1)
                 {
                     result = initialStructure();
                     initial_timestamp = header;   
@@ -483,7 +488,7 @@ void Estimator::processImage(const map<int, vector<pair<int, Eigen::Matrix<doubl
 
 #if (FEATURE_ENABLE_STEREO_SUPPORT)
         // stereo + IMU initilization
-        if(DEV_CONFIGS[BASE_DEV].STEREO && DEV_CONFIGS[BASE_DEV].USE_IMU)
+        if(pCfg->STEREO && pCfg->USE_IMU)
         {
             f_manager.initFramePoseByPnP(frame_count, Ps, Rs, tic, ric);
             f_manager.triangulate(frame_count, Ps, Rs, tic, ric);
@@ -511,7 +516,7 @@ void Estimator::processImage(const map<int, vector<pair<int, Eigen::Matrix<doubl
         }
 
         // stereo only initilization
-        if(DEV_CONFIGS[BASE_DEV].STEREO && !DEV_CONFIGS[BASE_DEV].USE_IMU)
+        if(pCfg->STEREO && !pCfg->USE_IMU)
         {
             f_manager.initFramePoseByPnP(frame_count, Ps, Rs, tic, ric);
             f_manager.triangulate(frame_count, Ps, Rs, tic, ric);
@@ -543,27 +548,27 @@ void Estimator::processImage(const map<int, vector<pair<int, Eigen::Matrix<doubl
     else
     {
         TicToc t_solve;
-        if(!DEV_CONFIGS[BASE_DEV].USE_IMU)
+        if(!pCfg->USE_IMU)
             f_manager.initFramePoseByPnP(frame_count, Ps, Rs, tic, ric);
         f_manager.triangulate(frame_count, Ps, Rs, tic, ric);
         optimization();
         set<int> removeIndex;
         outliersRejection(removeIndex);
         f_manager.removeOutlier(removeIndex);
-        if (! DEV_CONFIGS[BASE_DEV].MULTIPLE_THREAD)
+        if (! pCfg->MULTIPLE_THREAD)
         {
             featureTracker.removeOutliers(removeIndex);
             predictPtsInNextFrame();
         }
             
-        ROS_DEBUG("solver costs: %fms", t_solve.toc());
+        ROS_INFO("solver costs: %fms", t_solve.toc());
 
         if (failureDetection())
         {
             ROS_WARN("failure detection!");
             failure_occur = 1;
             clearState();
-            setParameter();
+            setParameter(); // reinit
             ROS_WARN("system reboot!");
             return;
         }
@@ -662,7 +667,7 @@ bool Estimator::initialStructure()
         if((frame_it->first) == Headers[i])
         {
             frame_it->second.is_key_frame = true;
-            frame_it->second.R = Q[i].toRotationMatrix() * DEV_CONFIGS[BASE_DEV].RIC[0].transpose();
+            frame_it->second.R = Q[i].toRotationMatrix() * pCfg->RIC[0].transpose();
             frame_it->second.T = T[i];
             i++;
             continue;
@@ -716,7 +721,7 @@ bool Estimator::initialStructure()
         MatrixXd T_pnp;
         cv::cv2eigen(t, T_pnp);
         T_pnp = R_pnp * (-T_pnp);
-        frame_it->second.R = R_pnp * DEV_CONFIGS[BASE_DEV].RIC[0].transpose();
+        frame_it->second.R = R_pnp * pCfg->RIC[0].transpose();
         frame_it->second.T = T_pnp;
     }
     if (visualInitialAlign())
@@ -734,7 +739,7 @@ bool Estimator::visualInitialAlign()
     TicToc t_g;
     VectorXd x;
     //solve scale
-    bool result = VisualIMUAlignment(all_image_frame, Bgs, g, x);
+    bool result = VisualIMUAlignment(all_image_frame, Bgs, g, x, pCfg);
     if(!result)
     {
         ROS_DEBUG("solve g failed!");
@@ -757,7 +762,7 @@ bool Estimator::visualInitialAlign()
         pre_integrations[i]->repropagate(Vector3d::Zero(), Bgs[i]);
     }
     for (int i = frame_count; i >= 0; i--)
-        Ps[i] = s * Ps[i] - Rs[i] * DEV_CONFIGS[BASE_DEV].TIC[0] - (s * Ps[0] - Rs[0] * DEV_CONFIGS[BASE_DEV].TIC[0]);
+        Ps[i] = s * Ps[i] - Rs[i] * pCfg->TIC[0] - (s * Ps[0] - Rs[0] * pCfg->TIC[0]);
     int kv = -1;
     map<double, ImageFrame>::iterator frame_i;
     for (frame_i = all_image_frame.begin(); frame_i != all_image_frame.end(); frame_i++)
@@ -834,7 +839,7 @@ void Estimator::vector2double()
         para_Pose[i][5] = q.z();
         para_Pose[i][6] = q.w();
 
-        if(DEV_CONFIGS[BASE_DEV].USE_IMU)
+        if(pCfg->USE_IMU)
         {
             para_SpeedBias[i][0] = Vs[i].x();
             para_SpeedBias[i][1] = Vs[i].y();
@@ -850,7 +855,7 @@ void Estimator::vector2double()
         }
     }
 
-    for (int i = 0; i < DEV_CONFIGS[BASE_DEV].NUM_OF_CAM; i++)
+    for (int i = 0; i < pCfg->NUM_OF_CAM; i++)
     {
         para_Ex_Pose[i][0] = tic[i].x();
         para_Ex_Pose[i][1] = tic[i].y();
@@ -882,7 +887,7 @@ void Estimator::double2vector()
         failure_occur = 0;
     }
 
-    if(DEV_CONFIGS[BASE_DEV].USE_IMU)
+    if(pCfg->USE_IMU)
     {
         Vector3d origin_R00 = Utility::R2ypr(Quaterniond(para_Pose[0][6],
                                                           para_Pose[0][3],
@@ -934,9 +939,9 @@ void Estimator::double2vector()
         }
     }
 
-    if(DEV_CONFIGS[BASE_DEV].USE_IMU)
+    if(pCfg->USE_IMU)
     {
-        for (int i = 0; i < DEV_CONFIGS[BASE_DEV].NUM_OF_CAM; i++)
+        for (int i = 0; i < pCfg->NUM_OF_CAM; i++)
         {
             tic[i] = Vector3d(para_Ex_Pose[i][0],
                               para_Ex_Pose[i][1],
@@ -953,7 +958,7 @@ void Estimator::double2vector()
         dep(i) = para_Feature[i][0];
     f_manager.setDepth(dep);
 
-    if(DEV_CONFIGS[BASE_DEV].USE_IMU)
+    if(pCfg->USE_IMU)
         td = para_Td[0][0];
 
 }
@@ -1022,17 +1027,17 @@ void Estimator::optimization()
     {
         ceres::LocalParameterization *local_parameterization = new PoseLocalParameterization();
         problem.AddParameterBlock(para_Pose[i], SIZE_POSE, local_parameterization);
-        if(DEV_CONFIGS[BASE_DEV].USE_IMU)
+        if(pCfg->USE_IMU)
             problem.AddParameterBlock(para_SpeedBias[i], SIZE_SPEEDBIAS);
     }
-    if(!DEV_CONFIGS[BASE_DEV].USE_IMU)
+    if(!pCfg->USE_IMU)
         problem.SetParameterBlockConstant(para_Pose[0]);
 
-    for (int i = 0; i < DEV_CONFIGS[BASE_DEV].NUM_OF_CAM; i++)
+    for (int i = 0; i < pCfg->NUM_OF_CAM; i++)
     {
         ceres::LocalParameterization *local_parameterization = new PoseLocalParameterization();
         problem.AddParameterBlock(para_Ex_Pose[i], SIZE_POSE, local_parameterization);
-        if ((DEV_CONFIGS[BASE_DEV].ESTIMATE_EXTRINSIC && frame_count == WINDOW_SIZE && Vs[0].norm() > 0.2) || openExEstimation)
+        if ((pCfg->ESTIMATE_EXTRINSIC && frame_count == WINDOW_SIZE && Vs[0].norm() > 0.2) || openExEstimation)
         {
             //ROS_INFO("estimate extinsic param");
             openExEstimation = 1;
@@ -1045,7 +1050,7 @@ void Estimator::optimization()
     }
     problem.AddParameterBlock(para_Td[0], 1);
 
-    if (!DEV_CONFIGS[BASE_DEV].ESTIMATE_TD || Vs[0].norm() < 0.2)
+    if (!pCfg->ESTIMATE_TD || Vs[0].norm() < 0.2)
         problem.SetParameterBlockConstant(para_Td[0]);
 
     if (last_marginalization_info && last_marginalization_info->valid)
@@ -1055,14 +1060,14 @@ void Estimator::optimization()
         problem.AddResidualBlock(marginalization_factor, NULL,
                                  last_marginalization_parameter_blocks);
     }
-    if(DEV_CONFIGS[BASE_DEV].USE_IMU)
+    if(pCfg->USE_IMU)
     {
         for (int i = 0; i < frame_count; i++)
         {
             int j = i + 1;
             if (pre_integrations[j]->sum_dt > 10.0)
                 continue;
-            IMUFactor* imu_factor = new IMUFactor(pre_integrations[j]);
+            IMUFactor* imu_factor = new IMUFactor(pre_integrations[j], pCfg->G);
             problem.AddResidualBlock(imu_factor, NULL, para_Pose[i], para_SpeedBias[i], para_Pose[j], para_SpeedBias[j]);
         }
     }
@@ -1093,7 +1098,7 @@ void Estimator::optimization()
             }
 
 #if (FEATURE_ENABLE_STEREO_SUPPORT) // stereo only
-            if(DEV_CONFIGS[BASE_DEV].STEREO && it_per_frame.is_stereo)
+            if(pCfg->STEREO && it_per_frame.is_stereo)
             {                
                 Vector3d pts_j_right = it_per_frame.pointRight;
                 if(imu_i != imu_j)
@@ -1124,14 +1129,14 @@ void Estimator::optimization()
     options.linear_solver_type = ceres::DENSE_SCHUR;
     //options.num_threads = 2;
     options.trust_region_strategy_type = ceres::DOGLEG;
-    options.max_num_iterations = DEV_CONFIGS[BASE_DEV].NUM_ITERATIONS;
+    options.max_num_iterations = pCfg->NUM_ITERATIONS;
     //options.use_explicit_schur_complement = true;
     //options.minimizer_progress_to_stdout = true;
     //options.use_nonmonotonic_steps = true;
     if (marginalization_flag == MARGIN_OLD)
-        options.max_solver_time_in_seconds = DEV_CONFIGS[BASE_DEV].SOLVER_TIME * 4.0 / 5.0;
+        options.max_solver_time_in_seconds = pCfg->SOLVER_TIME * 4.0 / 5.0;
     else
-        options.max_solver_time_in_seconds = DEV_CONFIGS[BASE_DEV].SOLVER_TIME;
+        options.max_solver_time_in_seconds = pCfg->SOLVER_TIME;
     TicToc t_solver;
     ceres::Solver::Summary summary;
     ceres::Solve(options, &problem, &summary);
@@ -1168,11 +1173,11 @@ void Estimator::optimization()
             marginalization_info->addResidualBlockInfo(residual_block_info);
         }
 
-        if(DEV_CONFIGS[BASE_DEV].USE_IMU)
+        if(pCfg->USE_IMU)
         {
             if (pre_integrations[1]->sum_dt < 10.0)
             {
-                IMUFactor* imu_factor = new IMUFactor(pre_integrations[1]);
+                IMUFactor* imu_factor = new IMUFactor(pre_integrations[1], pCfg->G);
                 ResidualBlockInfo *residual_block_info = new ResidualBlockInfo(imu_factor, NULL,
                                                                            vector<double *>{para_Pose[0], para_SpeedBias[0], para_Pose[1], para_SpeedBias[1]},
                                                                            vector<int>{0, 1});
@@ -1210,7 +1215,7 @@ void Estimator::optimization()
                         marginalization_info->addResidualBlockInfo(residual_block_info);
                     }
 #if (FEATURE_ENABLE_STEREO_SUPPORT) // stereo only
-                    if(DEV_CONFIGS[BASE_DEV].STEREO && it_per_frame.is_stereo)
+                    if(pCfg->STEREO && it_per_frame.is_stereo)
                     {
                         Vector3d pts_j_right = it_per_frame.pointRight;
                         if(imu_i != imu_j)
@@ -1249,10 +1254,10 @@ void Estimator::optimization()
         for (int i = 1; i <= WINDOW_SIZE; i++)
         {
             addr_shift[reinterpret_cast<long>(para_Pose[i])] = para_Pose[i - 1];
-            if(DEV_CONFIGS[BASE_DEV].USE_IMU)
+            if(pCfg->USE_IMU)
                 addr_shift[reinterpret_cast<long>(para_SpeedBias[i])] = para_SpeedBias[i - 1];
         }
-        for (int i = 0; i < DEV_CONFIGS[BASE_DEV].NUM_OF_CAM; i++)
+        for (int i = 0; i < pCfg->NUM_OF_CAM; i++)
             addr_shift[reinterpret_cast<long>(para_Ex_Pose[i])] = para_Ex_Pose[i];
 
         addr_shift[reinterpret_cast<long>(para_Td[0])] = para_Td[0];
@@ -1309,17 +1314,17 @@ void Estimator::optimization()
                 else if (i == WINDOW_SIZE)
                 {
                     addr_shift[reinterpret_cast<long>(para_Pose[i])] = para_Pose[i - 1];
-                    if(DEV_CONFIGS[BASE_DEV].USE_IMU)
+                    if(pCfg->USE_IMU)
                         addr_shift[reinterpret_cast<long>(para_SpeedBias[i])] = para_SpeedBias[i - 1];
                 }
                 else
                 {
                     addr_shift[reinterpret_cast<long>(para_Pose[i])] = para_Pose[i];
-                    if(DEV_CONFIGS[BASE_DEV].USE_IMU)
+                    if(pCfg->USE_IMU)
                         addr_shift[reinterpret_cast<long>(para_SpeedBias[i])] = para_SpeedBias[i];
                 }
             }
-            for (int i = 0; i < DEV_CONFIGS[BASE_DEV].NUM_OF_CAM; i++)
+            for (int i = 0; i < pCfg->NUM_OF_CAM; i++)
                 addr_shift[reinterpret_cast<long>(para_Ex_Pose[i])] = para_Ex_Pose[i];
 
             addr_shift[reinterpret_cast<long>(para_Td[0])] = para_Td[0];
@@ -1352,7 +1357,7 @@ void Estimator::slideWindow()
                 Headers[i] = Headers[i + 1];
                 Rs[i].swap(Rs[i + 1]);
                 Ps[i].swap(Ps[i + 1]);
-                if(DEV_CONFIGS[BASE_DEV].USE_IMU)
+                if(pCfg->USE_IMU)
                 {
                     std::swap(pre_integrations[i], pre_integrations[i + 1]);
 
@@ -1369,14 +1374,14 @@ void Estimator::slideWindow()
             Ps[WINDOW_SIZE] = Ps[WINDOW_SIZE - 1];
             Rs[WINDOW_SIZE] = Rs[WINDOW_SIZE - 1];
 
-            if(DEV_CONFIGS[BASE_DEV].USE_IMU)
+            if(pCfg->USE_IMU)
             {
                 Vs[WINDOW_SIZE] = Vs[WINDOW_SIZE - 1];
                 Bas[WINDOW_SIZE] = Bas[WINDOW_SIZE - 1];
                 Bgs[WINDOW_SIZE] = Bgs[WINDOW_SIZE - 1];
 
                 delete pre_integrations[WINDOW_SIZE];
-                pre_integrations[WINDOW_SIZE] = new IntegrationBase{acc_0, gyr_0, Bas[WINDOW_SIZE], Bgs[WINDOW_SIZE]};
+                pre_integrations[WINDOW_SIZE] = new IntegrationBase{acc_0, gyr_0, Bas[WINDOW_SIZE], Bgs[WINDOW_SIZE], pCfg};
 
                 dt_buf[WINDOW_SIZE].clear();
                 linear_acceleration_buf[WINDOW_SIZE].clear();
@@ -1401,7 +1406,7 @@ void Estimator::slideWindow()
             Ps[frame_count - 1] = Ps[frame_count];
             Rs[frame_count - 1] = Rs[frame_count];
 
-            if(DEV_CONFIGS[BASE_DEV].USE_IMU)
+            if(pCfg->USE_IMU)
             {
                 for (unsigned int i = 0; i < dt_buf[frame_count].size(); i++)
                 {
@@ -1421,7 +1426,7 @@ void Estimator::slideWindow()
                 Bgs[frame_count - 1] = Bgs[frame_count];
 
                 delete pre_integrations[WINDOW_SIZE];
-                pre_integrations[WINDOW_SIZE] = new IntegrationBase{acc_0, gyr_0, Bas[WINDOW_SIZE], Bgs[WINDOW_SIZE]};
+                pre_integrations[WINDOW_SIZE] = new IntegrationBase{acc_0, gyr_0, Bas[WINDOW_SIZE], Bgs[WINDOW_SIZE], pCfg};
 
                 dt_buf[WINDOW_SIZE].clear();
                 linear_acceleration_buf[WINDOW_SIZE].clear();
@@ -1549,7 +1554,7 @@ void Estimator::outliersRejection(set<int> &removeIndex)
             }
 #if (FEATURE_ENABLE_STEREO_SUPPORT) // stereo only
             // need to rewrite projecton factor.........
-            if(DEV_CONFIGS[BASE_DEV].STEREO && it_per_frame.is_stereo)
+            if(pCfg->STEREO && it_per_frame.is_stereo)
             {
                 
                 Vector3d pts_j_right = it_per_frame.pointRight;

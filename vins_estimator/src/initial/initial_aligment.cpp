@@ -62,9 +62,9 @@ MatrixXd TangentBasis(Vector3d &g0)
     return bc;
 }
 
-void RefineGravity(map<double, ImageFrame> &all_image_frame, Vector3d &g, VectorXd &x)
+void RefineGravity(map<double, ImageFrame> &all_image_frame, Vector3d &g, VectorXd &x, const DeviceConfig_t *const pCfg)
 {
-    Vector3d g0 = g.normalized() * DEV_CONFIGS[BASE_DEV].G.norm();
+    Vector3d g0 = g.normalized() * pCfg->G.norm();
     Vector3d lx, ly;
     //VectorXd x;
     int all_frame_count = all_image_frame.size();
@@ -97,7 +97,7 @@ void RefineGravity(map<double, ImageFrame> &all_image_frame, Vector3d &g, Vector
             tmp_A.block<3, 3>(0, 0) = -dt * Matrix3d::Identity();
             tmp_A.block<3, 2>(0, 6) = frame_i->second.R.transpose() * dt * dt / 2 * Matrix3d::Identity() * lxly;
             tmp_A.block<3, 1>(0, 8) = frame_i->second.R.transpose() * (frame_j->second.T - frame_i->second.T) / 100.0;     
-            tmp_b.block<3, 1>(0, 0) = frame_j->second.pre_integration->delta_p + frame_i->second.R.transpose() * frame_j->second.R * DEV_CONFIGS[BASE_DEV].TIC[0] - DEV_CONFIGS[BASE_DEV].TIC[0] - frame_i->second.R.transpose() * dt * dt / 2 * g0;
+            tmp_b.block<3, 1>(0, 0) = frame_j->second.pre_integration->delta_p + frame_i->second.R.transpose() * frame_j->second.R * pCfg->TIC[0] - pCfg->TIC[0] - frame_i->second.R.transpose() * dt * dt / 2 * g0;
 
             tmp_A.block<3, 3>(3, 0) = -Matrix3d::Identity();
             tmp_A.block<3, 3>(3, 3) = frame_i->second.R.transpose() * frame_j->second.R;
@@ -126,13 +126,13 @@ void RefineGravity(map<double, ImageFrame> &all_image_frame, Vector3d &g, Vector
             b = b * 1000.0;
             x = A.ldlt().solve(b);
             VectorXd dg = x.segment<2>(n_state - 3);
-            g0 = (g0 + lxly * dg).normalized() * DEV_CONFIGS[BASE_DEV].G.norm();
+            g0 = (g0 + lxly * dg).normalized() * pCfg->G.norm();
             //double s = x(n_state - 1);
     }   
     g = g0;
 }
 
-bool LinearAlignment(map<double, ImageFrame> &all_image_frame, Vector3d &g, VectorXd &x)
+bool LinearAlignment(map<double, ImageFrame> &all_image_frame, Vector3d &g, VectorXd &x, const DeviceConfig_t *const pCfg)
 {
     int all_frame_count = all_image_frame.size();
     int n_state = all_frame_count * 3 + 3 + 1;
@@ -159,7 +159,7 @@ bool LinearAlignment(map<double, ImageFrame> &all_image_frame, Vector3d &g, Vect
         tmp_A.block<3, 3>(0, 0) = -dt * Matrix3d::Identity();
         tmp_A.block<3, 3>(0, 6) = frame_i->second.R.transpose() * dt * dt / 2 * Matrix3d::Identity();
         tmp_A.block<3, 1>(0, 9) = frame_i->second.R.transpose() * (frame_j->second.T - frame_i->second.T) / 100.0;     
-        tmp_b.block<3, 1>(0, 0) = frame_j->second.pre_integration->delta_p + frame_i->second.R.transpose() * frame_j->second.R * DEV_CONFIGS[BASE_DEV].TIC[0] - DEV_CONFIGS[BASE_DEV].TIC[0];
+        tmp_b.block<3, 1>(0, 0) = frame_j->second.pre_integration->delta_p + frame_i->second.R.transpose() * frame_j->second.R * pCfg->TIC[0] - pCfg->TIC[0];
         //cout << "delta_p   " << frame_j->second.pre_integration->delta_p.transpose() << endl;
         tmp_A.block<3, 3>(3, 0) = -Matrix3d::Identity();
         tmp_A.block<3, 3>(3, 3) = frame_i->second.R.transpose() * frame_j->second.R;
@@ -191,12 +191,12 @@ bool LinearAlignment(map<double, ImageFrame> &all_image_frame, Vector3d &g, Vect
     ROS_DEBUG("estimated scale: %f", s);
     g = x.segment<3>(n_state - 4);
     ROS_DEBUG_STREAM(" result g     " << g.norm() << " " << g.transpose());
-    if(fabs(g.norm() - DEV_CONFIGS[BASE_DEV].G.norm()) > 0.5 || s < 0)
+    if(fabs(g.norm() - pCfg->G.norm()) > 0.5 || s < 0)
     {
         return false;
     }
 
-    RefineGravity(all_image_frame, g, x);
+    RefineGravity(all_image_frame, g, x, pCfg);
     s = (x.tail<1>())(0) / 100.0;
     (x.tail<1>())(0) = s;
     ROS_DEBUG_STREAM(" refine     " << g.norm() << " " << g.transpose());
@@ -206,11 +206,11 @@ bool LinearAlignment(map<double, ImageFrame> &all_image_frame, Vector3d &g, Vect
         return true;
 }
 
-bool VisualIMUAlignment(map<double, ImageFrame> &all_image_frame, Vector3d* Bgs, Vector3d &g, VectorXd &x)
+bool VisualIMUAlignment(map<double, ImageFrame> &all_image_frame, Vector3d* Bgs, Vector3d &g, VectorXd &x, const DeviceConfig_t *const pCfg)
 {
     solveGyroscopeBias(all_image_frame, Bgs);
 
-    if(LinearAlignment(all_image_frame, g, x))
+    if(LinearAlignment(all_image_frame, g, x, pCfg))
         return true;
     else 
         return false;

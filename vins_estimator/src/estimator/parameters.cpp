@@ -94,6 +94,8 @@ void readParameters(std::string config_file)
     for (int i = 0; i < N_DEVICES; i++)
     {
         DeviceConfig_t* cfg = & (DEV_CONFIGS[i]);
+        cfg->DEVICE_ID = i;
+        
         std::string pre_ = "d"+ std::to_string(i) + "_";
         if (if_old_config){
             pre_ = ""; // no prefixes

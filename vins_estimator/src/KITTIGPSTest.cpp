@@ -23,7 +23,8 @@
 using namespace std;
 using namespace Eigen;
 
-Estimator estimator;
+#if (NOT_IMPLEMENTED)
+Estimator estimator();
 ros::Publisher pubGPS;
 
 int main(int argc, char** argv)
@@ -187,4 +188,10 @@ int main(int argc, char** argv)
 		fclose (outFile);
 	return 0;
 }
-
+#else
+int main(int argc, char** argv)
+{
+	assert("Not implemented");
+	return 0;
+}
+#endif

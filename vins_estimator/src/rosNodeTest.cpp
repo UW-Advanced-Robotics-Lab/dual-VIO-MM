@@ -37,36 +37,38 @@ typedef struct{
     std::mutex                              img0_mutex;
     // queue<sensor_msgs::JointStateConstPtr>  jnt_buf;
     // std::mutex                              jnt_mutex;
-    
-    // module:
-    Estimator                               estimator;
-} NodeData_t;
+} NodeBuffer_t;
 
-typedef Matrix<double, 7, 1> Vector7d_t; // for storing <time, acc, gyr>
+// typedef Matrix<double, 7, 1> Vector7d_t; // for storing <time, acc, gyr>
 
 ///////////////////////////
 ///////   DATA     ////////
 ///////////////////////////
-NodeData_t  m_data[MAX_NUM_DEVICES]; // each device has its own estimator
-
+NodeBuffer_t   m_buffer[MAX_NUM_DEVICES];
+Estimator      m_est_b(& DEV_CONFIGS[BASE_DEV]);
+Estimator      m_est_e(& DEV_CONFIGS[EE_DEV  ]);
+// Estimator      m_est[] = {
+//     Estimator(& DEV_CONFIGS[BASE_DEV]),
+//     Estimator(& DEV_CONFIGS[EE_DEV])
+// };
 
 ////////////////////////////////////////
 ///////   PRIVATE FUNCTION     /////////
 ////////////////////////////////////////
 
-void buf_img_safely(NodeData_t * const pD, const sensor_msgs::ImageConstPtr &img_msg)
+void buf_img_safely(NodeBuffer_t * const pB, const sensor_msgs::ImageConstPtr &img_msg)
 {
-    pD->img0_mutex.lock();
-    pD->img0_buf.push(img_msg);
-    pD->img0_mutex.unlock();
+    pB->img0_mutex.lock();
+    pB->img0_buf.push(img_msg);
+    pB->img0_mutex.unlock();
 }
 void d0_img0_callback(const sensor_msgs::ImageConstPtr &img_msg)
 {
-    buf_img_safely(& m_data[BASE_DEV], img_msg);
+    buf_img_safely(& m_buffer[BASE_DEV], img_msg);
 }
 void d1_img0_callback(const sensor_msgs::ImageConstPtr &img_msg)
 {
-    buf_img_safely(& m_data[EE_DEV], img_msg);
+    buf_img_safely(& m_buffer[EE_DEV], img_msg);
 }
 
 cv::Mat process_IMG_from_msg(const sensor_msgs::ImageConstPtr &img_msg)
@@ -84,8 +86,8 @@ cv::Mat process_IMG_from_msg(const sensor_msgs::ImageConstPtr &img_msg)
 // extract images with same timestamp from two topics
 void sync_process_IMG()
 {
-    NodeData_t * const pD0 = & m_data[BASE_DEV];
-    NodeData_t * const pD1 = & m_data[EE_DEV  ];
+    NodeBuffer_t * const pB0 = & m_buffer[BASE_DEV];
+    NodeBuffer_t * const pB1 = & m_buffer[EE_DEV  ];
     
     while(FOREVER)
     {
@@ -99,44 +101,44 @@ void sync_process_IMG()
             bool if_image_synced = false;
             
             // cache data:
-            pD0->img0_mutex.lock();
-            pD1->img0_mutex.lock();
-            if (!pD0->img0_buf.empty() && !pD1->img0_buf.empty())
+            pB0->img0_mutex.lock();
+            pB1->img0_mutex.lock();
+            if (!pB0->img0_buf.empty() && !pB1->img0_buf.empty())
             {
-                d0_time = pD0->img0_buf.front()->header.stamp.toSec();
-                d1_time = pD1->img0_buf.front()->header.stamp.toSec();
+                d0_time = pB0->img0_buf.front()->header.stamp.toSec();
+                d1_time = pB1->img0_buf.front()->header.stamp.toSec();
                 // time delta = t_d0 - t_d1 = base - ee
                 d01_delta = (d0_time - d1_time);
                 // 0.003s sync tolerance
                 if(d01_delta < (- IMAGE_SYNCHRONIZATION_TIME_DELTA_MAX)) // img0 is ahead of img1
                 {
-                    pD0->img0_buf.pop();
+                    pB0->img0_buf.pop();
                     printf("throw img0\n");
                 }
                 else if(d01_delta > (+ IMAGE_SYNCHRONIZATION_TIME_DELTA_MAX)) // img1 is ahead of img0
                 {
-                    pD1->img0_buf.pop();
+                    pB1->img0_buf.pop();
                     printf("throw img1\n");
                 }
                 else // in-bound sync:
                 {
-                    d0_img     = process_IMG_from_msg(pD0->img0_buf.front());
-                    pD0->img0_buf.pop();
-                    d1_img     = process_IMG_from_msg(pD1->img0_buf.front());
-                    pD1->img0_buf.pop();
+                    d0_img     = process_IMG_from_msg(pB0->img0_buf.front());
+                    pB0->img0_buf.pop();
+                    d1_img     = process_IMG_from_msg(pB1->img0_buf.front());
+                    pB1->img0_buf.pop();
                     if_image_synced = true;
                     // printf("synced img0 and img1\n");
                 }
             }
-            pD0->img0_mutex.unlock();
-            pD1->img0_mutex.unlock();
+            pB0->img0_mutex.unlock();
+            pB1->img0_mutex.unlock();
 
             if(if_image_synced)
             {
                 // decoupled estimator
                 // TODO: we should consider coupling the estimators (stereo for the same states)
-                pD0->estimator.inputImage(d0_time, d0_img);
-                pD1->estimator.inputImage(d0_time, d1_img);
+                m_est_b.inputImage(d0_time, d0_img);
+                m_est_e.inputImage(d0_time, d1_img);
             }
         }
         
@@ -164,14 +166,14 @@ void d0_imu_callback(const sensor_msgs::ImuConstPtr &imu_msg)
     Vector3d acc, gyr;
     double t;
     t = process_IMU_from_msg(imu_msg, acc, gyr);
-    m_data[BASE_DEV].estimator.inputIMU(t, acc, gyr);
+    m_est_b.inputIMU(t, acc, gyr);
 }
 void d1_imu_callback(const sensor_msgs::ImuConstPtr &imu_msg)
 {
     Vector3d acc, gyr;
     double t;
     t = process_IMU_from_msg(imu_msg, acc, gyr);
-    m_data[EE_DEV  ].estimator.inputIMU(t, acc, gyr);
+    m_est_e.inputIMU(t, acc, gyr);
 }
 
 void restart_callback(const std_msgs::BoolConstPtr &restart_msg)
@@ -179,10 +181,10 @@ void restart_callback(const std_msgs::BoolConstPtr &restart_msg)
     if (restart_msg->data == true)
     {
         ROS_WARN("restart the estimator!");
-        m_data[BASE_DEV].estimator.clearState();
-        m_data[EE_DEV  ].estimator.clearState();
-        m_data[BASE_DEV].estimator.setParameter();
-        m_data[EE_DEV  ].estimator.setParameter();
+        m_est_b.clearState();
+        m_est_e.clearState();
+        m_est_b.setParameter();
+        m_est_e.setParameter();
     }
     return;
 }
@@ -206,9 +208,9 @@ int main(int argc, char **argv)
     printf("config_file: %s\n", argv[1]);
 
     readParameters(config_file);
-    
-    m_data[BASE_DEV].estimator.setParameter();
-    m_data[EE_DEV  ].estimator.setParameter();
+    // IMPORTANT: we need to set the parameters for each estimator, before we can use it
+    m_est_b.setParameter();
+    m_est_e.setParameter();
 
 #ifdef EIGEN_DONT_PARALLELIZE
     ROS_DEBUG("EIGEN_DONT_PARALLELIZE");
