@@ -46,7 +46,7 @@ using namespace DBoW2;
 class PoseGraph
 {
 public:
-	PoseGraph();
+	PoseGraph(DeviceConfig_t* const _pCfg, LoopDevice_t* const _pLoop);
 	~PoseGraph();
 	void registerPub(ros::NodeHandle &n);
 	void addKeyFrame(KeyFrame* cur_kf, bool flag_detect_loop);
@@ -69,6 +69,8 @@ public:
 
 
 private:
+	DeviceConfig_t*  pCfg;
+	LoopDevice_t* 	 pLoop;
 	int detectLoop(KeyFrame* keyframe, int frame_index);
 	void addKeyFrameIntoVoc(KeyFrame* keyframe);
 	void optimize4DoF();

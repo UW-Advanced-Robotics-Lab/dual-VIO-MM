@@ -30,7 +30,9 @@ ros::Publisher pub_odometry[MAX_NUM_DEVICES];
 ros::Publisher pub_latest_odometry[MAX_NUM_DEVICES];
 ros::Publisher pub_image_track[MAX_NUM_DEVICES];
 
-CameraPoseVisualization cameraposevisual(1, 0, 0, 1);
+CameraPoseVisualization cameraposevisual[MAX_NUM_DEVICES]={
+    CameraPoseVisualization(1, 0, 0, 1), CameraPoseVisualization(1, 0, 0, 1)
+};
 static double sum_of_path = 0;
 static Vector3d last_path(0.0, 0.0, 0.0);
 
@@ -38,37 +40,31 @@ size_t pub_counter = 0;
 
 void registerPub(ros::NodeHandle &n)
 {
-    // Data Publish:
-    pub_camera_pose[BASE_DEV]       = n.advertise<nav_msgs::Odometry>("base/camera_pose", 1000);
-    pub_camera_pose[EE_DEV  ]       = n.advertise<nav_msgs::Odometry>("EE/camera_pose", 1000);
-    pub_odometry[BASE_DEV]          = n.advertise<nav_msgs::Odometry>("base/odometry", 1000);
-    pub_odometry[EE_DEV  ]          = n.advertise<nav_msgs::Odometry>("EE/odometry", 1000);
-    pub_latest_odometry[BASE_DEV]   = n.advertise<nav_msgs::Odometry>("base/imu_propagate", 1000);
-    pub_latest_odometry[EE_DEV  ]   = n.advertise<nav_msgs::Odometry>("EE/imu_propagate", 1000);
-    pub_key_poses[BASE_DEV]         = n.advertise<visualization_msgs::Marker>("base/key_poses", 1000);
-    pub_key_poses[EE_DEV  ]         = n.advertise<visualization_msgs::Marker>("EE/key_poses", 1000);
-    pub_keyframe_point[BASE_DEV]    = n.advertise<sensor_msgs::PointCloud>("base/keyframe_point", 1000);
-    pub_keyframe_point[EE_DEV  ]    = n.advertise<sensor_msgs::PointCloud>("EE/keyframe_point", 1000);
-    pub_keyframe_pose[BASE_DEV]     = n.advertise<nav_msgs::Odometry>("base/keyframe_pose", 1000);
-    pub_keyframe_pose[EE_DEV  ]     = n.advertise<nav_msgs::Odometry>("EE/keyframe_pose", 1000);
-    pub_extrinsic[BASE_DEV]         = n.advertise<nav_msgs::Odometry>("base/extrinsic", 1000);
-    pub_extrinsic[EE_DEV  ]         = n.advertise<nav_msgs::Odometry>("EE/extrinsic", 1000);
+    // TODO: feature flags for run-time instead of visualizations
 
-    // Rviz Visuals:
-    pub_camera_pose_visual[BASE_DEV]= n.advertise<visualization_msgs::MarkerArray>("base/camera_pose_visual", 1000);
-    pub_camera_pose_visual[EE_DEV  ]= n.advertise<visualization_msgs::MarkerArray>("EE/camera_pose_visual", 1000);
-    pub_path[BASE_DEV]              = n.advertise<nav_msgs::Path>("base/path", 1000);
-    pub_path[EE_DEV  ]              = n.advertise<nav_msgs::Path>("EE/path", 1000);
-    pub_image_track[BASE_DEV]       = n.advertise<sensor_msgs::Image>("base/image_track", 1000);
-    pub_image_track[EE_DEV  ]       = n.advertise<sensor_msgs::Image>("EE/image_track", 1000);
-    pub_point_cloud[BASE_DEV]       = n.advertise<sensor_msgs::PointCloud>("base/point_cloud", 1000);
-    pub_point_cloud[EE_DEV  ]       = n.advertise<sensor_msgs::PointCloud>("EE/point_cloud", 1000);
-    pub_margin_cloud[BASE_DEV]      = n.advertise<sensor_msgs::PointCloud>("base/margin_cloud", 1000);
-    pub_margin_cloud[EE_DEV  ]      = n.advertise<sensor_msgs::PointCloud>("EE/margin_cloud", 1000);
-    
+    for (int i = 0; i < N_DEVICES; i++)
+    {
+        // Data Publish:
+        pub_camera_pose[i]       = n.advertise<nav_msgs::Odometry>(((i)?(TOPIC_CAMERA_POSE_E):(TOPIC_CAMERA_POSE_B)), PUBLISHER_BUFFER_SIZE);
+        pub_odometry[i]          = n.advertise<nav_msgs::Odometry>(((i)?(TOPIC_ODOMETRY_E):(TOPIC_ODOMETRY_B)), PUBLISHER_BUFFER_SIZE);
+        pub_latest_odometry[i]   = n.advertise<nav_msgs::Odometry>(((i)?(TOPIC_IMU_PROPAGATE_E):(TOPIC_IMU_PROPAGATE_B)), PUBLISHER_BUFFER_SIZE);
+        pub_key_poses[i]         = n.advertise<visualization_msgs::Marker>(((i)?(TOPIC_KEY_POSES_E):(TOPIC_KEY_POSES_B)), PUBLISHER_BUFFER_SIZE);
+        pub_keyframe_point[i]    = n.advertise<sensor_msgs::PointCloud>(((i)?(TOPIC_KEYFRAME_POINT_E):(TOPIC_KEYFRAME_POINT_B)), PUBLISHER_BUFFER_SIZE);
+        pub_keyframe_pose[i]     = n.advertise<nav_msgs::Odometry>(((i)?(TOPIC_KEYFRAME_POSE_E):(TOPIC_KEYFRAME_POSE_B)), PUBLISHER_BUFFER_SIZE);
+        pub_extrinsic[i]         = n.advertise<nav_msgs::Odometry>(((i)?(TOPIC_EXTRINSIC_E):(TOPIC_EXTRINSIC_B)), PUBLISHER_BUFFER_SIZE);
 
-    cameraposevisual.setScale(0.1);
-    cameraposevisual.setLineWidth(0.01);
+        // Rviz Visuals:
+        pub_camera_pose_visual[i]= n.advertise<visualization_msgs::MarkerArray>(((i)?(TOPIC_CAMERA_POSE_VISUAL_E):(TOPIC_CAMERA_POSE_VISUAL_B)), PUBLISHER_BUFFER_SIZE);
+        pub_path[i]              = n.advertise<nav_msgs::Path>(((i)?(TOPIC_PATH_E):(TOPIC_PATH_B)), PUBLISHER_BUFFER_SIZE);
+        pub_image_track[i]       = n.advertise<sensor_msgs::Image>(((i)?(TOPIC_IMAGE_TRACK_E):(TOPIC_IMAGE_TRACK_B)), PUBLISHER_BUFFER_SIZE);
+        pub_point_cloud[i]       = n.advertise<sensor_msgs::PointCloud>(((i)?(TOPIC_POINT_CLOUD_E):(TOPIC_POINT_CLOUD_B)), PUBLISHER_BUFFER_SIZE);
+        pub_margin_cloud[i]      = n.advertise<sensor_msgs::PointCloud>(((i)?(TOPIC_MARGIN_CLOUD_E):(TOPIC_MARGIN_CLOUD_B)), PUBLISHER_BUFFER_SIZE);
+        
+        // placeholders
+        cameraposevisual[i].setScale(0.1);
+        cameraposevisual[i].setLineWidth(0.01);
+    }
+
 }
 
 void pubLatestOdometry(const Eigen::Vector3d &P, const Eigen::Quaterniond &Q, const Eigen::Vector3d &V, const double t, const int device_id)
@@ -254,8 +250,8 @@ void pubCameraPose(const Estimator &estimator, const std_msgs::Header &header)
 
         pub_camera_pose[estimator.pCfg->DEVICE_ID].publish(odometry);
 
-        cameraposevisual.reset();
-        cameraposevisual.add_pose(P, R);
+        cameraposevisual[estimator.pCfg->DEVICE_ID].reset();
+        cameraposevisual[estimator.pCfg->DEVICE_ID].add_pose(P, R);
         
 #if (FEATURE_ENABLE_STEREO_SUPPORT) // for stereo camera pose
         if(estimator.pCfg->STEREO)
@@ -265,7 +261,7 @@ void pubCameraPose(const Estimator &estimator, const std_msgs::Header &header)
             cameraposevisual.add_pose(P, R);
         }
 #endif
-        cameraposevisual.publish_by(pub_camera_pose_visual[estimator.pCfg->DEVICE_ID], odometry.header);
+        cameraposevisual[estimator.pCfg->DEVICE_ID].publish_by(pub_camera_pose_visual[estimator.pCfg->DEVICE_ID], odometry.header);
     }
 }
 

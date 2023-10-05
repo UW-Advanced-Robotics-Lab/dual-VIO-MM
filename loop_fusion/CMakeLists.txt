@@ -27,8 +27,8 @@ include_directories(${catkin_INCLUDE_DIRS} ${CERES_INCLUDE_DIRS}  ${EIGEN3_INCLU
 
 catkin_package()
 
-add_executable(loop_fusion_node
-    src/pose_graph_node.cpp
+add_library(loop_fusion_lib
+    src/parameters.cpp
     src/pose_graph.cpp
     src/keyframe.cpp
     src/utility/CameraPoseVisualization.cpp
@@ -41,6 +41,9 @@ add_executable(loop_fusion_node
     src/ThirdParty/DUtils/Timestamp.cpp
     src/ThirdParty/DVision/BRIEF.cpp
     src/ThirdParty/VocabularyBinary.cpp
-    )
+)
 
-target_link_libraries(loop_fusion_node ${catkin_LIBRARIES}  ${OpenCV_LIBS} ${CERES_LIBRARIES}) 
+target_link_libraries(loop_fusion_lib ${catkin_LIBRARIES}  ${OpenCV_LIBS} ${CERES_LIBRARIES}) 
+
+add_executable(loop_fusion_node src/pose_graph_node.cpp)
+target_link_libraries(loop_fusion_node loop_fusion_lib) 

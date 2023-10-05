@@ -104,7 +104,6 @@ class Estimator
     double prevTime, curTime;
     bool openExEstimation;
 
-    std::thread trackThread;
     std::thread processThread;
 
     FeatureTracker featureTracker;

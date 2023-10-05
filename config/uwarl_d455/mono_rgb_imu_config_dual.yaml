@@ -21,7 +21,7 @@ d1_imu_topic: "/cam_EE/imu"
 d1_image0_topic: "/cam_EE/color/image_raw"
 
 # [Output Path]
-output_path: "output"
+output_path: "~/output"
 
 # [Calib. File Dependencies]
 d0_cam0_calib: "color_base_mei.yaml"
@@ -100,8 +100,8 @@ d1_td: 0.0003475970005734179 # initial value of time offset. unit: s. readed ima
 # - [cam0]
 d0_load_previous_pose_graph: 0        # load and reuse previous pose graph; load from 'pose_graph_save_path'
 d0_pose_graph_save_path: "~/output/pose_graph_c0/" # save and load path
-d0_save_image: 0                      # save image in pose graph for visualization prupose; you can close this function by setting 0 
+d0_save_image: 1                      # save image in pose graph for visualization prupose; you can close this function by setting 0 
 # - [cam1]
 d1_load_previous_pose_graph: 0        # load and reuse previous pose graph; load from 'pose_graph_save_path'
 d1_pose_graph_save_path: "~/output/pose_graph_c1/" # save and load path
-d1_save_image: 0                      # save image in pose graph for visualization prupose; you can close this function by setting 0 
+d1_save_image: 1                      # save image in pose graph for visualization prupose; you can close this function by setting 0 

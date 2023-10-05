@@ -48,47 +48,36 @@ using namespace std;
 #define FEATURE_ENABLE_STANDALONE_SUPPORT    (NOT_IMPLEMENTED) // allow standalone support for one device [opt out for runtime]
 
 // ----------------------------------------------------------------
-// : ARCHIVES :
+// : ROS TOPICS :
 // ----------------------------------------------------------------
-// extern double INIT_DEPTH;
-// extern double MIN_PARALLAX;
-// extern int ESTIMATE_EXTRINSIC;
+#define FUSE_TOPIC(BRANCH, LEAF)      ( BRANCH "\/" LEAF )// combine string
+// publisher: ----------------------------------------------------
+#define TOPIC_CAMERA_POSE_B           (FUSE_TOPIC("base" , "camera_pose"))
+#define TOPIC_CAMERA_POSE_E           (FUSE_TOPIC("EE"   , "camera_pose"))
+#define TOPIC_ODOMETRY_B              (FUSE_TOPIC("base" , "odometry"))
+#define TOPIC_ODOMETRY_E              (FUSE_TOPIC("EE"   , "odometry"))
+#define TOPIC_IMU_PROPAGATE_B         (FUSE_TOPIC("base" , "imu_propagate"))
+#define TOPIC_IMU_PROPAGATE_E         (FUSE_TOPIC("EE"   , "imu_propagate"))
+#define TOPIC_KEY_POSES_B             (FUSE_TOPIC("base" , "key_poses"))
+#define TOPIC_KEY_POSES_E             (FUSE_TOPIC("EE"   , "key_poses"))
+#define TOPIC_KEYFRAME_POINT_B        (FUSE_TOPIC("base" , "keyframe_point"))
+#define TOPIC_KEYFRAME_POINT_E        (FUSE_TOPIC("EE"   , "keyframe_point"))
+#define TOPIC_KEYFRAME_POSE_B         (FUSE_TOPIC("base" , "keyframe_pose"))
+#define TOPIC_KEYFRAME_POSE_E         (FUSE_TOPIC("EE"   , "keyframe_pose"))
+#define TOPIC_EXTRINSIC_B             (FUSE_TOPIC("base" , "extrinsic"))
+#define TOPIC_EXTRINSIC_E             (FUSE_TOPIC("EE"   , "extrinsic"))
+#define TOPIC_CAMERA_POSE_VISUAL_B    (FUSE_TOPIC("base" , "camera_pose_visual"))
+#define TOPIC_CAMERA_POSE_VISUAL_E    (FUSE_TOPIC("EE"   , "camera_pose_visual"))
+#define TOPIC_PATH_B                  (FUSE_TOPIC("base" , "path"))
+#define TOPIC_PATH_E                  (FUSE_TOPIC("EE"   , "path"))
+#define TOPIC_IMAGE_TRACK_B           (FUSE_TOPIC("base" , "image_track"))
+#define TOPIC_IMAGE_TRACK_E           (FUSE_TOPIC("EE"   , "image_track"))
+#define TOPIC_POINT_CLOUD_B           (FUSE_TOPIC("base" , "point_cloud"))
+#define TOPIC_POINT_CLOUD_E           (FUSE_TOPIC("EE"   , "point_cloud"))
+#define TOPIC_MARGIN_CLOUD_B          (FUSE_TOPIC("base" , "margin_cloud"))
+#define TOPIC_MARGIN_CLOUD_E          (FUSE_TOPIC("EE"   , "margin_cloud"))
+#define PUBLISHER_BUFFER_SIZE         (1000)
 
-// extern double ACC_N, ACC_W;
-// extern double GYR_N, GYR_W;
-
-// extern std::vector<Eigen::Matrix3d> RIC;
-// extern std::vector<Eigen::Vector3d> TIC;
-// extern Eigen::Vector3d G;
-
-// extern double BIAS_ACC_THRESHOLD;
-// extern double BIAS_GYR_THRESHOLD;
-// extern double SOLVER_TIME;
-// extern int NUM_ITERATIONS;
-// extern std::string EX_CALIB_RESULT_PATH;
-// extern std::string VINS_RESULT_PATH;
-// extern std::string OUTPUT_FOLDER;
-// extern std::string IMU_TOPIC;
-// extern double TD;
-// extern int ESTIMATE_TD;
-// extern int ROLLING_SHUTTER;
-// extern int ROW, COL;
-// extern int NUM_OF_CAM;
-// extern int STEREO;
-// extern int USE_IMU;
-// extern int MULTIPLE_THREAD;
-
-// extern std::string IMAGE0_TOPIC, IMAGE1_TOPIC;
-// extern std::string FISHEYE_MASK;
-// extern std::vector<std::string> CAM_NAMES;
-// extern int MAX_CNT;
-// extern int MIN_DIST;
-// extern double F_THRESHOLD;
-// extern int SHOW_TRACK;
-// extern int FLOW_BACK;
-
-// - pts_gt for debug purpose;
-extern map<int, Eigen::Vector3d> pts_gt;
 // ----------------------------------------------------------------
 // : Public Functions :
 // ----------------------------------------------------------------
@@ -184,3 +173,4 @@ typedef struct{
 // extern DeviceConfig_t   DEV_CONFIG;
 extern int              N_DEVICES;
 extern DeviceConfig_t   DEV_CONFIGS[MAX_NUM_DEVICES];
+extern map<int, Eigen::Vector3d> pts_gt;
