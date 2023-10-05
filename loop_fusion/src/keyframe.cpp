@@ -325,7 +325,7 @@ bool KeyFrame::findConnection(KeyFrame* old_kf)
 	reduceVector(matched_id, status);
 	//printf("search by des finish");
 
-	#if 0 
+	#if FEATURE_DEBUG_IMAGE_AT_CONNECTIONS
 		if (pCfg->DEBUG_IMAGE)
 	    {
 			int gap = 10;
@@ -381,7 +381,7 @@ bool KeyFrame::findConnection(KeyFrame* old_kf)
 	reduceVector(matched_3d, status);
 	reduceVector(matched_id, status);
 	*/
-	#if 0
+	#if FEATURE_DEBUG_IMAGE_AT_CONNECTIONS
 		if (pCfg->DEBUG_IMAGE)
 	    {
 			int gap = 10;
