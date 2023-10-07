@@ -19,6 +19,13 @@ d0_image0_topic: "/cam_base/color/image_raw"
 # - [cam1]
 d1_imu_topic: "/cam_EE/imu"
 d1_image0_topic: "/cam_EE/color/image_raw"
+# - [arm]
+arm_joint_topic: "/wam/joint_states"
+arm_pose_topic: "/wam/pose"
+arm_calib: "wam_arm.yaml"
+# - [vins]
+d0_vicon_topic: "/vicon/wam_base/wam_base"
+d1_vicon_topic: "/vicon/wam_EE/wam_EE"
 
 # [Output Path]
 output_path: "~/output"

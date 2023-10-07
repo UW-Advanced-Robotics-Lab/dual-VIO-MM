@@ -21,6 +21,7 @@
 #include <nav_msgs/Path.h>
 #include <nav_msgs/Odometry.h>
 #include <geometry_msgs/PointStamped.h>
+#include <geometry_msgs/TransformStamped.h>
 #include <visualization_msgs/Marker.h>
 #include <tf/transform_broadcaster.h>
 #include "CameraPoseVisualization.h"
@@ -63,3 +64,8 @@ void pubKeyframe(const Estimator &estimator);
 void pubRelocalization(const Estimator &estimator);
 
 void pubCar(const Estimator & estimator, const std_msgs::Header &header);
+
+#if (FEATURE_ENABLE_VICON_SUPPORT)
+// vicon:
+void pubViconOdometry(const geometry_msgs::TransformStampedConstPtr &transform_msg, const int device_id);
+#endif

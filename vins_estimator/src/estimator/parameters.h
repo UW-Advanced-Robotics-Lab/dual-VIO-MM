@@ -18,6 +18,8 @@
 #include <fstream>
 #include <map>
 
+#include <sensor_msgs/JointState.h>
+
 using namespace std;
 
 // ----------------------------------------------------------------
@@ -27,30 +29,18 @@ using namespace std;
 #define MAX_NUM_DEVICES     (2U) // 2: dual, 1: standalone
 #define BASE_DEV            (0U)
 #define EE_DEV              (1U)
-
+// ----------------------------------------------------------------
+// : Hyper-Parameters :
+// ----------------------------------------------------------------
 #define FOCAL_LENGTH        ((double)   (460.0))
 #define WINDOW_SIZE         ((int)      (10))
 #define NUM_OF_F            ((int)      (1000))
 #define DEFAULT_GRAVITY     (Eigen::Vector3d(0.0, 0.0, 9.8)) // default G is assumed to be -ve z-axis
 
-
-// ----------------------------------------------------------------
-// : Feature Definitions :
-// ----------------------------------------------------------------
-#define ENABLED             (1U)
-#define DISABLED            (0U)
-#define NOT_IMPLEMENTED     (0U)
-#define FOREVER             (1U)
-
-#define FEATURE_ENABLE_STEREO_SUPPORT        (NOT_IMPLEMENTED) // allow stereo support per device [TODO: let's study stereo later]
-#define FEATURE_ENABLE_PT_CLOUD_SUPPORT      (NOT_IMPLEMENTED) // allow stereo support per device [TODO: let's study stereo later]
-#define FEATURE_ENABLE_8UC1_IMAGE_SUPPORT    (NOT_IMPLEMENTED) // allow 8UC1 image support per device [opt out for runtime]
-#define FEATURE_ENABLE_STANDALONE_SUPPORT    (NOT_IMPLEMENTED) // allow standalone support for one device [opt out for runtime]
-
 // ----------------------------------------------------------------
 // : ROS TOPICS :
 // ----------------------------------------------------------------
-#define FUSE_TOPIC(BRANCH, LEAF)      ( BRANCH "\/" LEAF )// combine string
+#define FUSE_TOPIC(BRANCH, LEAF)      ( BRANCH "/" LEAF )// combine string
 // publisher: ----------------------------------------------------
 #define TOPIC_CAMERA_POSE_B           (FUSE_TOPIC("base" , "camera_pose"))
 #define TOPIC_CAMERA_POSE_E           (FUSE_TOPIC("EE"   , "camera_pose"))
@@ -78,10 +68,53 @@ using namespace std;
 #define TOPIC_MARGIN_CLOUD_E          (FUSE_TOPIC("EE"   , "margin_cloud"))
 #define PUBLISHER_BUFFER_SIZE         (1000)
 
+#define TOPIC_VICON_PATH_B            (FUSE_TOPIC("base" , "vicon/path"))
+#define TOPIC_VICON_PATH_E            (FUSE_TOPIC("EE"   , "vicon/path"))
+
+// converter: --------------------------------
+#define CV_YAML_TO_BOOL(X)      ((bool)(static_cast<int>(X)!=0))
+
 // ----------------------------------------------------------------
-// : Public Functions :
+// : Feature Definitions :
 // ----------------------------------------------------------------
-void readParameters(std::string config_file);
+#define ENABLED             (1U)
+#define DISABLED            (0U)
+#define NOT_IMPLEMENTED     (0U)
+#define FOREVER             (1U)
+
+#define FEATURE_ENABLE_STEREO_SUPPORT        (NOT_IMPLEMENTED) // allow stereo support per device [TODO: let's study stereo later]
+#define FEATURE_ENABLE_PT_CLOUD_SUPPORT      (NOT_IMPLEMENTED) // allow stereo support per device [TODO: let's study stereo later]
+#define FEATURE_ENABLE_8UC1_IMAGE_SUPPORT    (NOT_IMPLEMENTED) // allow 8UC1 image support per device [opt out for runtime]
+#define FEATURE_ENABLE_STANDALONE_SUPPORT    (NOT_IMPLEMENTED) // allow standalone support for one device [opt out for runtime]
+
+// vicon support:
+#define FEATURE_ENABLE_VICON_SUPPORT                    ( ENABLED) // to feed vicon data and output as nav_msg::path for visualization
+
+// debug only features:
+#define FEATURE_CONSOLE_PRINTF                          ( ENABLED)
+#define FEATURE_CONSOLE_DEBUG_PRINTF                    ( ENABLED)
+// debug only features (additional images):
+#define FEATURE_DEBUG_IMAGE_AT_CONNECTIONS              (DISABLED)
+// ----------------------------------------------------------------
+// : Debug printfs :
+// ----------------------------------------------------------------
+#if (FEATURE_CONSOLE_PRINTF)
+#   define PRINTF(...)       {printf(__VA_ARGS__); printf("\n"); fflush(stdout);}
+#   define PRINT_INFO(...)   {printf(" \033[0;36m > [INFO ] \033[0m "); PRINTF(__VA_ARGS__);}
+#   define PRINT_WARN(...)   {printf(" \033[0;32m > [WARN ] \033[0m "); PRINTF(__VA_ARGS__);}
+#   define PRINT_ERROR(...)  {printf(" \033[0;35m > [ERROR] \033[0m "); PRINTF(__VA_ARGS__);}
+#else
+#   define PRINTF(...)       {}// Do Nothing
+#   define PRINT_INFO(...)   {}// Do Nothing
+#   define PRINT_WARN(...)   {}// Do Nothing
+#   define PRINT_ERROR(...)  {}// Do Nothing
+#endif
+#if (FEATURE_CONSOLE_DEBUG_PRINTF)
+#   define PRINT_DEBUG_FULL(...)  {printf("%s %s:%d", __TIME__, __FILE__, __LINE__); printf(" \033[0;33m > [DEBUG] \033[0m "); PRINTF(__VA_ARGS__);}
+#   define PRINT_DEBUG(...)  {printf(" \033[0;33m > [DEBUG-INFO] \033[0m "); PRINTF(__VA_ARGS__);}
+#else
+#   define PRINT_DEBUG(...)  {}// Do Nothing
+#endif
 
 // ----------------------------------------------------------------
 // : Definitions :
@@ -165,12 +198,35 @@ typedef struct{
     double              SOLVER_TIME;        //
     // - Const Params:
     Eigen::Vector3d     G;                  // gravity constant
+    // - Optionals: GT vicon
+#if (FEATURE_ENABLE_VICON_SUPPORT)
+    // vicon:
+    std::string          VICON_TOPIC;
+#endif
 } DeviceConfig_t;
 
+typedef struct{
+    // topics:
+    std::string          JOINTS_TOPIC;
+    std::string          POSE_TOPIC;
+    // calibs:
+    std::string          CALIBRATION_FILE_PATH;
+
+    // UNUSED:
+    Eigen::Matrix4d      T_BS; // Transformation from start to base camera position
+    Eigen::Matrix4d      T_TE; // Transformation from end-effector camera to tool tip
+    bool                 estimate_arm_extrinsics;
+} ArmConfig_t;
 // ----------------------------------------------------------------
 // : Global Data Placeholder:
 // ----------------------------------------------------------------
 // extern DeviceConfig_t   DEV_CONFIG;
 extern int              N_DEVICES;
 extern DeviceConfig_t   DEV_CONFIGS[MAX_NUM_DEVICES];
+extern ArmConfig_t      ARM_CONFIG;
 extern map<int, Eigen::Vector3d> pts_gt;
+
+// ----------------------------------------------------------------
+// : Public Functions :
+// ----------------------------------------------------------------
+void readParameters(std::string config_file);

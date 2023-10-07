@@ -54,6 +54,7 @@ map<int, Eigen::Vector3d> pts_gt; // debug information
 // DeviceConfig_t      DEV_CONFIG;
 int                 N_DEVICES;
 DeviceConfig_t      DEV_CONFIGS[MAX_NUM_DEVICES];
+ArmConfig_t         ARM_CONFIG;
 
 template <typename T>
 T readParam(ros::NodeHandle &n, std::string name)
@@ -90,7 +91,16 @@ void readParameters(std::string config_file)
     N_DEVICES = fsSettings["num_of_devices"];
     bool if_old_config = (N_DEVICES == 0);
     N_DEVICES = if_old_config? 1:N_DEVICES; // only one device supported at the time for old config
+    // common:
+    int pn = config_file.find_last_of('/');
+    std::string configPath_ = config_file.substr(0, pn);
+
+    // loading arm:
+    fsSettings["arm_joint_topic"] >> ARM_CONFIG.JOINTS_TOPIC;
+    fsSettings["arm_pose_topic"] >> ARM_CONFIG.POSE_TOPIC;
+    ARM_CONFIG.CALIBRATION_FILE_PATH = configPath_ + "/" + static_cast<std::string>(fsSettings["arm_calib"]);
     
+    // loading camera devices:
     for (int i = 0; i < N_DEVICES; i++)
     {
         DeviceConfig_t* cfg = & (DEV_CONFIGS[i]);
@@ -128,7 +138,10 @@ void readParameters(std::string config_file)
         cfg->COL = fsSettings["image_width"];     //[unused]
         ROS_INFO("ROW: %d COL: %d ", cfg->ROW, cfg->COL);
 
-
+#if (FEATURE_ENABLE_VICON_SUPPORT)
+        // # vicon:
+        fsSettings[pre_+"vicon_topic"] >> cfg->VICON_TOPIC;
+#endif
         // # IMU:
         cfg->USE_IMU        = fsSettings[pre_+"imu"];
         cfg->TD             = fsSettings[pre_+"td"];
@@ -213,11 +226,8 @@ void readParameters(std::string config_file)
         }
 
         // @ cam paths:
-        std::string configPath_, cam0Calib_, cam0Path_;
+        std::string cam0Calib_, cam0Path_;
         fsSettings[pre_+"cam0_calib"] >> cam0Calib_;
-
-        int pn = config_file.find_last_of('/');
-        configPath_ = config_file.substr(0, pn);
         cam0Path_ = configPath_ + "/" + cam0Calib_;
         
         // - cache:
@@ -233,7 +243,7 @@ void readParameters(std::string config_file)
             // cam1 path:
             fsSettings[pre_+"cam1_calib"] >> cam0Calib_;
             cam0Path_ = configPath_ + "/" + cam0Calib_; 
-            printf("%s cam1 path\n", configPath_.c_str() );
+            printf("%s cam1 path\n", can0Path.c_str() );
             cfg->CAM_NAMES[1] = cam0Path_;
             
             // - transformation:

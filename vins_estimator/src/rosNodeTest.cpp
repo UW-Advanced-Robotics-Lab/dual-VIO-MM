@@ -27,6 +27,7 @@
 #define SUB_IMG_BUFFER_SIZE         (30U)
 #define SUB_IMU_BUFFER_SIZE         (100U)
 #define SUB_FEAT_BUFFER_SIZE        (100U)
+#define SUB_ARM_BUFFER_SIZE         (100U)
 
 #define IMAGE_FPS           (float)(30) // --> implies the frame difference between two cameras can be up to 0.015~0.03333 ms
 #define IMAGE_SYNCHRONIZATION_TIME_DELTA_MAX    (double)(0.03) // 0.03-0.003s sync tolerance [100Hz]
@@ -36,10 +37,21 @@ typedef struct{
     // buffer:
     queue<sensor_msgs::ImageConstPtr>       img0_buf;
     std::mutex                              img0_mutex;
-    // queue<sensor_msgs::JointStateConstPtr>  jnt_buf;
-    // std::mutex                              jnt_mutex;
 } NodeBuffer_t;
 
+typedef struct{
+    queue<sensor_msgs::JointStateConstPtr>      jnt_buf;
+    std::mutex                                  jnt_mutex;
+    queue<geometry_msgs::PoseStampedConstPtr>   pose_buf;
+    std::mutex                                  pose_mutex;
+} ArmBuffer_t;
+
+#if (FEATURE_ENABLE_VICON_SUPPORT)
+typedef struct{
+    queue<geometry_msgs::TransformStampedConstPtr>  vicon_buf;
+    std::mutex                                      vicon_mutex;
+} ViconBuffer_t;
+#endif
 // typedef Matrix<double, 7, 1> Vector7d_t; // for storing <time, acc, gyr>
 
 ///////////////////////////
@@ -52,6 +64,11 @@ Estimator      m_est_e(& DEV_CONFIGS[EE_DEV  ]);
 //     Estimator(& DEV_CONFIGS[BASE_DEV]),
 //     Estimator(& DEV_CONFIGS[EE_DEV])
 // };
+ArmBuffer_t    m_arm;
+
+#if (FEATURE_ENABLE_VICON_SUPPORT)
+ViconBuffer_t  m_GT[MAX_NUM_DEVICES];
+#endif
 
 ////////////////////////////////////////
 ///////   PRIVATE FUNCTION     /////////
@@ -177,6 +194,30 @@ void d1_imu_callback(const sensor_msgs::ImuConstPtr &imu_msg)
     m_est_e.inputIMU(t, acc, gyr);
 }
 
+void arm_jnts_callback(const sensor_msgs::JointStateConstPtr &jnts_msg)
+{
+    m_arm.jnt_mutex.lock();
+    m_arm.jnt_buf.push(jnts_msg);
+    m_arm.jnt_mutex.unlock();
+}
+
+void arm_pose_callback(const geometry_msgs::PoseStampedConstPtr &pose_msg)
+{
+    m_arm.pose_mutex.lock();
+    m_arm.pose_buf.push(pose_msg);
+    m_arm.pose_mutex.unlock();
+}
+
+#if (FEATURE_ENABLE_VICON_SUPPORT)
+void vicon_pub_callback(const geometry_msgs::TransformStampedConstPtr &transform_msg, const int device_id)
+{
+    // m_GT[device_id].vicon_mutex.lock();
+    // m_GT[device_id].vicon_buf.push(transform_msg);
+    // m_GT[device_id].vicon_mutex.unlock();
+    pubViconOdometry(transform_msg, device_id);
+}
+#endif
+
 void restart_callback(const std_msgs::BoolConstPtr &restart_msg)
 {
     if (restart_msg->data == true)
@@ -223,11 +264,21 @@ int main(int argc, char **argv)
 
     registerPub(n);
 
-    // Subscribe:
+    // Subscribe: TODO: (minor) eventually, we should utilize the boost::bind cast instead of explicit function
     ros::Subscriber sub_d0_imu = n.subscribe(DEV_CONFIGS[BASE_DEV].IMU_TOPIC, SUB_IMU_BUFFER_SIZE, d0_imu_callback, ros::TransportHints().tcpNoDelay());
     ros::Subscriber sub_d1_imu = n.subscribe(DEV_CONFIGS[EE_DEV  ].IMU_TOPIC, SUB_IMU_BUFFER_SIZE, d1_imu_callback, ros::TransportHints().tcpNoDelay());
     ros::Subscriber sub_d0_img0 = n.subscribe(DEV_CONFIGS[BASE_DEV].IMAGE_TOPICS[0], SUB_IMG_BUFFER_SIZE, d0_img0_callback);
     ros::Subscriber sub_d1_img0 = n.subscribe(DEV_CONFIGS[EE_DEV  ].IMAGE_TOPICS[0], SUB_IMG_BUFFER_SIZE, d1_img0_callback);
+    // ros::Subscriber sub_arm_jnts = n.subscribe(ARM_CONFIG.JOINTS_TOPIC, SUB_ARM_BUFFER_SIZE, arm_jnts_callback); //, ros::TransportHints().tcpNoDelay());
+    // ros::Subscriber sub_arm_pose = n.subscribe(ARM_CONFIG.POSE_TOPIC, SUB_ARM_BUFFER_SIZE, arm_pose_callback); //, ros::TransportHints().tcpNoDelay());
+#if (FEATURE_ENABLE_VICON_SUPPORT)
+    ros::Subscriber sub_d0_vicon = n.subscribe< geometry_msgs::TransformStamped>(
+        DEV_CONFIGS[BASE_DEV].VICON_TOPIC, SUB_ARM_BUFFER_SIZE, 
+        boost::bind(vicon_pub_callback, _1, BASE_DEV)); //, ros::TransportHints().tcpNoDelay());
+    ros::Subscriber sub_d1_vicon = n.subscribe< geometry_msgs::TransformStamped>(
+        DEV_CONFIGS[EE_DEV  ].VICON_TOPIC, SUB_ARM_BUFFER_SIZE, 
+        boost::bind(vicon_pub_callback, _1, EE_DEV)); //, ros::TransportHints().tcpNoDelay());
+#endif
     
     printf("==== [ Subscriptions Completed ] ==== \n");
     printf("[Node] Sub IMU Topic   d0.0: %s\n", DEV_CONFIGS[BASE_DEV].IMU_TOPIC.c_str());

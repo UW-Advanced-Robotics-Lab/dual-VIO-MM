@@ -39,8 +39,8 @@
 // ----------------------------------------------------------------
 // : ROS TOPICS :
 // ----------------------------------------------------------------
-#define FUSE_TOPIC(BRANCH, LEAF)      ( BRANCH "\/" LEAF )// combine string
-#define FUSE_SUB_TOPIC(NODE, BRANCH, LEAF)  ( "\/" NODE "\/" BRANCH "\/" LEAF )// combine string
+#define FUSE_TOPIC(BRANCH, LEAF)      ( BRANCH "/" LEAF )// combine string
+#define FUSE_SUB_TOPIC(NODE, BRANCH, LEAF)  ( "/" NODE "/" BRANCH "/" LEAF )// combine string
 
 // mathcing estimator: --------------------------------------------
 #define SUB_TOPIC_ODOMETRY_B              (FUSE_SUB_TOPIC("vins_estimator", "base" , "odometry"))

@@ -11,6 +11,7 @@
 
 using namespace ros;
 using namespace Eigen;
+
 ros::Publisher pub_key_poses[MAX_NUM_DEVICES];
 ros::Publisher pub_camera_pose[MAX_NUM_DEVICES];
 ros::Publisher pub_camera_pose_visual[MAX_NUM_DEVICES];
@@ -29,6 +30,11 @@ ros::Publisher pub_odometry[MAX_NUM_DEVICES];
 
 ros::Publisher pub_latest_odometry[MAX_NUM_DEVICES];
 ros::Publisher pub_image_track[MAX_NUM_DEVICES];
+
+#if (FEATURE_ENABLE_VICON_SUPPORT)
+ros::Publisher pub_vicon[MAX_NUM_DEVICES];
+nav_msgs::Path vicon_path[MAX_NUM_DEVICES]; // buffer
+#endif
 
 CameraPoseVisualization cameraposevisual[MAX_NUM_DEVICES]={
     CameraPoseVisualization(1, 0, 0, 1), CameraPoseVisualization(1, 0, 0, 1)
@@ -60,6 +66,11 @@ void registerPub(ros::NodeHandle &n)
         pub_point_cloud[i]       = n.advertise<sensor_msgs::PointCloud>(((i)?(TOPIC_POINT_CLOUD_E):(TOPIC_POINT_CLOUD_B)), PUBLISHER_BUFFER_SIZE);
         pub_margin_cloud[i]      = n.advertise<sensor_msgs::PointCloud>(((i)?(TOPIC_MARGIN_CLOUD_E):(TOPIC_MARGIN_CLOUD_B)), PUBLISHER_BUFFER_SIZE);
         
+        // vicon rviz visuals: 
+#if (FEATURE_ENABLE_VICON_SUPPORT)
+        pub_vicon[i] = n.advertise<nav_msgs::Path>(((i)?(TOPIC_VICON_PATH_E):(TOPIC_VICON_PATH_B)), PUBLISHER_BUFFER_SIZE);
+#endif
+
         // placeholders
         cameraposevisual[i].setScale(0.1);
         cameraposevisual[i].setLineWidth(0.01);
@@ -149,6 +160,7 @@ void pubOdometry(const Estimator &estimator, const std_msgs::Header &header)
         odometry.child_frame_id = "world";
         Quaterniond tmp_Q;
         tmp_Q = Quaterniond(estimator.Rs[WINDOW_SIZE]);
+        //TODO: opt, static cast
         odometry.pose.pose.position.x = estimator.Ps[WINDOW_SIZE].x();
         odometry.pose.pose.position.y = estimator.Ps[WINDOW_SIZE].y();
         odometry.pose.pose.position.z = estimator.Ps[WINDOW_SIZE].z();
@@ -192,6 +204,31 @@ void pubOdometry(const Estimator &estimator, const std_msgs::Header &header)
                                                           tmp_Q.w(), tmp_Q.x(), tmp_Q.y(), tmp_Q.z());
     }
 }
+
+#if (FEATURE_ENABLE_VICON_SUPPORT)
+void pubViconOdometry(const geometry_msgs::TransformStampedConstPtr &transform_msg, const int device_id)
+{
+    std_msgs::Header header;
+    header.frame_id = "world";
+    header.stamp = transform_msg->header.stamp; // copy the timestamp, TODO: should we do a sync?
+    
+    geometry_msgs::Pose pose;
+    //TODO: opt, static cast
+    pose.position.x = transform_msg->transform.translation.x;
+    pose.position.y = transform_msg->transform.translation.y;
+    pose.position.z = transform_msg->transform.translation.z;
+    pose.orientation = transform_msg->transform.rotation;
+
+    geometry_msgs::PoseStamped pose_stamped;
+    pose_stamped.header = header;
+    pose_stamped.pose = pose;
+    vicon_path[device_id].header = header;
+    vicon_path[device_id].header.frame_id = "world";
+    vicon_path[device_id].poses.push_back(pose_stamped);
+    // publish the path:
+    pub_vicon[device_id].publish(vicon_path[device_id]);
+}
+#endif
 
 void pubKeyPoses(const Estimator &estimator, const std_msgs::Header &header)
 {

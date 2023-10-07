@@ -13,7 +13,7 @@
 
 PoseGraph::PoseGraph(DeviceConfig_t* const _pCfg, LoopDevice_t* const _pLoop)
 {
-    //PRINT_DEBUG("PoseGraph::PoseGraph initialized");
+    PRINT_DEBUG("PoseGraph::PoseGraph initialized");
     pCfg=_pCfg;
     pLoop=_pLoop;
     posegraph_visualization = new CameraPoseVisualization(1.0, 0.0, 1.0, 1.0);

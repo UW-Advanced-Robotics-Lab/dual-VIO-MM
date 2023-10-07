@@ -21,7 +21,7 @@ class IntegrationBase
     IntegrationBase() = delete;
     IntegrationBase(const Eigen::Vector3d &_acc_0, const Eigen::Vector3d &_gyr_0,
                     const Eigen::Vector3d &_linearized_ba, const Eigen::Vector3d &_linearized_bg, 
-                    const DeviceConfig_t * _pCfg)
+                    const DeviceConfig_t * const _pCfg)
         : acc_0{_acc_0}, gyr_0{_gyr_0}, linearized_acc{_acc_0}, linearized_gyr{_gyr_0},
           linearized_ba{_linearized_ba}, linearized_bg{_linearized_bg}, pCfg{_pCfg},
             jacobian{Eigen::Matrix<double, 15, 15>::Identity()}, covariance{Eigen::Matrix<double, 15, 15>::Zero()},
@@ -216,7 +216,7 @@ class IntegrationBase
     std::vector<Eigen::Vector3d> acc_buf;
     std::vector<Eigen::Vector3d> gyr_buf;
 
-    const DeviceConfig_t * pCfg;
+    const DeviceConfig_t * const pCfg;
 };
 /*
 
