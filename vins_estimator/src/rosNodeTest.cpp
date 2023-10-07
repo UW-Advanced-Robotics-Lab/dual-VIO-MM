@@ -21,30 +21,24 @@
 #include "estimator/parameters.h"
 #include "utility/visualization.h"
 
-/////////////////////////////////
-///////   DEFINITION     ////////
-/////////////////////////////////
-#define SUB_IMG_BUFFER_SIZE         (30U)
-#define SUB_IMU_BUFFER_SIZE         (100U)
-#define SUB_FEAT_BUFFER_SIZE        (100U)
-#define SUB_ARM_BUFFER_SIZE         (100U)
-
-#define IMAGE_FPS           (float)(30) // --> implies the frame difference between two cameras can be up to 0.015~0.03333 ms
-#define IMAGE_SYNCHRONIZATION_TIME_DELTA_MAX    (double)(0.03) // 0.03-0.003s sync tolerance [100Hz]
-#define IMU_SYNCHRONIZATION_TIME_DELTA_MAX      (double)(0.001) // 0.0001s sync tolerance 
-
+// ----------------------------------------------------------------
+// : Definitions:
+// ----------------------------------------------------------------
 typedef struct{
     // buffer:
     queue<sensor_msgs::ImageConstPtr>       img0_buf;
     std::mutex                              img0_mutex;
+    double                                  time_last_update;
 } NodeBuffer_t;
 
+#if (FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT)
 typedef struct{
     queue<sensor_msgs::JointStateConstPtr>      jnt_buf;
     std::mutex                                  jnt_mutex;
     queue<geometry_msgs::PoseStampedConstPtr>   pose_buf;
     std::mutex                                  pose_mutex;
 } ArmBuffer_t;
+#endif
 
 #if (FEATURE_ENABLE_VICON_SUPPORT)
 typedef struct{
@@ -52,23 +46,36 @@ typedef struct{
     std::mutex                                      vicon_mutex;
 } ViconBuffer_t;
 #endif
+
+#if (FEATURE_ENABLE_PERFORMANCE_EVAL)
+typedef struct{
+    int image_frame_dropped_tick = 0;
+    int image_valid_counter = 0;
+} PerformanceManager_t;
+#endif
 // typedef Matrix<double, 7, 1> Vector7d_t; // for storing <time, acc, gyr>
 
-///////////////////////////
-///////   DATA     ////////
-///////////////////////////
+// ----------------------------------------------------------------
+// : Global Data Placeholder:
+// ----------------------------------------------------------------
+// configs:
+DeviceConfig_t DEV_CONFIGS[MAX_NUM_DEVICES];
 NodeBuffer_t   m_buffer[MAX_NUM_DEVICES];
+
+#if (FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT)
+ArmConfig_t    ARM_CONFIG;
+ArmBuffer_t    m_arm;
+#endif
+#if (FEATURE_ENABLE_VICON_SUPPORT)
+ViconBuffer_t  m_GT[MAX_NUM_DEVICES]; // UNUSED
+#endif
+
+// Estimators:
 Estimator      m_est_b(& DEV_CONFIGS[BASE_DEV]);
 Estimator      m_est_e(& DEV_CONFIGS[EE_DEV  ]);
-// Estimator      m_est[] = {
-//     Estimator(& DEV_CONFIGS[BASE_DEV]),
-//     Estimator(& DEV_CONFIGS[EE_DEV])
-// };
-ArmBuffer_t    m_arm;
 
-#if (FEATURE_ENABLE_VICON_SUPPORT)
-ViconBuffer_t  m_GT[MAX_NUM_DEVICES];
-#endif
+// Performance:
+PerformanceManager_t m_perf;
 
 ////////////////////////////////////////
 ///////   PRIVATE FUNCTION     /////////
@@ -77,6 +84,7 @@ ViconBuffer_t  m_GT[MAX_NUM_DEVICES];
 void buf_img_safely(NodeBuffer_t * const pB, const sensor_msgs::ImageConstPtr &img_msg)
 {
     pB->img0_mutex.lock();
+    pB->time_last_update = img_msg->header.stamp.toSec();
     pB->img0_buf.push(img_msg);
     pB->img0_mutex.unlock();
 }
@@ -114,15 +122,16 @@ void sync_process_IMG()
             // Dual Monocular Cameras: --> Requires image synchronization
             // placeholders:
             cv::Mat d0_img, d1_img;
-            double d0_time, d1_time, d01_delta;
+            double d0_time, d1_time, d01_delta, d0_time_latest;
             
             bool if_image_synced = false;
             
-            // cache data:
+            // cache data if the frame timing is within the diff threshold @ IMAGE_SYNCHRONIZATION_TIME_DELTA_MAX
             pB0->img0_mutex.lock();
             pB1->img0_mutex.lock();
             if (!pB0->img0_buf.empty() && !pB1->img0_buf.empty())
             {
+                d0_time_latest = pB0->time_last_update;
                 d0_time = pB0->img0_buf.front()->header.stamp.toSec();
                 d1_time = pB1->img0_buf.front()->header.stamp.toSec();
                 // time delta = t_d0 - t_d1 = base - ee
@@ -131,12 +140,12 @@ void sync_process_IMG()
                 if(d01_delta < (- IMAGE_SYNCHRONIZATION_TIME_DELTA_MAX)) // img0 is ahead of img1
                 {
                     pB0->img0_buf.pop();
-                    printf("throw img0 dt=%f \n",d01_delta);
+                    PRINT_WARN("throw img0 dt=%f ",d01_delta);
                 }
                 else if(d01_delta > (+ IMAGE_SYNCHRONIZATION_TIME_DELTA_MAX)) // img1 is ahead of img0
                 {
                     pB1->img0_buf.pop();
-                    printf("throw img1\n");
+                    PRINT_WARN("throw img1");
                 }
                 else // in-bound sync:
                 {
@@ -145,7 +154,7 @@ void sync_process_IMG()
                     d1_img     = process_IMG_from_msg(pB1->img0_buf.front());
                     pB1->img0_buf.pop();
                     if_image_synced = true;
-                    // printf("synced img0 and img1\n");
+                    // printf("synced img0 and img1");
                 }
             }
             pB0->img0_mutex.unlock();
@@ -153,15 +162,46 @@ void sync_process_IMG()
 
             if(if_image_synced)
             {
-                // decoupled estimator
-                // TODO: we should consider coupling the estimators (stereo for the same states)
+#if (FEATURE_ENABLE_FRAME_DROP_FOR_REAL_TIME) 
+/* FEATURE_ENABLE_FRAME_DROP_FOR_REAL_TIME
+*  @problem: it seems that we are running behind the schedule for the high res image feeds ??? 
+*  @solution: 
+*       Let's try to drop the frame if we are behind the schedule
+*/
+                // measure time difference between the latest image and the current processed image:
+                const double delta_time = d0_time_latest - d0_time; 
+
+#           if (FEATURE_ENABLE_PERFORMANCE_EVAL)
+                m_perf.image_valid_counter ++;
+#           endif
+
+                if (delta_time < IMAGE_BEHIND_SCHEDULE_TIME_TOLERANCE) // if we are on-schedule, queue for processing
+                {
+                    // [ decoupled estimators ]
+                    // [Later] TODO: we should consider coupling the estimators (stereo for the same states)
+                    m_est_b.inputImage(d0_time, d0_img);
+                    m_est_e.inputImage(d0_time, d1_img);
+                }
+#           if (FEATURE_ENABLE_PERFORMANCE_EVAL) // drop the images if we are behind the schedule
+                else
+                {
+                    // Performance DEBUG: lets see the time difference between current and latest image.
+                    m_perf.image_frame_dropped_tick ++;
+                    float drop_rate_pa = (m_perf.image_frame_dropped_tick * 100.0)/(m_perf.image_valid_counter);
+                    PRINT_WARN(" Frame Dropped [delta time=%f], Cumulated Frame Drop Rate: %.2f \%", delta_time, drop_rate_pa);
+                }
+#           endif
+                    
+#else
+                // no guard
                 m_est_b.inputImage(d0_time, d0_img);
                 m_est_e.inputImage(d0_time, d1_img);
+#endif
             }
         }
         
-        std::chrono::milliseconds dura(2);
-        std::this_thread::sleep_for(dura);
+        // std::chrono::milliseconds dura(2);
+        // std::this_thread::sleep_for(dura);
     }
 }
 
@@ -194,20 +234,21 @@ void d1_imu_callback(const sensor_msgs::ImuConstPtr &imu_msg)
     m_est_e.inputIMU(t, acc, gyr);
 }
 
+#if (FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT)
 void arm_jnts_callback(const sensor_msgs::JointStateConstPtr &jnts_msg)
 {
     m_arm.jnt_mutex.lock();
-    m_arm.jnt_buf.push(jnts_msg);
+    // m_arm.jnt_buf.push(jnts_msg);
     m_arm.jnt_mutex.unlock();
 }
 
 void arm_pose_callback(const geometry_msgs::PoseStampedConstPtr &pose_msg)
 {
     m_arm.pose_mutex.lock();
-    m_arm.pose_buf.push(pose_msg);
+    // m_arm.pose_buf.push(pose_msg);
     m_arm.pose_mutex.unlock();
 }
-
+#endif
 #if (FEATURE_ENABLE_VICON_SUPPORT)
 void vicon_pub_callback(const geometry_msgs::TransformStampedConstPtr &transform_msg, const int device_id)
 {
@@ -240,19 +281,27 @@ int main(int argc, char **argv)
 
     if(argc != 2)
     {
-        printf("please intput: rosrun vins vins_node [config file] \n"
+        PRINT_ERROR("please intput: rosrun vins vins_node [config file] "
                "for example: rosrun vins vins_node "
-               "~/catkin_ws/src/VINS-Fusion/config/euroc/euroc_stereo_imu_config.yaml \n");
+               "~/catkin_ws/src/VINS-Fusion/config/euroc/euroc_stereo_imu_config.yaml ");
         return 1;
     }
 
     string config_file = argv[1];
-    printf("config_file: %s\n", argv[1]);
-
-    readParameters(config_file);
+    PRINT_INFO("config_file: %s", argv[1]);
+#if (FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT)
+    const int N_DEVICES = readParameters(config_file, DEV_CONFIGS, ARM_CONFIG);
+#else
+    const int N_DEVICES = readParameters(config_file, DEV_CONFIGS);
+#endif
     // IMPORTANT: we need to set the parameters for each estimator, before we can use it
     m_est_b.setParameter();
     m_est_e.setParameter();
+
+#if (FEATURE_ENABLE_PERFORMANCE_EVAL)
+    m_perf.image_frame_dropped_tick = 0;
+    m_perf.image_valid_counter = 0;
+#endif
 
 #ifdef EIGEN_DONT_PARALLELIZE
     ROS_DEBUG("EIGEN_DONT_PARALLELIZE");
@@ -262,15 +311,17 @@ int main(int argc, char **argv)
     ROS_WARN("waiting for image and imu...");
     ROS_DEBUG("waiting for image and imu...");
 
-    registerPub(n);
+    registerPub(n, N_DEVICES);
 
     // Subscribe: TODO: (minor) eventually, we should utilize the boost::bind cast instead of explicit function
     ros::Subscriber sub_d0_imu = n.subscribe(DEV_CONFIGS[BASE_DEV].IMU_TOPIC, SUB_IMU_BUFFER_SIZE, d0_imu_callback, ros::TransportHints().tcpNoDelay());
     ros::Subscriber sub_d1_imu = n.subscribe(DEV_CONFIGS[EE_DEV  ].IMU_TOPIC, SUB_IMU_BUFFER_SIZE, d1_imu_callback, ros::TransportHints().tcpNoDelay());
     ros::Subscriber sub_d0_img0 = n.subscribe(DEV_CONFIGS[BASE_DEV].IMAGE_TOPICS[0], SUB_IMG_BUFFER_SIZE, d0_img0_callback);
     ros::Subscriber sub_d1_img0 = n.subscribe(DEV_CONFIGS[EE_DEV  ].IMAGE_TOPICS[0], SUB_IMG_BUFFER_SIZE, d1_img0_callback);
-    // ros::Subscriber sub_arm_jnts = n.subscribe(ARM_CONFIG.JOINTS_TOPIC, SUB_ARM_BUFFER_SIZE, arm_jnts_callback); //, ros::TransportHints().tcpNoDelay());
-    // ros::Subscriber sub_arm_pose = n.subscribe(ARM_CONFIG.POSE_TOPIC, SUB_ARM_BUFFER_SIZE, arm_pose_callback); //, ros::TransportHints().tcpNoDelay());
+#if (FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT)
+    ros::Subscriber sub_arm_jnts = n.subscribe(ARM_CONFIG.JOINTS_TOPIC, SUB_ARM_BUFFER_SIZE, arm_jnts_callback); //, ros::TransportHints().tcpNoDelay());
+    ros::Subscriber sub_arm_pose = n.subscribe(ARM_CONFIG.POSE_TOPIC, SUB_ARM_BUFFER_SIZE, arm_pose_callback); //, ros::TransportHints().tcpNoDelay());
+#endif
 #if (FEATURE_ENABLE_VICON_SUPPORT)
     ros::Subscriber sub_d0_vicon = n.subscribe< geometry_msgs::TransformStamped>(
         DEV_CONFIGS[BASE_DEV].VICON_TOPIC, SUB_ARM_BUFFER_SIZE, 
@@ -280,11 +331,11 @@ int main(int argc, char **argv)
         boost::bind(vicon_pub_callback, _1, EE_DEV)); //, ros::TransportHints().tcpNoDelay());
 #endif
     
-    printf("==== [ Subscriptions Completed ] ==== \n");
-    printf("[Node] Sub IMU Topic   d0.0: %s\n", DEV_CONFIGS[BASE_DEV].IMU_TOPIC.c_str());
-    printf("[Node] Sub IMU Topic   d1.0: %s\n", DEV_CONFIGS[EE_DEV  ].IMU_TOPIC.c_str());
-    printf("[Node] Sub Image Topic d0.0: %s\n", DEV_CONFIGS[BASE_DEV].IMAGE_TOPICS[0].c_str());
-    printf("[Node] Sub Image Topic d1.0: %s\n", DEV_CONFIGS[EE_DEV  ].IMAGE_TOPICS[0].c_str());
+    PRINT_INFO("==== [ Subscriptions Completed ] ==== ");
+    PRINT_INFO("[Node] Sub IMU Topic   d0.0: %s", DEV_CONFIGS[BASE_DEV].IMU_TOPIC.c_str());
+    PRINT_INFO("[Node] Sub IMU Topic   d1.0: %s", DEV_CONFIGS[EE_DEV  ].IMU_TOPIC.c_str());
+    PRINT_INFO("[Node] Sub Image Topic d0.0: %s", DEV_CONFIGS[BASE_DEV].IMAGE_TOPICS[0].c_str());
+    PRINT_INFO("[Node] Sub Image Topic d1.0: %s", DEV_CONFIGS[EE_DEV  ].IMAGE_TOPICS[0].c_str());
     
     ros::Subscriber sub_restart = n.subscribe("/vins_restart", 100, restart_callback);
 

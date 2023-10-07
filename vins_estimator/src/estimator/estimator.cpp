@@ -22,7 +22,7 @@ Estimator::~Estimator()
     if (pCfg->MULTIPLE_THREAD)
     {
         processThread.join();
-        printf("join thread \n");
+        PRINT_WARN("join thread \n");
     }
 }
 
@@ -125,7 +125,7 @@ void Estimator::changeSensorType(int use_imu, int use_stereo)
     bool restart = false;
     mProcess.lock();
     if(!use_imu && !use_stereo)
-        printf("at least use two sensors! \n");
+        PRINT_WARN("at least use two sensors! \n");
     else
     {
         if(pCfg->USE_IMU != use_imu)
@@ -148,7 +148,7 @@ void Estimator::changeSensorType(int use_imu, int use_stereo)
         }
         
         pCfg->STEREO = use_stereo;
-        printf("use imu %d use stereo %d\n", pCfg->USE_IMU, pCfg->STEREO);
+        PRINT_WARN("use imu %d use stereo %d\n", pCfg->USE_IMU, pCfg->STEREO);
     }
     mProcess.unlock();
     if(restart)
@@ -193,7 +193,7 @@ void Estimator::inputImage(double t, const cv::Mat &_img, const cv::Mat &_img1)
         mBuf.unlock();
         TicToc processTime;
         processMeasurements();
-        printf("process time: %f\n", processTime.toc());
+        PRINT_WARN("process time: %f\n", processTime.toc());
     }
     
 }
@@ -231,7 +231,7 @@ bool Estimator::getIMUInterval(double t0, double t1, vector<pair<double, Eigen::
 {
     if(accBuf.empty())
     {
-        printf("not receive imu\n");
+        PRINT_ERROR("not receive imu\n");
         return false;
     }
     //printf("get imu from %f %f\n", t0, t1);
@@ -255,7 +255,7 @@ bool Estimator::getIMUInterval(double t0, double t1, vector<pair<double, Eigen::
     }
     else
     {
-        printf("wait for imu\n");
+        PRINT_WARN("wait for imu\n");
         return false;
     }
     return true;
@@ -286,7 +286,7 @@ void Estimator::processMeasurements()
                     break;
                 else
                 {
-                    printf("wait for imu ... \n");
+                    PRINT_WARN("wait for imu ... \n");
                     if (! pCfg->MULTIPLE_THREAD)
                         return;
                     std::chrono::milliseconds dura(5);
@@ -299,6 +299,7 @@ void Estimator::processMeasurements()
 
             featureBuf.pop();
             mBuf.unlock();
+            PRINT_DEBUG("feature buffer size: %d\n",featureBuf.size());
 
             if(pCfg->USE_IMU)
             {
@@ -324,7 +325,7 @@ void Estimator::processMeasurements()
 
                 printStatistics(*this, 0);
 
-                // publish
+                // publish 
                 std_msgs::Header header;
                 header.frame_id = "world";
                 header.stamp = ros::Time(feature.first);
@@ -343,15 +344,15 @@ void Estimator::processMeasurements()
         if (! pCfg->MULTIPLE_THREAD)
             break;
 
-        std::chrono::milliseconds dura(2);
-        std::this_thread::sleep_for(dura);
+        // std::chrono::milliseconds dura(1);
+        // std::this_thread::sleep_for(dura);
     }
 }
 
 
 void Estimator::initFirstIMUPose(vector<pair<double, Eigen::Vector3d>> &accVector)
 {
-    printf("init first imu pose\n");
+    PRINT_WARN("init first imu pose\n");
     initFirstPoseFlag = true;
     //return;
     Eigen::Vector3d averAcc(0, 0, 0);
@@ -361,7 +362,7 @@ void Estimator::initFirstIMUPose(vector<pair<double, Eigen::Vector3d>> &accVecto
         averAcc = averAcc + accVector[i].second;
     }
     averAcc = averAcc / n;
-    printf("averge acc %f %f %f\n", averAcc.x(), averAcc.y(), averAcc.z());
+    PRINT_WARN("averge acc %f %f %f\n", averAcc.x(), averAcc.y(), averAcc.z());
     Matrix3d R0 = Utility::g2R(averAcc);
     double yaw = Utility::R2ypr(R0).x();
     R0 = Utility::ypr2R(Eigen::Vector3d{-yaw, 0, 0}) * R0;
@@ -561,7 +562,7 @@ void Estimator::processImage(const map<int, vector<pair<int, Eigen::Matrix<doubl
             predictPtsInNextFrame();
         }
             
-        ROS_INFO("solver costs: %fms", t_solve.toc());
+        ROS_DEBUG("solver costs: %fms", t_solve.toc());
 
         if (failureDetection())
         {

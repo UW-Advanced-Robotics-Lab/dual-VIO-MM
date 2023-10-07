@@ -40,7 +40,7 @@
 // extern ros::Publisher pub_pose_graph;
 // extern int IMAGE_ROW, IMAGE_COL;
 
-void registerPub(ros::NodeHandle &n);
+void registerPub(ros::NodeHandle &n, const int N_DEVICES);
 
 void pubLatestOdometry(const Eigen::Vector3d &P, const Eigen::Quaterniond &Q, const Eigen::Vector3d &V, const double t, const int device_id);
 void pubTrackImage(const cv::Mat &imgTrack, const double t, const int device_id);

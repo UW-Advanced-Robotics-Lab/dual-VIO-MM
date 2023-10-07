@@ -1,21 +1,17 @@
 #include "parameters.h"
 // ----------------------------------------------------------------
-// : Data Placeholder:
-// ----------------------------------------------------------------
-// extern DeviceConfig_t   DEV_CONFIG;
-int              N_DEVICES;
-DeviceConfig_t   DEV_CONFIGS[MAX_NUM_DEVICES];
-LoopDevice_t     LoopDevices[MAX_NUM_DEVICES];
-// ----------------------------------------------------------------
 // : Public Functions :
 // ----------------------------------------------------------------
-void readParameters(const std::string config_file, const std::string pkg_path)
+int readParameters(
+    const std::string config_file, const std::string pkg_path, 
+    DeviceConfig_t DEV_CONFIGS[], LoopDevice_t LoopDevices[]
+) //-->N_DEVICES
 {
     FILE *fh = fopen(config_file.c_str(),"r");
     if(fh == NULL){
         ROS_WARN("config_file dosen't exist; wrong config_file path");
         ROS_BREAK();
-        return;          
+        return 0;
     }
     fclose(fh);
 
@@ -26,7 +22,7 @@ void readParameters(const std::string config_file, const std::string pkg_path)
         throw std::runtime_error("[ERROR]: Wrong path to settings");
     }
     ////////// BEGIN HERE //////////////////////////////////
-    N_DEVICES = fsSettings["num_of_devices"];
+    int N_DEVICES = fsSettings["num_of_devices"];
     bool if_old_config = (N_DEVICES == 0);
     N_DEVICES = if_old_config? 1:N_DEVICES; // only one device supported at the time for old config
     
@@ -75,6 +71,7 @@ void readParameters(const std::string config_file, const std::string pkg_path)
 
     ////////////////////////////////////////////////////////////////
     fsSettings.release();
+    return N_DEVICES;
 }
 
 

@@ -9,76 +9,24 @@
 
 #include "parameters.h"
 // ----------------------------------------------------------------
-// : ARCHIVES :
+// : Public Functions :
 // ----------------------------------------------------------------
-// double INIT_DEPTH;
-// double MIN_PARALLAX;
-// double ACC_N, ACC_W;
-// double GYR_N, GYR_W;
-
-// std::vector<Eigen::Matrix3d> RIC;
-// std::vector<Eigen::Vector3d> TIC;
-
-// Eigen::Vector3d G{0.0, 0.0, 9.8};
-
-// double BIAS_ACC_THRESHOLD;
-// double BIAS_GYR_THRESHOLD;
-// double SOLVER_TIME;
-// int NUM_ITERATIONS;
-// int ESTIMATE_EXTRINSIC;
-// int ESTIMATE_TD;
-// int ROLLING_SHUTTER;
-// std::string EX_CALIB_RESULT_PATH;
-// std::string VINS_RESULT_PATH;
-// std::string OUTPUT_FOLDER;
-// std::string IMU_TOPIC;
-// int ROW, COL;
-// double TD;
-// int NUM_OF_CAM;
-// int STEREO;
-// int USE_IMU;
-// int MULTIPLE_THREAD;
-map<int, Eigen::Vector3d> pts_gt; // debug information
-// std::string IMAGE0_TOPIC, IMAGE1_TOPIC;
-// std::string FISHEYE_MASK;
-// std::vector<std::string> CAM_NAMES;
-// int MAX_CNT;
-// int MIN_DIST;
-// double F_THRESHOLD;
-// int SHOW_TRACK;
-// int FLOW_BACK;
-
-// ----------------------------------------------------------------
-// : IMPLEMENTATION :
-// ----------------------------------------------------------------
-// DeviceConfig_t      DEV_CONFIG;
-int                 N_DEVICES;
-DeviceConfig_t      DEV_CONFIGS[MAX_NUM_DEVICES];
-ArmConfig_t         ARM_CONFIG;
-
-template <typename T>
-T readParam(ros::NodeHandle &n, std::string name)
-{
-    T ans;
-    if (n.getParam(name, ans))
-    {
-        ROS_INFO_STREAM("Loaded " << name << ": " << ans);
-    }
-    else
-    {
-        ROS_ERROR_STREAM("Failed to load " << name);
-        n.shutdown();
-    }
-    return ans;
-}
-
-void readParameters(std::string config_file)
+#if (FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT)
+int readParameters(
+    const std::string config_file, 
+    DeviceConfig_t   DEV_CONFIGS[], 
+    ArmConfig_t      ARM_CONFIG) //--> N_DEVICES
+#else
+int readParameters(
+    const std::string config_file, 
+    DeviceConfig_t   DEV_CONFIGS[]) //--> N_DEVICES
+#endif
 {
     FILE *fh = fopen(config_file.c_str(),"r");
     if(fh == NULL){
         ROS_WARN("config_file dosen't exist; wrong config_file path");
         ROS_BREAK();
-        return;          
+        return 0;  
     }
     fclose(fh);
 
@@ -88,7 +36,7 @@ void readParameters(std::string config_file)
         std::cerr << "ERROR: Wrong path to settings" << std::endl;
     }
     ////////// BEGIN HERE //////////////////////////////////
-    N_DEVICES = fsSettings["num_of_devices"];
+    int N_DEVICES = fsSettings["num_of_devices"];
     bool if_old_config = (N_DEVICES == 0);
     N_DEVICES = if_old_config? 1:N_DEVICES; // only one device supported at the time for old config
     // common:
@@ -96,9 +44,11 @@ void readParameters(std::string config_file)
     std::string configPath_ = config_file.substr(0, pn);
 
     // loading arm:
+#if (FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT)
     fsSettings["arm_joint_topic"] >> ARM_CONFIG.JOINTS_TOPIC;
     fsSettings["arm_pose_topic"] >> ARM_CONFIG.POSE_TOPIC;
     ARM_CONFIG.CALIBRATION_FILE_PATH = configPath_ + "/" + static_cast<std::string>(fsSettings["arm_calib"]);
+#endif
     
     // loading camera devices:
     for (int i = 0; i < N_DEVICES; i++)
@@ -111,7 +61,7 @@ void readParameters(std::string config_file)
             pre_ = ""; // no prefixes
         }
 
-        printf("=== [Indexing %scameras_imu ]", pre_.c_str());
+        PRINT_WARN("=== [Indexing %s cameras_imu ]", pre_.c_str());
         
         // # Camera topic
         fsSettings[pre_+"image0_topic"] >> cfg->IMAGE_TOPICS[0];
@@ -145,11 +95,11 @@ void readParameters(std::string config_file)
         // # IMU:
         cfg->USE_IMU        = fsSettings[pre_+"imu"];
         cfg->TD             = fsSettings[pre_+"td"];
-        printf("USE_IMU: %d\n", cfg->USE_IMU);
+        PRINT_INFO("USE_IMU: %d", cfg->USE_IMU);
         if(cfg->USE_IMU)
         {
             fsSettings[pre_+"imu_topic"] >> cfg->IMU_TOPIC;
-            printf("IMU_TOPIC: %s\n", cfg->IMU_TOPIC.c_str());
+            PRINT_INFO("IMU_TOPIC: %s", cfg->IMU_TOPIC.c_str());
             cfg->ACC_N = fsSettings[pre_+"acc_n"];
             cfg->ACC_W = fsSettings[pre_+"acc_w"];
             cfg->GYR_N = fsSettings[pre_+"gyr_n"];
@@ -166,7 +116,7 @@ void readParameters(std::string config_file)
         {
             cfg->ESTIMATE_EXTRINSIC   = CALIB_EXACT;
             cfg->ESTIMATE_TD          = CALIB_EXACT;
-            printf("no imu, fix extrinsic param; no time offset calibration\n");
+            PRINT_INFO("no imu, fix extrinsic param; no time offset calibration");
         }
 
         // # output:
@@ -218,10 +168,10 @@ void readParameters(std::string config_file)
         // # calibration of 2nd camera if has
         int n0_cam = fsSettings[pre_+"num_of_cam"];
 
-        printf("camera number %d\n", n0_cam);
+        PRINT_INFO("camera number %d", n0_cam);
         if(n0_cam != 1 && n0_cam != 2)
         {
-            printf("num_of_cam should be 1 or 2\n");
+            PRINT_INFO("num_of_cam should be 1 or 2");
             assert(0);
         }
 
@@ -232,7 +182,7 @@ void readParameters(std::string config_file)
         
         // - cache:
         cfg->CAM_NAMES[0] = cam0Path_;
-        printf("%s cam0 path\n", cam0Path_.c_str() );
+        PRINT_INFO("cam0 path: %s", cam0Path_.c_str() );
 
 #if (FEATURE_ENABLE_STEREO_SUPPORT)
         // stereo?
@@ -243,7 +193,7 @@ void readParameters(std::string config_file)
             // cam1 path:
             fsSettings[pre_+"cam1_calib"] >> cam0Calib_;
             cam0Path_ = configPath_ + "/" + cam0Calib_; 
-            printf("%s cam1 path\n", can0Path.c_str() );
+            PRINT_INFO("%s cam1 path", can0Path.c_str() );
             cfg->CAM_NAMES[1] = cam0Path_;
             
             // - transformation:
@@ -265,4 +215,5 @@ void readParameters(std::string config_file)
 
     ////////////////////////////////////////////////////////////////
     fsSettings.release();
+    return N_DEVICES;
 }

@@ -33,9 +33,9 @@
 #include "utility/CameraPoseVisualization.h"
 #include "parameters.h"
 using namespace std;
-/////////////////////////////////
-///////   DEFINITION     ////////
-/////////////////////////////////
+// ----------------------------------------------------------------
+// : Definitions:
+// ----------------------------------------------------------------
 typedef struct{
     // buffer:
     queue<sensor_msgs::ImageConstPtr>       image;
@@ -64,10 +64,10 @@ typedef struct{
     std::mutex              guard;
 } NodeData_t;
 
-///////////////////////////
-///////   DATA     ////////
-///////////////////////////
-// global:
+// ----------------------------------------------------------------
+// : Data Placeholder:
+// ----------------------------------------------------------------
+// parameters:
 int              N_DEVICES;
 DeviceConfig_t   DEV_CONFIGS[MAX_NUM_DEVICES];
 LoopDevice_t     LoopDevices[MAX_NUM_DEVICES];
@@ -82,9 +82,9 @@ ros::Publisher   pub_odometry_rect[MAX_NUM_CAMERAS];
 ros::Publisher   pub_point_cloud[MAX_NUM_CAMERAS];
 ros::Publisher   pub_margin_cloud[MAX_NUM_CAMERAS];
 
-////////////////////////////////////////
-///////   PRIVATE FUNCTION     /////////
-////////////////////////////////////////
+// ----------------------------------------------------------------
+// : Private Functions :
+// ----------------------------------------------------------------
 
 void new_sequence(const int device_id)
 {
@@ -523,7 +523,7 @@ int main(int argc, char **argv)
     const std::string pkg_path = ros::package::getPath("loop_fusion");
     try
     {
-        readParameters(config_file, pkg_path); // --> loading configuration
+        N_DEVICES = readParameters(config_file, pkg_path, DEV_CONFIGS, LoopDevices); // --> loading configuration
     }
     catch (const std::exception &)
     {

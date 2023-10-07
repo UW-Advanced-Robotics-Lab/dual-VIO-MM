@@ -44,7 +44,7 @@ static Vector3d last_path(0.0, 0.0, 0.0);
 
 size_t pub_counter = 0;
 
-void registerPub(ros::NodeHandle &n)
+void registerPub(ros::NodeHandle &n, const int N_DEVICES)
 {
     // TODO: feature flags for run-time instead of visualizations
 
@@ -182,6 +182,7 @@ void pubOdometry(const Estimator &estimator, const std_msgs::Header &header)
         path[device_id].poses.push_back(pose_stamped);
         pub_path[device_id].publish(path[device_id]);
 
+#if(FEATURE_VIZ_ROSOUT_ODOMETRY_SUPPORT)
         // write result to file
         ofstream foutC(estimator.pCfg->VINS_RESULT_PATH, ios::app);
         foutC.setf(ios::fixed, ios::floatfield);
@@ -202,6 +203,7 @@ void pubOdometry(const Estimator &estimator, const std_msgs::Header &header)
         Eigen::Vector3d tmp_T = estimator.Ps[WINDOW_SIZE];
         printf("time: %f, t: %f %f %f q: %f %f %f %f \n", header.stamp.toSec(), tmp_T.x(), tmp_T.y(), tmp_T.z(),
                                                           tmp_Q.w(), tmp_Q.x(), tmp_Q.y(), tmp_Q.z());
+#endif
     }
 }
 

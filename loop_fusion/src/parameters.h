@@ -160,12 +160,10 @@ typedef struct{
     ros::Publisher*         p_match_image_publisher;
 } LoopDevice_t;
 // ----------------------------------------------------------------
-// : Global Data Placeholder:
-// ----------------------------------------------------------------
-// extern DeviceConfig_t   DEV_CONFIG;
-extern int              N_DEVICES;
-
-// ----------------------------------------------------------------
 // : Public Functions :
 // ----------------------------------------------------------------
-void readParameters(const std::string config_file, const std::string pkg_path);
+int readParameters(
+    const std::string config_file, 
+    const std::string pkg_path, 
+    DeviceConfig_t DEV_CONFIGS[], 
+    LoopDevice_t LoopDevices[]); //-->N_DEVICES

@@ -224,7 +224,7 @@ bool FeatureManager::solvePoseByPnP(Eigen::Matrix3d &R, Eigen::Vector3d &P,
     //printf("pnp size %d \n",(int)pts2D.size() );
     if (int(pts2D.size()) < 4)
     {
-        printf("feature tracking not enough, please slowly move you device! \n");
+        PRINT_ERROR("feature tracking not enough, please slowly move you device! \n");
         return false;
     }
     cv::Mat r, rvec, t, D, tmp_r;
@@ -238,7 +238,7 @@ bool FeatureManager::solvePoseByPnP(Eigen::Matrix3d &R, Eigen::Vector3d &P,
 
     if(!pnp_succ)
     {
-        printf("pnp failed ! \n");
+        PRINT_ERROR("pnp failed ! \n");
         return false;
     }
     cv::Rodrigues(rvec, r);

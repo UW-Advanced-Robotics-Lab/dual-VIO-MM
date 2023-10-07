@@ -17,8 +17,11 @@
 #include <opencv2/core/eigen.hpp>
 #include <fstream>
 #include <map>
-
+// ros:
 #include <sensor_msgs/JointState.h>
+
+// for print:
+#include <stdio.h>
 
 using namespace std;
 
@@ -36,6 +39,28 @@ using namespace std;
 #define WINDOW_SIZE         ((int)      (10))
 #define NUM_OF_F            ((int)      (1000))
 #define DEFAULT_GRAVITY     (Eigen::Vector3d(0.0, 0.0, 9.8)) // default G is assumed to be -ve z-axis
+
+#define IMAGE_FPS                               (float)(30)     // [UNUSED]--> implies the frame difference between two cameras can be up to 0.015~0.03333 ms
+
+/* Hyperparams:
+*   @IMAGE_SYNCHRONIZATION_TIME_DELTA_MAX:
+*       - Ex: 0.03 sync tolerance: we throw out images if the time between two devices' image is greater than this value
+*       - for 30Hz FPS two devices: timing gap is within 0.033 seconds
+*       - range: [0.003, 0.03] // the original article for stereo images is 0.003, but the tol between devices can be greater than the same device stereo images
+*   @IMAGE_BEHIND_SCHEDULE_TIME_TOLERANCE:
+*       - Ex: 0.1 seconds tolerance: drop frames if we are processing the image 0.1s behind the schedule, wrt the latest image feed
+*       - the smaller the stricter the schedule, 
+*           - the lower latency between the resultant pose estimation wrt the latest image
+*           - the higher frame drops on lower cpu/gpu power
+*           - ALERT: a too small number will result unstable trajectory, a too large number will cumulates large latency overtime on the estimations
+*           - Rule of thumb: a right threshold will result a converging frame drop rates, one can risk a smaller number for short demos
+*           - a high rate of image stabilizatio is required for unstable device, like ee camera
+*       - for 30Hz x2 devices, the rate can be minimum 0.033 seconds, lets give it a tolerance of 0.06 for a 15Hz processing rate
+*       - range: [0.033, 0.1]: 0.1: about 10% drop rates, ee path is squiggly. 0.06: steady increasing to 20% for 40s rung
+*/
+//[Later] TODO: should we parameterize as config hyper parameter? depending on the hardware, the rate might be dfifferent.
+#define IMAGE_SYNCHRONIZATION_TIME_DELTA_MAX    (double)(0.03) 
+#define IMAGE_BEHIND_SCHEDULE_TIME_TOLERANCE    (double)(0.06) 
 
 // ----------------------------------------------------------------
 // : ROS TOPICS :
@@ -71,6 +96,12 @@ using namespace std;
 #define TOPIC_VICON_PATH_B            (FUSE_TOPIC("base" , "vicon/path"))
 #define TOPIC_VICON_PATH_E            (FUSE_TOPIC("EE"   , "vicon/path"))
 
+// buffer size: -----------------------------
+#define SUB_IMG_BUFFER_SIZE         (30U)
+#define SUB_IMU_BUFFER_SIZE         (100U)
+#define SUB_FEAT_BUFFER_SIZE        (100U)
+#define SUB_ARM_BUFFER_SIZE         (100U)
+
 // converter: --------------------------------
 #define CV_YAML_TO_BOOL(X)      ((bool)(static_cast<int>(X)!=0))
 
@@ -87,12 +118,21 @@ using namespace std;
 #define FEATURE_ENABLE_8UC1_IMAGE_SUPPORT    (NOT_IMPLEMENTED) // allow 8UC1 image support per device [opt out for runtime]
 #define FEATURE_ENABLE_STANDALONE_SUPPORT    (NOT_IMPLEMENTED) // allow standalone support for one device [opt out for runtime]
 
+// performance related feature support:
+#define FEATURE_ENABLE_PERFORMANCE_EVAL                 ( ENABLED) // report performance
+/* To enforce the real-time performance, we will drop frames if we are n seconds behind the schedule */
+#define FEATURE_ENABLE_FRAME_DROP_FOR_REAL_TIME         ( ENABLED) // set via "IMAGE_BEHIND_SCHEDULE_TIME_TOLERANCE"
+
 // vicon support:
 #define FEATURE_ENABLE_VICON_SUPPORT                    ( ENABLED) // to feed vicon data and output as nav_msg::path for visualization
+// arm odometry support:
+#define FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT             (DISABLED) // [WIP]
 
 // debug only features:
 #define FEATURE_CONSOLE_PRINTF                          ( ENABLED)
-#define FEATURE_CONSOLE_DEBUG_PRINTF                    ( ENABLED)
+#define FEATURE_CONSOLE_DEBUG_PRINTF                    (DISABLED)
+#define FEATURE_VIZ_ROSOUT_ODOMETRY_SUPPORT             (DISABLED)
+
 // debug only features (additional images):
 #define FEATURE_DEBUG_IMAGE_AT_CONNECTIONS              (DISABLED)
 // ----------------------------------------------------------------
@@ -205,6 +245,7 @@ typedef struct{
 #endif
 } DeviceConfig_t;
 
+#if (FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT)
 typedef struct{
     // topics:
     std::string          JOINTS_TOPIC;
@@ -217,16 +258,17 @@ typedef struct{
     Eigen::Matrix4d      T_TE; // Transformation from end-effector camera to tool tip
     bool                 estimate_arm_extrinsics;
 } ArmConfig_t;
-// ----------------------------------------------------------------
-// : Global Data Placeholder:
-// ----------------------------------------------------------------
-// extern DeviceConfig_t   DEV_CONFIG;
-extern int              N_DEVICES;
-extern DeviceConfig_t   DEV_CONFIGS[MAX_NUM_DEVICES];
-extern ArmConfig_t      ARM_CONFIG;
-extern map<int, Eigen::Vector3d> pts_gt;
-
+#endif
 // ----------------------------------------------------------------
 // : Public Functions :
 // ----------------------------------------------------------------
-void readParameters(std::string config_file);
+#if (FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT)
+    int readParameters(
+        const std::string config_file, 
+        DeviceConfig_t   DEV_CONFIGS[], 
+        ArmConfig_t      ARM_CONFIG); //--> N_DEVICES
+#else
+    int readParameters(
+        const std::string config_file, 
+        DeviceConfig_t   DEV_CONFIGS[]); //--> N_DEVICES
+#endif
