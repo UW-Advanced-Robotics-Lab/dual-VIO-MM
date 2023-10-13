@@ -50,10 +50,11 @@ void registerPub(ros::NodeHandle &n, const int N_DEVICES)
 
     for (int i = 0; i < N_DEVICES; i++)
     {
+        // TODO: flag unnecessary pubs for run-time performance
         // Data Publish:
         pub_camera_pose[i]       = n.advertise<nav_msgs::Odometry>(((i)?(TOPIC_CAMERA_POSE_E):(TOPIC_CAMERA_POSE_B)), PUBLISHER_BUFFER_SIZE);
         pub_odometry[i]          = n.advertise<nav_msgs::Odometry>(((i)?(TOPIC_ODOMETRY_E):(TOPIC_ODOMETRY_B)), PUBLISHER_BUFFER_SIZE);
-        pub_latest_odometry[i]   = n.advertise<nav_msgs::Odometry>(((i)?(TOPIC_IMU_PROPAGATE_E):(TOPIC_IMU_PROPAGATE_B)), PUBLISHER_BUFFER_SIZE);
+        pub_latest_odometry[i]   = n.advertise<nav_msgs::Odometry>(((i)?(TOPIC_IMU_PROPAGATE_E):(TOPIC_IMU_PROPAGATE_B)), PUBLISHER_BUFFER_SIZE); // TODO: not being sub
         pub_key_poses[i]         = n.advertise<visualization_msgs::Marker>(((i)?(TOPIC_KEY_POSES_E):(TOPIC_KEY_POSES_B)), PUBLISHER_BUFFER_SIZE);
         pub_keyframe_point[i]    = n.advertise<sensor_msgs::PointCloud>(((i)?(TOPIC_KEYFRAME_POINT_E):(TOPIC_KEYFRAME_POINT_B)), PUBLISHER_BUFFER_SIZE);
         pub_keyframe_pose[i]     = n.advertise<nav_msgs::Odometry>(((i)?(TOPIC_KEYFRAME_POSE_E):(TOPIC_KEYFRAME_POSE_B)), PUBLISHER_BUFFER_SIZE);

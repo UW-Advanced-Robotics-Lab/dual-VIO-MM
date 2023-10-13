@@ -24,8 +24,8 @@ arm_joint_topic: "/wam/joint_states"
 arm_pose_topic: "/wam/pose"
 arm_calib: "wam_arm.yaml"
 # - [vins]
-d0_vicon_topic: "/vicon/wam_base/wam_base"
-d1_vicon_topic: "/vicon/wam_EE/wam_EE"
+d0_vicon_topic: "/vicon/cam_base/cam_base"
+d1_vicon_topic: "/vicon/cam_EE/cam_EE"
 
 # [Output Path]
 output_path: "~/output"
@@ -47,20 +47,32 @@ d0_body_T_cam0: !!opencv-matrix
     rows: 4
     cols: 4
     dt: d
-    data: [  ### 0511:
-             0.9998882, -0.00193321, 0.01482754, 0.02478332,
-             0.00201731, 0.99998196, -0.00565838, -0.01078818,
-            -0.01481633, 0.00568766, 0.99987406, 0.0356058,
-             0., 0., 0., 1. ]
+    data: [ # T_ic:
+            #### based on [2023-05-11-15-47-26_base_rgb_mei-imu]
+               0.9998882, -0.00193321, 0.01482754, 0.02478332,
+               0.00201731, 0.99998196, -0.00565838, -0.01078818,
+               -0.01481633, 0.00568766, 0.99987406, 0.0356058,
+               0., 0., 0., 1. ]
+            # T_ic: Extrinsic from "Color" To "Gyro" [Manufacture]
+                # 0.999992   ,    -0.00371369   ,  -0.00152836    ,  0.0289912428706884  ,
+                # 0.00371287 ,     0.999993     ,  -0.000541772   ,  0.00741964485496283 ,
+                # 0.00153036 ,     0.000536093  ,   0.999999      ,  0.0156792011111975  , 
+                # 0, 0, 0, 1]
 d1_body_T_cam0: !!opencv-matrix
     rows: 4
     cols: 4
     dt: d
-    data: [  #### based on [2023-05-11-15-43-1_EE_rgb_mei-results-imucam]
-             0.99999713,  0.00184888, -0.00152691,  0.03679528,
-            -0.00184825,  0.99999821,  0.00041351,  0.0029463 ,
-             0.00152767, -0.00041069,  0.99999875,  0.03515003,
-             0.        ,  0.        ,  0.        ,  1.         ]
+    data: [ # T_ic:
+            #### based on [2023-05-11-15-43-1_EE_rgb_mei-results-imucam]
+               0.99999713,  0.00184888, -0.00152691,  0.03679528,
+              -0.00184825,  0.99999821,  0.00041351,  0.0029463 ,
+               0.00152767, -0.00041069,  0.99999875,  0.03515003,
+               0.        ,  0.        ,  0.        ,  1.         ]
+            # T_ic: Extrinsic from "Color" To "Gyro" [Manufacture]
+            #     0.999996    ,     0.00212487   ,   -0.00160311    , 0.0289688687771559 ,
+            #    -0.00212717  ,     0.999997     ,   -0.00143346    , 0.00740136113017797 ,
+            #     0.00160005  ,     0.00143687   ,    0.999998      , 0.0156113049015403 , 
+            #     0, 0, 0, 1]
 
 #Multiple thread support
 multiple_thread: 1
@@ -87,12 +99,40 @@ d0_acc_w: 0.0000525       # accelerometer bias random work noise standard deviat
 d0_gyr_n: 0.00229         # gyroscope measurement noise standard deviation.     #0.05  0.004
 d0_gyr_w: 0.00000196      # gyroscope bias random work noise standard deviation.     #4.0e-5
 d0_g_norm: 9.8         # gravity magnitude
+# NOTE: imu data is collected when the robot is powered on and idling,
+#       hence, it captures the noises with additional system noises,
+#       otherwise, the noise factor would nor perform well with real data.
+#### based on [2023-05-11-15-47-26_base_rgb_mei-imu]
+# Accelerometer 0511:
+# Noise density: 0.003946724900130952
+# Noise density (discrete): 0.055815118807207915
+# Random walk: 5.247260402566035e-05
+# Gyroscope:
+# Noise density: 0.00016158344803440678
+# Noise density (discrete): 0.002285135036652663
+# Random walk: 1.954810193183154e-06
+
 # - [cam1]
-d1_acc_n: 0.283          # accelerometer measurement noise standard deviation. #0.2   0.04
-d1_acc_w: 0.00212        # accelerometer bias random work noise standard deviation.  #0.002
-d1_gyr_n: 0.006463      # gyroscope measurement noise standard deviation.     #0.05  0.004
-d1_gyr_w: 0.0000267      # gyroscope bias random work noise standard deviation.     #4.0e-5
-d1_g_norm: 9.8         # gravity magnitude #TODO: unified gravity magnitude??
+d1_acc_n: 0.1414          # accelerometer measurement noise standard deviation. 
+d1_acc_w: 0.00106         # accelerometer bias random work noise standard deviation 
+d1_gyr_n: 0.006463        # gyroscope measurement noise standard deviation. 
+d1_gyr_w: 0.00000267      # gyroscope bias random work noise standard deviation. 
+d1_g_norm: 9.8            # gravity magnitude #TODO: unified gravity magnitude? 
+# NOTE: imu data is collected when arm is holding up and facing forward with the camera,
+#       hence, it captures the noises in addition to the system noises,
+#       but, the noise may not be suitable for all joint configurations. 
+#### based on [2023-05-11-15-43-17_EE_rgb_mei-results-imucam]
+#   Model: calibrated
+#   Update rate: 200.0
+#   Accelerometer:
+#     Noise density: 0.009998222535561607 
+#     Noise density (discrete): 0.1413962190941554 
+#     Random walk: 0.0010572240682889056
+#   Gyroscope:
+#     Noise density: 0.00045700146412701916
+#     Noise density (discrete): 0.00646297668592792 
+#     Random walk: 2.672307981517485e-06
+#   T_ib (imu0 to imu0)
 
 # NOTE: fine tuned on May 9 , 11 pm
 #unsynchronization parameters
