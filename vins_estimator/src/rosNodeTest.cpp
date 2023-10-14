@@ -159,6 +159,55 @@ void sync_process_IMG()
             }
             pB0->img0_mutex.unlock();
             pB1->img0_mutex.unlock();
+            
+            // Placeholder for joints:
+            sensor_msgs::JointStateConstPtr jnt_msg_E = NULL;
+            sensor_msgs::JointStateConstPtr jnt_msg_b = NULL;
+
+#if (FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT)
+            // - batch processing the joint messages to match within the frame
+            sensor_msgs::JointStateConstPtr jnt_msg;
+            double da_time;
+
+            if (if_image_synced)
+            {
+                m_arm.jnt_mutex.lock();
+                // int counter = 0;
+                // int counter2 = 0;
+                while (!m_arm.jnt_buf.empty()) 
+                {
+                    jnt_msg = m_arm.jnt_buf.front();
+                    da_time = jnt_msg->header.stamp.toSec() + IMAGE_ARM_SYNC_TIME_DELTA_MAX; // with offset
+
+                    // acquire arms within the delta time window, set to allowance 1-3 ticks 0.002s/tick
+                    if (FLOAT_IN_BOUND((da_time - d0_time), 0, (IMAGE_ARM_SYNC_TIME_DELTA_MAX * 2)))
+                    {
+                        jnt_msg_b = jnt_msg;
+                        // PRINT_DEBUG("> fetching joint buffer dt=%fs", d01_delta);
+                        // PRINT_ARRAY(jnt_msg->position, 7);
+                        // counter2 ++;
+                    }
+                    if (FLOAT_IN_BOUND((da_time - d1_time), 0, (IMAGE_ARM_SYNC_TIME_DELTA_MAX * 2)))
+                    {
+                        // PRINT_DEBUG("> fetching joint buffer dt=%fs", d01_delta);
+                        // PRINT_ARRAY(jnt_msg->position, 7);
+                        jnt_msg_E = jnt_msg;
+                        // counter ++;
+                    }
+                    
+                    m_arm.jnt_buf.pop();
+                    if ((da_time >= d0_time) && (da_time >= d1_time)) // time passed out of range
+                    {
+                        // PRINT_DEBUG("> current joint buffer size: %d", m_arm.jnt_buf.size());
+                        // PRINT_DEBUG("EOW counter: %d, %d", counter, counter2);
+                        // if (jnt_msg_E && jnt_msg_b)
+                        //     PRINT_ARRAY_DIFF(jnt_msg_E->position, jnt_msg_b->position, 7); // diff is about 0.001
+                        break; // out of the delta time window
+                    }
+                }
+                m_arm.jnt_mutex.unlock();
+            }
+#endif
 
             if(if_image_synced)
             {
@@ -179,8 +228,9 @@ void sync_process_IMG()
                 {
                     // [ decoupled estimators ]
                     // [Later] TODO: we should consider coupling the estimators (stereo for the same states)
-                    m_est_b.inputImage(d0_time, d0_img);
-                    m_est_e.inputImage(d0_time, d1_img);
+                    // TODO: add joint state from the estimators
+                    m_est_b.inputImage(d0_time, d0_img, NO_IMG, jnt_msg_b);
+                    m_est_e.inputImage(d0_time, d1_img, NO_IMG, jnt_msg_E);
                 }
 #           if (FEATURE_ENABLE_PERFORMANCE_EVAL) // drop the images if we are behind the schedule
                 else
@@ -238,14 +288,14 @@ void d1_imu_callback(const sensor_msgs::ImuConstPtr &imu_msg)
 void arm_jnts_callback(const sensor_msgs::JointStateConstPtr &jnts_msg)
 {
     m_arm.jnt_mutex.lock();
-    // m_arm.jnt_buf.push(jnts_msg);
+    m_arm.jnt_buf.push(jnts_msg);
     m_arm.jnt_mutex.unlock();
 }
 
 void arm_pose_callback(const geometry_msgs::PoseStampedConstPtr &pose_msg)
 {
     m_arm.pose_mutex.lock();
-    // m_arm.pose_buf.push(pose_msg);
+    m_arm.pose_buf.push(pose_msg);
     m_arm.pose_mutex.unlock();
 }
 #endif
@@ -320,7 +370,7 @@ int main(int argc, char **argv)
     ros::Subscriber sub_d1_img0 = n.subscribe(DEV_CONFIGS[EE_DEV  ].IMAGE_TOPICS[0], SUB_IMG_BUFFER_SIZE, d1_img0_callback);
 #if (FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT)
     ros::Subscriber sub_arm_jnts = n.subscribe(ARM_CONFIG.JOINTS_TOPIC, SUB_ARM_BUFFER_SIZE, arm_jnts_callback); //, ros::TransportHints().tcpNoDelay());
-    ros::Subscriber sub_arm_pose = n.subscribe(ARM_CONFIG.POSE_TOPIC, SUB_ARM_BUFFER_SIZE, arm_pose_callback); //, ros::TransportHints().tcpNoDelay());
+    // ros::Subscriber sub_arm_pose = n.subscribe(ARM_CONFIG.POSE_TOPIC, SUB_ARM_BUFFER_SIZE, arm_pose_callback); //, ros::TransportHints().tcpNoDelay());
 #endif
 #if (FEATURE_ENABLE_VICON_SUPPORT)
     ros::Subscriber sub_d0_vicon = n.subscribe< geometry_msgs::TransformStamped>(

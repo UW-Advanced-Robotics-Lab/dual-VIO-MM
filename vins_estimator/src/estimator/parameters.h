@@ -26,12 +26,23 @@
 using namespace std;
 
 // ----------------------------------------------------------------
+// : Definitions :
+// ----------------------------------------------------------------
+#define ENABLED             (1U)
+#define DISABLED            (0U)
+#define NOT_IMPLEMENTED     (0U)
+#define FOREVER             (1U)
+
+#define NO_IMG              (cv::Mat())
+
+// ----------------------------------------------------------------
 // : Parameters :
 // ----------------------------------------------------------------
 #define MAX_NUM_CAMERAS     (2U) // 2: stereo, 1: mono
 #define MAX_NUM_DEVICES     (2U) // 2: dual, 1: standalone
 #define BASE_DEV            (0U)
 #define EE_DEV              (1U)
+
 // ----------------------------------------------------------------
 // : Hyper-Parameters :
 // ----------------------------------------------------------------
@@ -61,6 +72,7 @@ using namespace std;
 //[Later] TODO: should we parameterize as config hyper parameter? depending on the hardware, the rate might be dfifferent.
 #define IMAGE_SYNCHRONIZATION_TIME_DELTA_MAX    (double)(0.03) 
 #define IMAGE_BEHIND_SCHEDULE_TIME_TOLERANCE    (double)(0.06) 
+#define IMAGE_ARM_SYNC_TIME_DELTA_MAX           (double)(0.002)  // 500 Hz --> 0.002 s --> tol: 0.002 s: allowance of 1-2 ticks
 
 // ----------------------------------------------------------------
 // : ROS TOPICS :
@@ -103,16 +115,13 @@ using namespace std;
 #define SUB_ARM_BUFFER_SIZE         (100U)
 
 // converter: --------------------------------
-#define CV_YAML_TO_BOOL(X)      ((bool)(static_cast<int>(X)!=0))
+#define CV_YAML_TO_BOOL(X)          ((bool)(static_cast<int>(X)!=0))
+#define FLOAT_IN_RANGE(X, BOUND)    (((X < BOUND) && (X > -BOUND)))
+#define FLOAT_IN_BOUND(X, LB, UB)   (((X < UB) && (X > LB)))
 
 // ----------------------------------------------------------------
 // : Feature Definitions :
 // ----------------------------------------------------------------
-#define ENABLED             (1U)
-#define DISABLED            (0U)
-#define NOT_IMPLEMENTED     (0U)
-#define FOREVER             (1U)
-
 #define FEATURE_ENABLE_STEREO_SUPPORT        (NOT_IMPLEMENTED) // allow stereo support per device [TODO: let's study stereo later]
 #define FEATURE_ENABLE_PT_CLOUD_SUPPORT      (NOT_IMPLEMENTED) // allow stereo support per device [TODO: let's study stereo later]
 #define FEATURE_ENABLE_8UC1_IMAGE_SUPPORT    (NOT_IMPLEMENTED) // allow 8UC1 image support per device [opt out for runtime]
@@ -126,11 +135,11 @@ using namespace std;
 // vicon support:
 #define FEATURE_ENABLE_VICON_SUPPORT                    ( ENABLED) // to feed vicon data and output as nav_msg::path for visualization
 // arm odometry support:
-#define FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT             (DISABLED) // [WIP]
+#define FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT             ( ENABLED) // [WIP]
 
 // debug only features:
 #define FEATURE_CONSOLE_PRINTF                          ( ENABLED)
-#define FEATURE_CONSOLE_DEBUG_PRINTF                    (DISABLED)
+#define FEATURE_CONSOLE_DEBUG_PRINTF                    ( ENABLED)
 #define FEATURE_VIZ_ROSOUT_ODOMETRY_SUPPORT             (DISABLED)
 
 // debug only features (additional images):
@@ -150,10 +159,15 @@ using namespace std;
 #   define PRINT_ERROR(...)  {}// Do Nothing
 #endif
 #if (FEATURE_CONSOLE_DEBUG_PRINTF)
-#   define PRINT_DEBUG_FULL(...)  {printf("%s %s:%d", __TIME__, __FILE__, __LINE__); printf(" \033[0;33m > [DEBUG] \033[0m "); PRINTF(__VA_ARGS__);}
+#   define PRINT_DEBUG_FULL(...)  {printf("%s %s:%d", __TIME__, __FILE__, __LINE__); printf(" \033[0;33m > [DEBUG-FULL] \033[0m "); PRINTF(__VA_ARGS__);}
 #   define PRINT_DEBUG(...)  {printf(" \033[0;33m > [DEBUG-INFO] \033[0m "); PRINTF(__VA_ARGS__);}
+#   define PRINT_ARRAY(array, length) {printf(" \033[0;33m > [DEBUG-ARR] ["); for(int i = 0; i < length; i++){printf("%f\t", array[i]);} PRINTF("] \033[0m ");}
+#   define PRINT_ARRAY_DIFF(array1, array2, length) {printf(" \033[0;33m > [DEBUG-ARR] ["); for(int i = 0; i < length; i++){printf("%f\t", (array1[i]-array2[i]));} PRINTF("] \033[0m ");}
 #else
+#   define PRINT_DEBUG_FULL(...)  {}// Do Nothing
 #   define PRINT_DEBUG(...)  {}// Do Nothing
+#   define PRINT_ARRAY(...)  {}// Do Nothing
+#   define PRINT_ARRAY_DIFF(...)  {}// Do Nothing
 #endif
 
 // ----------------------------------------------------------------
@@ -190,6 +204,7 @@ enum CalibVersion
     CALIB_EXACT       = (0),
 };
 
+typedef Eigen::Matrix<double, 7, 1> Vector7d_t;
 
 typedef struct{
     int                 DEVICE_ID;
@@ -266,7 +281,7 @@ typedef struct{
     int readParameters(
         const std::string config_file, 
         DeviceConfig_t   DEV_CONFIGS[], 
-        ArmConfig_t      ARM_CONFIG); //--> N_DEVICES
+        ArmConfig_t     &ARM_CONFIG); //--> N_DEVICES
 #else
     int readParameters(
         const std::string config_file, 

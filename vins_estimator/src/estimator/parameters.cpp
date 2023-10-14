@@ -14,8 +14,8 @@
 #if (FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT)
 int readParameters(
     const std::string config_file, 
-    DeviceConfig_t   DEV_CONFIGS[], 
-    ArmConfig_t      ARM_CONFIG) //--> N_DEVICES
+    DeviceConfig_t    DEV_CONFIGS[], 
+    ArmConfig_t      &ARM_CONFIG) //--> N_DEVICES
 #else
 int readParameters(
     const std::string config_file, 

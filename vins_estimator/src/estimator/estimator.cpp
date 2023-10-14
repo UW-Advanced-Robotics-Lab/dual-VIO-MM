@@ -159,8 +159,28 @@ void Estimator::changeSensorType(int use_imu, int use_stereo)
 }
 #endif
 
-void Estimator::inputImage(double t, const cv::Mat &_img, const cv::Mat &_img1)
+
+void _process_JntVector_from_msg(const sensor_msgs::JointStateConstPtr &_jnt_msg, Vector7d_t &jnt_pos, Vector7d_t &jnt_vel, Vector7d_t &jnt_tau)
 {
+    // PRINT_ARRAY(_jnt_msg->position, 7);
+    for (int i = 0; i < 7; ++i) {
+        jnt_pos(i) = _jnt_msg->position[i];
+        jnt_vel(i) = _jnt_msg->velocity[i];
+        jnt_tau(i) = _jnt_msg->effort[i];
+    }
+    // std::cout << jnt_pos << std::endl;
+}
+
+void Estimator::inputImage(double t, const cv::Mat &_img, const cv::Mat &_img1, const sensor_msgs::JointStateConstPtr &_jnt_msg)
+{
+    // input joints:
+    if (_jnt_msg)
+    {
+        Vector7d_t jnt_pos, jnt_vel, jnt_tau;
+        _process_JntVector_from_msg(_jnt_msg, jnt_pos, jnt_vel, jnt_tau);
+    }
+
+    // processing image:
     inputImageCnt++;
     map<int, vector<pair<int, Eigen::Matrix<double, 7, 1>>>> featureFrame;
     TicToc featureTrackerTime;
@@ -299,7 +319,7 @@ void Estimator::processMeasurements()
 
             featureBuf.pop();
             mBuf.unlock();
-            PRINT_DEBUG("feature buffer size: %d\n",featureBuf.size());
+            // PRINT_DEBUG("feature buffer size: %d\n",featureBuf.size());
 
             if(pCfg->USE_IMU)
             {
@@ -1061,6 +1081,7 @@ void Estimator::optimization()
         problem.AddResidualBlock(marginalization_factor, NULL,
                                  last_marginalization_parameter_blocks);
     }
+    // - IMU Residuals
     if(pCfg->USE_IMU)
     {
         for (int i = 0; i < frame_count; i++)
@@ -1073,6 +1094,7 @@ void Estimator::optimization()
         }
     }
 
+    // - Camera Feature Residuals
     int f_m_cnt = 0;
     int feature_index = -1;
     for (auto &it_per_id : f_manager.feature)
