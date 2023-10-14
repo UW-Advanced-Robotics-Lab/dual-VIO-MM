@@ -45,7 +45,7 @@ void reduceVector(vector<int> &v, vector<uchar> status)
     v.resize(j);
 }
 
-FeatureTracker::FeatureTracker(DeviceConfig_t * const _pCfg):pCfg{_pCfg}
+FeatureTracker::FeatureTracker(std::shared_ptr<DeviceConfig_t> _pCfg):pCfg{_pCfg}
 {
     stereo_cam = 0;
     n_id = 0;

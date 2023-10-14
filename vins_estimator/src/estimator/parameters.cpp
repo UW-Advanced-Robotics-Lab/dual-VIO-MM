@@ -12,14 +12,14 @@
 // : Public Functions :
 // ----------------------------------------------------------------
 #if (FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT)
-int readParameters(
-    const std::string config_file, 
-    DeviceConfig_t    DEV_CONFIGS[], 
-    ArmConfig_t      &ARM_CONFIG) //--> N_DEVICES
+    int readParameters(
+        const std::string config_file, 
+        std::shared_ptr<DeviceConfig_t>     pCfgs[], 
+        std::shared_ptr<ArmConfig_t>        pArmCfg) //--> N_DEVICES
 #else
-int readParameters(
-    const std::string config_file, 
-    DeviceConfig_t   DEV_CONFIGS[]) //--> N_DEVICES
+    int readParameters(
+        const std::string config_file, 
+        std::shared_ptr<DeviceConfig_t>     pCfgs[]) //--> N_DEVICES
 #endif
 {
     FILE *fh = fopen(config_file.c_str(),"r");
@@ -45,15 +45,15 @@ int readParameters(
 
     // loading arm:
 #if (FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT)
-    fsSettings["arm_joint_topic"] >> ARM_CONFIG.JOINTS_TOPIC;
-    fsSettings["arm_pose_topic"] >> ARM_CONFIG.POSE_TOPIC;
-    ARM_CONFIG.CALIBRATION_FILE_PATH = configPath_ + "/" + static_cast<std::string>(fsSettings["arm_calib"]);
+    fsSettings["arm_joint_topic"] >> pArmCfg->JOINTS_TOPIC;
+    fsSettings["arm_pose_topic"] >> pArmCfg->POSE_TOPIC;
+    pArmCfg->CALIBRATION_FILE_PATH = configPath_ + "/" + static_cast<std::string>(fsSettings["arm_calib"]);
 #endif
     
     // loading camera devices:
     for (int i = 0; i < N_DEVICES; i++)
     {
-        DeviceConfig_t* cfg = & (DEV_CONFIGS[i]);
+        std::shared_ptr<DeviceConfig_t> cfg = pCfgs[i];
         cfg->DEVICE_ID = i;
         
         std::string pre_ = "d"+ std::to_string(i) + "_";

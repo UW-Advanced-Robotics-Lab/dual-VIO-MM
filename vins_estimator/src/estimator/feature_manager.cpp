@@ -14,7 +14,7 @@ int FeaturePerId::endFrame()
     return start_frame + feature_per_frame.size() - 1;
 }
 
-FeatureManager::FeatureManager(Matrix3d _Rs[], DeviceConfig_t *const _pCfg):Rs(_Rs), pCfg{_pCfg}
+FeatureManager::FeatureManager(Matrix3d _Rs[], std::shared_ptr<DeviceConfig_t> _pCfg):Rs(_Rs), pCfg{_pCfg}
 {
     for (int i = 0; i < pCfg->NUM_OF_CAM; i++)
         ric[i].setIdentity();

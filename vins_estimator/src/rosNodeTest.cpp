@@ -59,11 +59,13 @@ typedef struct{
 // : Global Data Placeholder:
 // ----------------------------------------------------------------
 // configs:
-DeviceConfig_t DEV_CONFIGS[MAX_NUM_DEVICES];
+std::shared_ptr<DeviceConfig_t> pCfgs[MAX_NUM_DEVICES] = {
+    std::make_shared<DeviceConfig_t>(), std::make_shared<DeviceConfig_t>()
+};
 NodeBuffer_t   m_buffer[MAX_NUM_DEVICES];
 
 #if (FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT)
-ArmConfig_t    ARM_CONFIG;
+std::shared_ptr<ArmConfig_t> pArmCfg = std::make_shared<ArmConfig_t>();
 ArmBuffer_t    m_arm;
 #endif
 #if (FEATURE_ENABLE_VICON_SUPPORT)
@@ -71,8 +73,8 @@ ViconBuffer_t  m_GT[MAX_NUM_DEVICES]; // UNUSED
 #endif
 
 // Estimators:
-Estimator      m_est_b(& DEV_CONFIGS[BASE_DEV]);
-Estimator      m_est_e(& DEV_CONFIGS[EE_DEV  ]);
+Estimator      m_est_b(pCfgs[BASE_DEV]);
+Estimator      m_est_e(pCfgs[EE_DEV  ]);
 
 // Performance:
 PerformanceManager_t m_perf;
@@ -340,9 +342,9 @@ int main(int argc, char **argv)
     string config_file = argv[1];
     PRINT_INFO("config_file: %s", argv[1]);
 #if (FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT)
-    const int N_DEVICES = readParameters(config_file, DEV_CONFIGS, ARM_CONFIG);
+    const int N_DEVICES = readParameters(config_file, pCfgs, pArmCfg);
 #else
-    const int N_DEVICES = readParameters(config_file, DEV_CONFIGS);
+    const int N_DEVICES = readParameters(config_file, pCfgs);
 #endif
     // IMPORTANT: we need to set the parameters for each estimator, before we can use it
     m_est_b.setParameter();
@@ -364,28 +366,28 @@ int main(int argc, char **argv)
     registerPub(n, N_DEVICES);
 
     // Subscribe: TODO: (minor) eventually, we should utilize the boost::bind cast instead of explicit function
-    ros::Subscriber sub_d0_imu = n.subscribe(DEV_CONFIGS[BASE_DEV].IMU_TOPIC, SUB_IMU_BUFFER_SIZE, d0_imu_callback, ros::TransportHints().tcpNoDelay());
-    ros::Subscriber sub_d1_imu = n.subscribe(DEV_CONFIGS[EE_DEV  ].IMU_TOPIC, SUB_IMU_BUFFER_SIZE, d1_imu_callback, ros::TransportHints().tcpNoDelay());
-    ros::Subscriber sub_d0_img0 = n.subscribe(DEV_CONFIGS[BASE_DEV].IMAGE_TOPICS[0], SUB_IMG_BUFFER_SIZE, d0_img0_callback);
-    ros::Subscriber sub_d1_img0 = n.subscribe(DEV_CONFIGS[EE_DEV  ].IMAGE_TOPICS[0], SUB_IMG_BUFFER_SIZE, d1_img0_callback);
+    ros::Subscriber sub_d0_imu = n.subscribe(pCfgs[BASE_DEV]->IMU_TOPIC, SUB_IMU_BUFFER_SIZE, d0_imu_callback, ros::TransportHints().tcpNoDelay());
+    ros::Subscriber sub_d1_imu = n.subscribe(pCfgs[EE_DEV  ]->IMU_TOPIC, SUB_IMU_BUFFER_SIZE, d1_imu_callback, ros::TransportHints().tcpNoDelay());
+    ros::Subscriber sub_d0_img0 = n.subscribe(pCfgs[BASE_DEV]->IMAGE_TOPICS[0], SUB_IMG_BUFFER_SIZE, d0_img0_callback);
+    ros::Subscriber sub_d1_img0 = n.subscribe(pCfgs[EE_DEV  ]->IMAGE_TOPICS[0], SUB_IMG_BUFFER_SIZE, d1_img0_callback);
 #if (FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT)
-    ros::Subscriber sub_arm_jnts = n.subscribe(ARM_CONFIG.JOINTS_TOPIC, SUB_ARM_BUFFER_SIZE, arm_jnts_callback); //, ros::TransportHints().tcpNoDelay());
-    // ros::Subscriber sub_arm_pose = n.subscribe(ARM_CONFIG.POSE_TOPIC, SUB_ARM_BUFFER_SIZE, arm_pose_callback); //, ros::TransportHints().tcpNoDelay());
+    ros::Subscriber sub_arm_jnts = n.subscribe(pArmCfg->JOINTS_TOPIC, SUB_ARM_BUFFER_SIZE, arm_jnts_callback); //, ros::TransportHints().tcpNoDelay());
+    // ros::Subscriber sub_arm_pose = n.subscribe(pArmCfg->POSE_TOPIC, SUB_ARM_BUFFER_SIZE, arm_pose_callback); //, ros::TransportHints().tcpNoDelay());
 #endif
 #if (FEATURE_ENABLE_VICON_SUPPORT)
     ros::Subscriber sub_d0_vicon = n.subscribe< geometry_msgs::TransformStamped>(
-        DEV_CONFIGS[BASE_DEV].VICON_TOPIC, SUB_ARM_BUFFER_SIZE, 
+        pCfgs[BASE_DEV]->VICON_TOPIC, SUB_ARM_BUFFER_SIZE, 
         boost::bind(vicon_pub_callback, _1, BASE_DEV)); //, ros::TransportHints().tcpNoDelay());
     ros::Subscriber sub_d1_vicon = n.subscribe< geometry_msgs::TransformStamped>(
-        DEV_CONFIGS[EE_DEV  ].VICON_TOPIC, SUB_ARM_BUFFER_SIZE, 
+        pCfgs[EE_DEV  ]->VICON_TOPIC, SUB_ARM_BUFFER_SIZE, 
         boost::bind(vicon_pub_callback, _1, EE_DEV)); //, ros::TransportHints().tcpNoDelay());
 #endif
     
     PRINT_INFO("==== [ Subscriptions Completed ] ==== ");
-    PRINT_INFO("[Node] Sub IMU Topic   d0.0: %s", DEV_CONFIGS[BASE_DEV].IMU_TOPIC.c_str());
-    PRINT_INFO("[Node] Sub IMU Topic   d1.0: %s", DEV_CONFIGS[EE_DEV  ].IMU_TOPIC.c_str());
-    PRINT_INFO("[Node] Sub Image Topic d0.0: %s", DEV_CONFIGS[BASE_DEV].IMAGE_TOPICS[0].c_str());
-    PRINT_INFO("[Node] Sub Image Topic d1.0: %s", DEV_CONFIGS[EE_DEV  ].IMAGE_TOPICS[0].c_str());
+    PRINT_INFO("[Node] Sub IMU Topic   d0.0: %s", pCfgs[BASE_DEV]->IMU_TOPIC.c_str());
+    PRINT_INFO("[Node] Sub IMU Topic   d1.0: %s", pCfgs[EE_DEV  ]->IMU_TOPIC.c_str());
+    PRINT_INFO("[Node] Sub Image Topic d0.0: %s", pCfgs[BASE_DEV]->IMAGE_TOPICS[0].c_str());
+    PRINT_INFO("[Node] Sub Image Topic d1.0: %s", pCfgs[EE_DEV  ]->IMAGE_TOPICS[0].c_str());
     
     ros::Subscriber sub_restart = n.subscribe("/vins_restart", 100, restart_callback);
 

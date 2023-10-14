@@ -40,7 +40,7 @@
 class Estimator
 {
   public:
-    Estimator(DeviceConfig_t *const _pCfg);
+    Estimator(std::shared_ptr<DeviceConfig_t> _pCfg);
     ~Estimator();
     void setParameter();
 
@@ -95,7 +95,7 @@ class Estimator
         MARGIN_SECOND_NEW = 1
     };
     
-    DeviceConfig_t * pCfg; // this config may be modified by the estimator
+    std::shared_ptr<DeviceConfig_t> pCfg; // this config may be modified by the estimator
     std::mutex mProcess;
     std::mutex mBuf;
     std::mutex mPropagate;

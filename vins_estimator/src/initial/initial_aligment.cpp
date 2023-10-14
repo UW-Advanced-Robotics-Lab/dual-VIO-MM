@@ -62,7 +62,7 @@ MatrixXd TangentBasis(Vector3d &g0)
     return bc;
 }
 
-void RefineGravity(map<double, ImageFrame> &all_image_frame, Vector3d &g, VectorXd &x, const DeviceConfig_t *const pCfg)
+void RefineGravity(map<double, ImageFrame> &all_image_frame, Vector3d &g, VectorXd &x, const std::shared_ptr<DeviceConfig_t> pCfg)
 {
     Vector3d g0 = g.normalized() * pCfg->G.norm();
     Vector3d lx, ly;
@@ -132,7 +132,7 @@ void RefineGravity(map<double, ImageFrame> &all_image_frame, Vector3d &g, Vector
     g = g0;
 }
 
-bool LinearAlignment(map<double, ImageFrame> &all_image_frame, Vector3d &g, VectorXd &x, const DeviceConfig_t *const pCfg)
+bool LinearAlignment(map<double, ImageFrame> &all_image_frame, Vector3d &g, VectorXd &x, const std::shared_ptr<DeviceConfig_t> pCfg)
 {
     int all_frame_count = all_image_frame.size();
     int n_state = all_frame_count * 3 + 3 + 1;
@@ -206,7 +206,7 @@ bool LinearAlignment(map<double, ImageFrame> &all_image_frame, Vector3d &g, Vect
         return true;
 }
 
-bool VisualIMUAlignment(map<double, ImageFrame> &all_image_frame, Vector3d* Bgs, Vector3d &g, VectorXd &x, const DeviceConfig_t *const pCfg)
+bool VisualIMUAlignment(map<double, ImageFrame> &all_image_frame, Vector3d* Bgs, Vector3d &g, VectorXd &x, const std::shared_ptr<DeviceConfig_t> pCfg)
 {
     solveGyroscopeBias(all_image_frame, Bgs);
 

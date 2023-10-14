@@ -280,10 +280,10 @@ typedef struct{
 #if (FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT)
     int readParameters(
         const std::string config_file, 
-        DeviceConfig_t   DEV_CONFIGS[], 
-        ArmConfig_t     &ARM_CONFIG); //--> N_DEVICES
+        std::shared_ptr<DeviceConfig_t>     pCfgs[], 
+        std::shared_ptr<ArmConfig_t>        pArmCfg); //--> N_DEVICES
 #else
     int readParameters(
         const std::string config_file, 
-        DeviceConfig_t   DEV_CONFIGS[]); //--> N_DEVICES
+        std::shared_ptr<DeviceConfig_t>     pCfgs[]); //--> N_DEVICES
 #endif

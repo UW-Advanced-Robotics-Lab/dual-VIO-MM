@@ -10,7 +10,7 @@
 #include "estimator.h"
 #include "../utility/visualization.h"
 
-Estimator::Estimator(DeviceConfig_t *const _pCfg): pCfg{_pCfg}, f_manager{Rs,_pCfg}, featureTracker{_pCfg}
+Estimator::Estimator(std::shared_ptr<DeviceConfig_t> _pCfg): pCfg{_pCfg}, f_manager{Rs,_pCfg}, featureTracker{_pCfg}
 {
     ROS_INFO("init begins");
     initThreadFlag = false;
