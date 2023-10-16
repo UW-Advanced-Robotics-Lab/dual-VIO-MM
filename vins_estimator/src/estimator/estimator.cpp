@@ -15,11 +15,19 @@ Estimator::Estimator(std::shared_ptr<DeviceConfig_t> _pCfg): pCfg{_pCfg}, f_mana
     ROS_INFO("init begins");
     initThreadFlag = false;
     clearState();
+#if (! FEATURE_NON_THREADING_SUPPORT)
+    PRINT_WARN("Assume threading supported all the time!");
+#endif
+#if (! FEATURE_PERMIT_WITHOUT_IMU_SUPPORT)
+    PRINT_WARN("Assume IMU must exist all the time!");
+#endif
 }
 
 Estimator::~Estimator()
 {
+#if (FEATURE_NON_THREADING_SUPPORT)
     if (pCfg->MULTIPLE_THREAD)
+#endif 
     {
         processThread.join();
         PRINT_WARN("join thread \n");
@@ -110,8 +118,10 @@ void Estimator::setParameter()
     cout << "set g " << g.transpose() << endl;
     featureTracker.readIntrinsicParameterArray(pCfg->CAM_NAMES, pCfg->NUM_OF_CAM);
 
+#if (FEATURE_NON_THREADING_SUPPORT)
     std::cout << "pCfg->MULTIPLE_THREAD is " << pCfg->MULTIPLE_THREAD << '\n';
     if (pCfg->MULTIPLE_THREAD && !initThreadFlag)
+#endif 
     {
         initThreadFlag = true;
         processThread = std::thread(&Estimator::processMeasurements, this);
@@ -119,7 +129,7 @@ void Estimator::setParameter()
     mProcess.unlock();
 }
 
-#if (FEATURE_ENABLE_STEREO_SUPPORT)
+#if (FEATURE_PERMIT_WITHOUT_IMU_SUPPORT)
 void Estimator::changeSensorType(int use_imu, int use_stereo)
 {
     bool restart = false;
@@ -158,18 +168,25 @@ void Estimator::changeSensorType(int use_imu, int use_stereo)
     }
 }
 #endif
-
+#if (FEATURE_ENABLE_STEREO_SUPPORT)
 void Estimator::inputImage(double t, const cv::Mat &_img, const cv::Mat &_img1)
+#else
+void Estimator::inputImage(double t, const cv::Mat &_img)
+#endif
 {
     // processing image:
     inputImageCnt++;
     map<int, vector<pair<int, Eigen::Matrix<double, 7, 1>>>> featureFrame;
     TicToc featureTrackerTime;
 
+#if (FEATURE_ENABLE_STEREO_SUPPORT)
     if(_img1.empty())
         featureFrame = featureTracker.trackImage(t, _img);
     else
         featureFrame = featureTracker.trackImage(t, _img, _img1);
+#else 
+    featureFrame = featureTracker.trackImage(t, _img);
+#endif
     //printf("featureTracker time: %f\n", featureTrackerTime.toc());
 
     if (pCfg->SHOW_TRACK)
@@ -178,7 +195,9 @@ void Estimator::inputImage(double t, const cv::Mat &_img, const cv::Mat &_img1)
         pubTrackImage(imgTrack, t, pCfg->DEVICE_ID);
     }
     
+#if (FEATURE_NON_THREADING_SUPPORT)
     if(pCfg->MULTIPLE_THREAD)  
+#endif
     {     
         if(inputImageCnt % 2 == 0)
         {
@@ -187,6 +206,7 @@ void Estimator::inputImage(double t, const cv::Mat &_img, const cv::Mat &_img1)
             mBuf.unlock();
         }
     }
+#if (FEATURE_NON_THREADING_SUPPORT)
     else
     {
         mBuf.lock();
@@ -196,6 +216,7 @@ void Estimator::inputImage(double t, const cv::Mat &_img, const cv::Mat &_img1)
         processMeasurements();
         PRINT_WARN("process time: %f\n", processTime.toc());
     }
+#endif 
     
 }
 
@@ -222,8 +243,10 @@ void Estimator::inputFeature(double t, const map<int, vector<pair<int, Eigen::Ma
     featureBuf.push(make_pair(t, featureFrame));
     mBuf.unlock();
 
+#if (FEATURE_NON_THREADING_SUPPORT)
     if(!pCfg->MULTIPLE_THREAD)
         processMeasurements();
+#endif
 }
 
 
@@ -281,28 +304,36 @@ void Estimator::processMeasurements()
         {
             feature = featureBuf.front();
             curTime = feature.first + td;
-            while(1)
+#if (FEATURE_PERMIT_WITHOUT_IMU_SUPPORT)
+            while ((!pCfg->USE_IMU  || IMUAvailable(feature.first + td)) == false)
+#else
+            while (! IMUAvailable(feature.first + td))
+#endif
             {
-                if ((!pCfg->USE_IMU  || IMUAvailable(feature.first + td)))
-                    break;
-                else
-                {
-                    PRINT_WARN("wait for imu ... \n");
-                    if (! pCfg->MULTIPLE_THREAD)
-                        return;
-                    std::chrono::milliseconds dura(5);
-                    std::this_thread::sleep_for(dura);
-                }
+                
+                PRINT_WARN("wait for imu ... \n");
+#if (FEATURE_NON_THREADING_SUPPORT)
+                if (! pCfg->MULTIPLE_THREAD)
+                    return;
+#endif
+                std::chrono::milliseconds dura(5);
+                std::this_thread::sleep_for(dura);
             }
             mBuf.lock();
+
+#if (FEATURE_PERMIT_WITHOUT_IMU_SUPPORT)
             if(pCfg->USE_IMU)
                 getIMUInterval(prevTime, curTime, accVector, gyrVector);
-
+#else
+            getIMUInterval(prevTime, curTime, accVector, gyrVector);
+#endif
             featureBuf.pop();
             mBuf.unlock();
             // PRINT_DEBUG("feature buffer size: %d\n",featureBuf.size());
 
+#if (FEATURE_PERMIT_WITHOUT_IMU_SUPPORT)
             if(pCfg->USE_IMU)
+#endif
             {
                 if(!initFirstPoseFlag)
                     initFirstIMUPose(accVector);
@@ -341,10 +372,10 @@ void Estimator::processMeasurements()
                 // printf("Plotting ... \n");
             }
         }
-
+#if (FEATURE_NON_THREADING_SUPPORT)
         if (! pCfg->MULTIPLE_THREAD)
             break;
-
+#endif
         // std::chrono::milliseconds dura(1);
         // std::this_thread::sleep_for(dura);
     }
@@ -550,8 +581,12 @@ void Estimator::processImage(const map<int, vector<pair<int, Eigen::Matrix<doubl
     else
     {
         TicToc t_solve;
+#if (FEATURE_PERMIT_WITHOUT_IMU_SUPPORT)
         if(!pCfg->USE_IMU)
             f_manager.initFramePoseByPnP(frame_count, Ps, Rs, tic, ric);
+#else
+        f_manager.initFramePoseByPnP(frame_count, Ps, Rs, tic, ric);
+#endif
         f_manager.triangulate(frame_count, Ps, Rs, tic, ric);
         optimization();
         set<int> removeIndex;
@@ -841,7 +876,9 @@ void Estimator::vector2double()
         para_Pose[i][5] = q.z();
         para_Pose[i][6] = q.w();
 
+#if (FEATURE_PERMIT_WITHOUT_IMU_SUPPORT)
         if(pCfg->USE_IMU)
+#endif
         {
             para_SpeedBias[i][0] = Vs[i].x();
             para_SpeedBias[i][1] = Vs[i].y();
@@ -889,7 +926,9 @@ void Estimator::double2vector()
         failure_occur = 0;
     }
 
+#if (FEATURE_PERMIT_WITHOUT_IMU_SUPPORT)
     if(pCfg->USE_IMU)
+#endif
     {
         Vector3d origin_R00 = Utility::R2ypr(Quaterniond(para_Pose[0][6],
                                                           para_Pose[0][3],
@@ -931,6 +970,7 @@ void Estimator::double2vector()
             
         }
     }
+#if (FEATURE_PERMIT_WITHOUT_IMU_SUPPORT)
     else
     {
         for (int i = 0; i <= WINDOW_SIZE; i++)
@@ -940,8 +980,11 @@ void Estimator::double2vector()
             Ps[i] = Vector3d(para_Pose[i][0], para_Pose[i][1], para_Pose[i][2]);
         }
     }
+#endif
 
+#if (FEATURE_PERMIT_WITHOUT_IMU_SUPPORT)
     if(pCfg->USE_IMU)
+#endif
     {
         for (int i = 0; i < pCfg->NUM_OF_CAM; i++)
         {
@@ -960,9 +1003,12 @@ void Estimator::double2vector()
         dep(i) = para_Feature[i][0];
     f_manager.setDepth(dep);
 
+#if (FEATURE_PERMIT_WITHOUT_IMU_SUPPORT)
     if(pCfg->USE_IMU)
         td = para_Td[0][0];
-
+#else
+        td = para_Td[0][0];
+#endif
 }
 
 bool Estimator::failureDetection()
@@ -1025,6 +1071,7 @@ void Estimator::optimization()
     loss_function = new ceres::HuberLoss(1.0);
     //loss_function = new ceres::CauchyLoss(1.0 / FOCAL_LENGTH);
     //ceres::LossFunction* loss_function = new ceres::HuberLoss(1.0);
+#if (FEATURE_PERMIT_WITHOUT_IMU_SUPPORT)
     for (int i = 0; i < frame_count + 1; i++)
     {
         ceres::LocalParameterization *local_parameterization = new PoseLocalParameterization();
@@ -1034,6 +1081,15 @@ void Estimator::optimization()
     }
     if(!pCfg->USE_IMU)
         problem.SetParameterBlockConstant(para_Pose[0]);
+#else
+    for (int i = 0; i < frame_count + 1; i++)
+    {
+        ceres::LocalParameterization *local_parameterization = new PoseLocalParameterization();
+        problem.AddParameterBlock(para_Pose[i], SIZE_POSE, local_parameterization);
+        problem.AddParameterBlock(para_SpeedBias[i], SIZE_SPEEDBIAS);
+    }
+    problem.SetParameterBlockConstant(para_Pose[0]);
+#endif
 
     for (int i = 0; i < pCfg->NUM_OF_CAM; i++)
     {
@@ -1063,7 +1119,9 @@ void Estimator::optimization()
                                  last_marginalization_parameter_blocks);
     }
     // - IMU Residuals
+#if (FEATURE_PERMIT_WITHOUT_IMU_SUPPORT)
     if(pCfg->USE_IMU)
+#endif
     {
         for (int i = 0; i < frame_count; i++)
         {
@@ -1176,8 +1234,9 @@ void Estimator::optimization()
                                                                            drop_set);
             marginalization_info->addResidualBlockInfo(residual_block_info);
         }
-
+#if (FEATURE_PERMIT_WITHOUT_IMU_SUPPORT)
         if(pCfg->USE_IMU)
+#endif
         {
             if (pre_integrations[1]->sum_dt < 10.0)
             {
@@ -1257,9 +1316,14 @@ void Estimator::optimization()
         std::unordered_map<long, double *> addr_shift;
         for (int i = 1; i <= WINDOW_SIZE; i++)
         {
+#if (FEATURE_PERMIT_WITHOUT_IMU_SUPPORT)
             addr_shift[reinterpret_cast<long>(para_Pose[i])] = para_Pose[i - 1];
             if(pCfg->USE_IMU)
                 addr_shift[reinterpret_cast<long>(para_SpeedBias[i])] = para_SpeedBias[i - 1];
+#else
+            addr_shift[reinterpret_cast<long>(para_Pose[i])] = para_Pose[i - 1];
+            addr_shift[reinterpret_cast<long>(para_SpeedBias[i])] = para_SpeedBias[i - 1];
+#endif
         }
         for (int i = 0; i < pCfg->NUM_OF_CAM; i++)
             addr_shift[reinterpret_cast<long>(para_Ex_Pose[i])] = para_Ex_Pose[i];
@@ -1317,15 +1381,25 @@ void Estimator::optimization()
                     continue;
                 else if (i == WINDOW_SIZE)
                 {
+#if (FEATURE_PERMIT_WITHOUT_IMU_SUPPORT)
                     addr_shift[reinterpret_cast<long>(para_Pose[i])] = para_Pose[i - 1];
                     if(pCfg->USE_IMU)
                         addr_shift[reinterpret_cast<long>(para_SpeedBias[i])] = para_SpeedBias[i - 1];
+#else
+                    addr_shift[reinterpret_cast<long>(para_Pose[i])] = para_Pose[i - 1];
+                    addr_shift[reinterpret_cast<long>(para_SpeedBias[i])] = para_SpeedBias[i - 1];
+#endif
                 }
                 else
                 {
+#if (FEATURE_PERMIT_WITHOUT_IMU_SUPPORT)
                     addr_shift[reinterpret_cast<long>(para_Pose[i])] = para_Pose[i];
                     if(pCfg->USE_IMU)
                         addr_shift[reinterpret_cast<long>(para_SpeedBias[i])] = para_SpeedBias[i];
+#else
+                    addr_shift[reinterpret_cast<long>(para_Pose[i])] = para_Pose[i];
+                    addr_shift[reinterpret_cast<long>(para_SpeedBias[i])] = para_SpeedBias[i];
+#endif
                 }
             }
             for (int i = 0; i < pCfg->NUM_OF_CAM; i++)
@@ -1361,7 +1435,9 @@ void Estimator::slideWindow()
                 Headers[i] = Headers[i + 1];
                 Rs[i].swap(Rs[i + 1]);
                 Ps[i].swap(Ps[i + 1]);
+#if (FEATURE_PERMIT_WITHOUT_IMU_SUPPORT)
                 if(pCfg->USE_IMU)
+#endif
                 {
                     std::swap(pre_integrations[i], pre_integrations[i + 1]);
 
@@ -1378,7 +1454,9 @@ void Estimator::slideWindow()
             Ps[WINDOW_SIZE] = Ps[WINDOW_SIZE - 1];
             Rs[WINDOW_SIZE] = Rs[WINDOW_SIZE - 1];
 
+#if (FEATURE_PERMIT_WITHOUT_IMU_SUPPORT)
             if(pCfg->USE_IMU)
+#endif
             {
                 Vs[WINDOW_SIZE] = Vs[WINDOW_SIZE - 1];
                 Bas[WINDOW_SIZE] = Bas[WINDOW_SIZE - 1];
@@ -1410,7 +1488,9 @@ void Estimator::slideWindow()
             Ps[frame_count - 1] = Ps[frame_count];
             Rs[frame_count - 1] = Rs[frame_count];
 
+#if (FEATURE_PERMIT_WITHOUT_IMU_SUPPORT)
             if(pCfg->USE_IMU)
+#endif
             {
                 for (unsigned int i = 0; i < dt_buf[frame_count].size(); i++)
                 {

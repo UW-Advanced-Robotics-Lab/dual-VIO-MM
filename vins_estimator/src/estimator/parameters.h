@@ -132,6 +132,10 @@ using namespace std;
 /* To enforce the real-time performance, we will drop frames if we are n seconds behind the schedule */
 #define FEATURE_ENABLE_FRAME_DROP_FOR_REAL_TIME         ( ENABLED) // set via "IMAGE_BEHIND_SCHEDULE_TIME_TOLERANCE"
 
+// other features:
+#define FEATURE_NON_THREADING_SUPPORT                   (DISABLED) // disable non-threading
+#define FEATURE_ESTIMATOR_THREADING_SUPPORT             (DISABLED) // backward-compatible with threading in estimator
+#define FEATURE_PERMIT_WITHOUT_IMU_SUPPORT              (FEATURE_ENABLE_STEREO_SUPPORT) // since there is no support from stereo, we will assume imu to be enabled all the time
 // vicon support:
 #define FEATURE_ENABLE_VICON_SUPPORT                    ( ENABLED) // to feed vicon data and output as nav_msg::path for visualization
 // arm odometry support:
