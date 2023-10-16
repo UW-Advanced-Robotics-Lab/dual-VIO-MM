@@ -24,12 +24,9 @@ Estimator::Estimator(std::shared_ptr<DeviceConfig_t> _pCfg): pCfg{_pCfg}, f_mana
 
 Estimator::~Estimator()
 {
-    if (pProcessThread != nullptr)
-    {
-        pProcessThread->join();
-        PRINT_WARN("join thread \n");
-        pProcessThread.reset();
-    }
+    // process removed from here
+    // detaching pointers:
+    pCfg.reset();
 }
 
 void Estimator::clearState()
@@ -115,11 +112,6 @@ void Estimator::setParameter()
     g = pCfg->G;
     cout << "set g " << g.transpose() << endl;
     featureTracker.readIntrinsicParameterArray(pCfg->CAM_NAMES, pCfg->NUM_OF_CAM);
- 
-    if (pProcessThread == nullptr)
-    {
-        pProcessThread = std::make_shared<std::thread>(& Estimator::processMeasurements, this);
-    }
     mProcess.unlock();
 }
 
@@ -218,10 +210,10 @@ void Estimator::inputFeature(double t, const map<int, vector<pair<int, Eigen::Ma
     featureBuf.push(make_pair(t, featureFrame));
     mBuf.unlock();
 
-#if (FEATURE_NON_THREADING_SUPPORT)
-    if(!pCfg->MULTIPLE_THREAD)
-        processMeasurements();
-#endif
+// #if (FEATURE_NON_THREADING_SUPPORT)
+//     if(!pCfg->MULTIPLE_THREAD)
+//         processMeasurements();
+// #endif
 }
 
 

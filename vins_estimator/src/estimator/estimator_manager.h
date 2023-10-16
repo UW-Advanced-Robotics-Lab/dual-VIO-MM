@@ -29,5 +29,8 @@ class EstimatorManager
         std::shared_ptr<DeviceConfig_t> pCfgs[MAX_NUM_DEVICES];
         std::shared_ptr<Estimator>      pEsts[MAX_NUM_DEVICES];
 
+        std::shared_ptr<std::thread>    pProcessThread[MAX_NUM_DEVICES] = {nullptr, nullptr};
+
+
         // static void _process_JntVector_from_msg(const sensor_msgs::JointStateConstPtr &_jnt_msg, Vector7d_t &jnt_pos, Vector7d_t &jnt_vel, Vector7d_t &jnt_tau);
 };

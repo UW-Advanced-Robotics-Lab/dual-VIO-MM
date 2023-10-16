@@ -105,8 +105,6 @@ class Estimator
     double prevTime, curTime;
     bool openExEstimation;
 
-    std::shared_ptr<std::thread> pProcessThread = nullptr;
-
     FeatureTracker featureTracker;
 
     SolverFlag solver_flag;

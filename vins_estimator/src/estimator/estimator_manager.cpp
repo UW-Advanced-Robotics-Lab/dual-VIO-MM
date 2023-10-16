@@ -14,6 +14,19 @@ EstimatorManager::EstimatorManager(std::shared_ptr<DeviceConfig_t> _pCfgs[])
 
 EstimatorManager::~EstimatorManager()
 {
+    if (pProcessThread[BASE_DEV] != nullptr)
+    {
+        pProcessThread[BASE_DEV]->join();
+        PRINT_WARN("join thread \n");
+        pProcessThread[BASE_DEV].reset();
+    }
+    if (pProcessThread[EE_DEV  ] != nullptr)
+    {
+        pProcessThread[EE_DEV  ]->join();
+        PRINT_WARN("join thread \n");
+        pProcessThread[EE_DEV  ].reset();
+    }
+    // detaching pointers:
     pCfgs[BASE_DEV].reset();
     pCfgs[EE_DEV  ].reset();
     pEsts[BASE_DEV].reset();
@@ -22,10 +35,21 @@ EstimatorManager::~EstimatorManager()
 
 void EstimatorManager::restartManager()
 {
+    // reset estimators:
     pEsts[BASE_DEV]->clearState();
     pEsts[EE_DEV  ]->clearState();
     pEsts[BASE_DEV]->setParameter();
     pEsts[EE_DEV  ]->setParameter();
+
+    // activate threads if not already:
+    if (pProcessThread[BASE_DEV] == nullptr)
+    {
+        pProcessThread[BASE_DEV] = std::make_shared<std::thread>(& Estimator::processMeasurements, pEsts[BASE_DEV]);
+    }
+    if (pProcessThread[EE_DEV  ] == nullptr)
+    {
+        pProcessThread[EE_DEV  ] = std::make_shared<std::thread>(& Estimator::processMeasurements, pEsts[EE_DEV  ]);
+    }
 }
 
 void EstimatorManager::inputIMU(const size_t DEV_ID, const double t, const Vector3d &acc, const Vector3d &gyr)
