@@ -34,6 +34,7 @@ include_directories(
 catkin_package()
 
 add_library(vins_lib
+    src/estimator/estimator_manager.cpp
     src/estimator/parameters.cpp
     src/estimator/estimator.cpp
     src/estimator/feature_manager.cpp

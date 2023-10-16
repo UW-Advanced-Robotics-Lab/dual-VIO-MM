@@ -17,9 +17,9 @@
 #include <ros/ros.h>
 #include <cv_bridge/cv_bridge.h>
 #include <opencv2/opencv.hpp>
-#include "estimator/estimator.h"
 #include "estimator/parameters.h"
 #include "utility/visualization.h"
+#include "estimator/estimator_manager.h"
 
 // ----------------------------------------------------------------
 // : Definitions:
@@ -73,8 +73,7 @@ ViconBuffer_t  m_GT[MAX_NUM_DEVICES]; // UNUSED
 #endif
 
 // Estimators:
-Estimator      m_est_b(pCfgs[BASE_DEV]);
-Estimator      m_est_e(pCfgs[EE_DEV  ]);
+EstimatorManager m_est_manager(pCfgs);
 
 // Performance:
 PerformanceManager_t m_perf;
@@ -231,8 +230,7 @@ void sync_process_IMG()
                     // [ decoupled estimators ]
                     // [Later] TODO: we should consider coupling the estimators (stereo for the same states)
                     // TODO: add joint state from the estimators
-                    m_est_b.inputImage(d0_time, d0_img, NO_IMG, jnt_msg_b);
-                    m_est_e.inputImage(d0_time, d1_img, NO_IMG, jnt_msg_E);
+                    m_est_manager.inputImage(d0_time, d0_img, d1_img, jnt_msg_b); //jnt_msg_E
                 }
 #           if (FEATURE_ENABLE_PERFORMANCE_EVAL) // drop the images if we are behind the schedule
                 else
@@ -246,8 +244,7 @@ void sync_process_IMG()
                     
 #else
                 // no guard
-                m_est_b.inputImage(d0_time, d0_img);
-                m_est_e.inputImage(d0_time, d1_img);
+                m_est_manager.inputImage(d0_time, d0_img, d1_img, jnt_msg_b);
 #endif
             }
         }
@@ -276,14 +273,14 @@ void d0_imu_callback(const sensor_msgs::ImuConstPtr &imu_msg)
     Vector3d acc, gyr;
     double t;
     t = process_IMU_from_msg(imu_msg, acc, gyr);
-    m_est_b.inputIMU(t, acc, gyr);
+    m_est_manager.inputIMU(BASE_DEV, t, acc, gyr);
 }
 void d1_imu_callback(const sensor_msgs::ImuConstPtr &imu_msg)
 {
     Vector3d acc, gyr;
     double t;
     t = process_IMU_from_msg(imu_msg, acc, gyr);
-    m_est_e.inputIMU(t, acc, gyr);
+    m_est_manager.inputIMU(EE_DEV, t, acc, gyr);
 }
 
 #if (FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT)
@@ -316,10 +313,7 @@ void restart_callback(const std_msgs::BoolConstPtr &restart_msg)
     if (restart_msg->data == true)
     {
         ROS_WARN("restart the estimator!");
-        m_est_b.clearState();
-        m_est_e.clearState();
-        m_est_b.setParameter();
-        m_est_e.setParameter();
+        m_est_manager.restartManager();
     }
     return;
 }
@@ -347,8 +341,7 @@ int main(int argc, char **argv)
     const int N_DEVICES = readParameters(config_file, pCfgs);
 #endif
     // IMPORTANT: we need to set the parameters for each estimator, before we can use it
-    m_est_b.setParameter();
-    m_est_e.setParameter();
+    m_est_manager.restartManager();
 
 #if (FEATURE_ENABLE_PERFORMANCE_EVAL)
     m_perf.image_frame_dropped_tick = 0;
