@@ -13,24 +13,22 @@
 Estimator::Estimator(std::shared_ptr<DeviceConfig_t> _pCfg): pCfg{_pCfg}, f_manager{Rs,_pCfg}, featureTracker{_pCfg}
 {
     ROS_INFO("init begins");
-    initThreadFlag = false;
     clearState();
-#if (! FEATURE_NON_THREADING_SUPPORT)
-    PRINT_WARN("Assume threading supported all the time!");
+#if (FEATURE_NON_THREADING_SUPPORT)
+    assert("> Assume threading supported all the time!");
 #endif
-#if (! FEATURE_PERMIT_WITHOUT_IMU_SUPPORT)
-    PRINT_WARN("Assume IMU must exist all the time!");
+#if (FEATURE_PERMIT_WITHOUT_IMU_SUPPORT)
+    assert("> Assume IMU must exist all the time!");
 #endif
 }
 
 Estimator::~Estimator()
 {
-#if (FEATURE_NON_THREADING_SUPPORT)
-    if (pCfg->MULTIPLE_THREAD)
-#endif 
+    if (pProcessThread != nullptr)
     {
-        processThread.join();
+        pProcessThread->join();
         PRINT_WARN("join thread \n");
+        pProcessThread.reset();
     }
 }
 
@@ -117,107 +115,84 @@ void Estimator::setParameter()
     g = pCfg->G;
     cout << "set g " << g.transpose() << endl;
     featureTracker.readIntrinsicParameterArray(pCfg->CAM_NAMES, pCfg->NUM_OF_CAM);
-
-#if (FEATURE_NON_THREADING_SUPPORT)
-    std::cout << "pCfg->MULTIPLE_THREAD is " << pCfg->MULTIPLE_THREAD << '\n';
-    if (pCfg->MULTIPLE_THREAD && !initThreadFlag)
-#endif 
+ 
+    if (pProcessThread == nullptr)
     {
-        initThreadFlag = true;
-        processThread = std::thread(&Estimator::processMeasurements, this);
+        pProcessThread = std::make_shared<std::thread>(& Estimator::processMeasurements, this);
     }
     mProcess.unlock();
 }
 
-#if (FEATURE_PERMIT_WITHOUT_IMU_SUPPORT)
-void Estimator::changeSensorType(int use_imu, int use_stereo)
-{
-    bool restart = false;
-    mProcess.lock();
-    if(!use_imu && !use_stereo)
-        PRINT_WARN("at least use two sensors! \n");
-    else
-    {
-        if(pCfg->USE_IMU != use_imu)
-        {
-            pCfg->USE_IMU = use_imu;
-            if(pCfg->USE_IMU)
-            {
-                // reuse imu; restart system
-                restart = true;
-            }
-            else
-            {
-                if (last_marginalization_info != nullptr)
-                    delete last_marginalization_info;
+// #if (FEATURE_PERMIT_WITHOUT_IMU_SUPPORT)
+// void Estimator::changeSensorType(int use_imu, int use_stereo)
+// {
+//     bool restart = false;
+//     mProcess.lock();
+//     if(!use_imu && !use_stereo)
+//         PRINT_WARN("at least use two sensors! \n");
+//     else
+//     {
+//         if(pCfg->USE_IMU != use_imu)
+//         {
+//             pCfg->USE_IMU = use_imu;
+//             if(pCfg->USE_IMU)
+//             {
+//                 // reuse imu; restart system
+//                 restart = true;
+//             }
+//             else
+//             {
+//                 if (last_marginalization_info != nullptr)
+//                     delete last_marginalization_info;
 
-                tmp_pre_integration = nullptr;
-                last_marginalization_info = nullptr;
-                last_marginalization_parameter_blocks.clear();
-            }
-        }
+//                 tmp_pre_integration = nullptr;
+//                 last_marginalization_info = nullptr;
+//                 last_marginalization_parameter_blocks.clear();
+//             }
+//         }
         
-        pCfg->STEREO = use_stereo;
-        PRINT_WARN("use imu %d use stereo %d\n", pCfg->USE_IMU, pCfg->STEREO);
-    }
-    mProcess.unlock();
-    if(restart)
-    {
-        clearState();
-        setParameter();
-    }
-}
-#endif
-#if (FEATURE_ENABLE_STEREO_SUPPORT)
-void Estimator::inputImage(double t, const cv::Mat &_img, const cv::Mat &_img1)
-#else
+//         pCfg->STEREO = use_stereo;
+//         PRINT_WARN("use imu %d use stereo %d\n", pCfg->USE_IMU, pCfg->STEREO);
+//     }
+//     mProcess.unlock();
+//     if(restart)
+//     {
+//         clearState();
+//         setParameter();
+//     }
+// }
+// #endif
+
 void Estimator::inputImage(double t, const cv::Mat &_img)
-#endif
 {
     // processing image:
     inputImageCnt++;
     map<int, vector<pair<int, Eigen::Matrix<double, 7, 1>>>> featureFrame;
     TicToc featureTrackerTime;
 
-#if (FEATURE_ENABLE_STEREO_SUPPORT)
-    if(_img1.empty())
-        featureFrame = featureTracker.trackImage(t, _img);
-    else
-        featureFrame = featureTracker.trackImage(t, _img, _img1);
-#else 
     featureFrame = featureTracker.trackImage(t, _img);
-#endif
     //printf("featureTracker time: %f\n", featureTrackerTime.toc());
 
-    if (pCfg->SHOW_TRACK)
-    {
-        cv::Mat imgTrack = featureTracker.getTrackImage();
-        pubTrackImage(imgTrack, t, pCfg->DEVICE_ID);
-    }
-    
-#if (FEATURE_NON_THREADING_SUPPORT)
-    if(pCfg->MULTIPLE_THREAD)  
-#endif
+    // push feature buffer , threading
     {     
-        if(inputImageCnt % 2 == 0)
+// #if (FEATURE_ENABLE_PROCESS_FRAME_FPS_FOR_RT) 
+//         if(inputImageCnt % 2 == 0) // NOTE: idk why it is dropping frame here, but likely is to minimize the rate of processing
+// #endif
         {
             mBuf.lock();
             featureBuf.push(make_pair(t, featureFrame));
             mBuf.unlock();
         }
     }
-#if (FEATURE_NON_THREADING_SUPPORT)
-    else
+
+#if (FEATURE_TRACKING_IMAGE_SUPPORT)
+    // publish:
+    if ((pCfg->SHOW_TRACK) && (inputImageCnt % 2 == 0))// publish at lower rate
     {
-        mBuf.lock();
-        featureBuf.push(make_pair(t, featureFrame));
-        mBuf.unlock();
-        TicToc processTime;
-        processMeasurements();
-        PRINT_WARN("process time: %f\n", processTime.toc());
+        cv::Mat imgTrack = featureTracker.getTrackImage();
+        pubTrackImage(imgTrack, t, pCfg->DEVICE_ID);
     }
-#endif 
-    
+#endif
 }
 
 void Estimator::inputIMU(double t, const Vector3d &linearAcceleration, const Vector3d &angularVelocity)
@@ -304,36 +279,27 @@ void Estimator::processMeasurements()
         {
             feature = featureBuf.front();
             curTime = feature.first + td;
-#if (FEATURE_PERMIT_WITHOUT_IMU_SUPPORT)
-            while ((!pCfg->USE_IMU  || IMUAvailable(feature.first + td)) == false)
-#else
-            while (! IMUAvailable(feature.first + td))
-#endif
+            
+            while (! IMUAvailable(feature.first + td)) //IMU Support
             {
                 
                 PRINT_WARN("wait for imu ... \n");
-#if (FEATURE_NON_THREADING_SUPPORT)
-                if (! pCfg->MULTIPLE_THREAD)
-                    return;
-#endif
+// #if (FEATURE_NON_THREADING_SUPPORT)
+//                 if (! pCfg->MULTIPLE_THREAD)
+//                     return;
+// #endif
                 std::chrono::milliseconds dura(5);
                 std::this_thread::sleep_for(dura);
             }
             mBuf.lock();
 
-#if (FEATURE_PERMIT_WITHOUT_IMU_SUPPORT)
-            if(pCfg->USE_IMU)
-                getIMUInterval(prevTime, curTime, accVector, gyrVector);
-#else
-            getIMUInterval(prevTime, curTime, accVector, gyrVector);
-#endif
+            getIMUInterval(prevTime, curTime, accVector, gyrVector); //IMU Support
+
             featureBuf.pop();
             mBuf.unlock();
             // PRINT_DEBUG("feature buffer size: %d\n",featureBuf.size());
 
-#if (FEATURE_PERMIT_WITHOUT_IMU_SUPPORT)
-            if(pCfg->USE_IMU)
-#endif
+            // if(pCfg->USE_IMU) IMU Support
             {
                 if(!initFirstPoseFlag)
                     initFirstIMUPose(accVector);
@@ -372,10 +338,10 @@ void Estimator::processMeasurements()
                 // printf("Plotting ... \n");
             }
         }
-#if (FEATURE_NON_THREADING_SUPPORT)
-        if (! pCfg->MULTIPLE_THREAD)
-            break;
-#endif
+// #if (FEATURE_NON_THREADING_SUPPORT)
+//         if (! pCfg->MULTIPLE_THREAD)
+//             break;
+// #endif
         // std::chrono::milliseconds dura(1);
         // std::this_thread::sleep_for(dura);
     }
@@ -494,9 +460,9 @@ void Estimator::processImage(const map<int, vector<pair<int, Eigen::Matrix<doubl
     if (solver_flag == INITIAL)
     {
         // monocular + IMU initilization
-#if (FEATURE_ENABLE_STEREO_SUPPORT) // condition only necessary for stereo support 
-        if (!pCfg->STEREO && pCfg->USE_IMU) 
-#endif
+// #if (FEATURE_ENABLE_STEREO_SUPPORT) // condition only necessary for stereo support 
+//         if (!pCfg->STEREO && pCfg->USE_IMU) 
+// #endif
         {
             if (frame_count == WINDOW_SIZE)
             {
@@ -581,12 +547,7 @@ void Estimator::processImage(const map<int, vector<pair<int, Eigen::Matrix<doubl
     else
     {
         TicToc t_solve;
-#if (FEATURE_PERMIT_WITHOUT_IMU_SUPPORT)
-        if(!pCfg->USE_IMU)
-            f_manager.initFramePoseByPnP(frame_count, Ps, Rs, tic, ric);
-#else
-        f_manager.initFramePoseByPnP(frame_count, Ps, Rs, tic, ric);
-#endif
+        f_manager.initFramePoseByPnP(frame_count, Ps, Rs, tic, ric); // IMU only supports
         f_manager.triangulate(frame_count, Ps, Rs, tic, ric);
         optimization();
         set<int> removeIndex;
@@ -876,9 +837,7 @@ void Estimator::vector2double()
         para_Pose[i][5] = q.z();
         para_Pose[i][6] = q.w();
 
-#if (FEATURE_PERMIT_WITHOUT_IMU_SUPPORT)
-        if(pCfg->USE_IMU)
-#endif
+        // if(pCfg->USE_IMU) IMU Support
         {
             para_SpeedBias[i][0] = Vs[i].x();
             para_SpeedBias[i][1] = Vs[i].y();
@@ -926,9 +885,7 @@ void Estimator::double2vector()
         failure_occur = 0;
     }
 
-#if (FEATURE_PERMIT_WITHOUT_IMU_SUPPORT)
-    if(pCfg->USE_IMU)
-#endif
+    // if(pCfg->USE_IMU) IMU Support
     {
         Vector3d origin_R00 = Utility::R2ypr(Quaterniond(para_Pose[0][6],
                                                           para_Pose[0][3],
@@ -970,21 +927,19 @@ void Estimator::double2vector()
             
         }
     }
-#if (FEATURE_PERMIT_WITHOUT_IMU_SUPPORT)
-    else
-    {
-        for (int i = 0; i <= WINDOW_SIZE; i++)
-        {
-            Rs[i] = Quaterniond(para_Pose[i][6], para_Pose[i][3], para_Pose[i][4], para_Pose[i][5]).normalized().toRotationMatrix();
+// #if (FEATURE_PERMIT_WITHOUT_IMU_SUPPORT)
+//     else
+//     {
+//         for (int i = 0; i <= WINDOW_SIZE; i++)
+//         {
+//             Rs[i] = Quaterniond(para_Pose[i][6], para_Pose[i][3], para_Pose[i][4], para_Pose[i][5]).normalized().toRotationMatrix();
             
-            Ps[i] = Vector3d(para_Pose[i][0], para_Pose[i][1], para_Pose[i][2]);
-        }
-    }
-#endif
+//             Ps[i] = Vector3d(para_Pose[i][0], para_Pose[i][1], para_Pose[i][2]);
+//         }
+//     }
+// #endif
 
-#if (FEATURE_PERMIT_WITHOUT_IMU_SUPPORT)
-    if(pCfg->USE_IMU)
-#endif
+    // if(pCfg->USE_IMU) IMU Support
     {
         for (int i = 0; i < pCfg->NUM_OF_CAM; i++)
         {
@@ -1003,12 +958,8 @@ void Estimator::double2vector()
         dep(i) = para_Feature[i][0];
     f_manager.setDepth(dep);
 
-#if (FEATURE_PERMIT_WITHOUT_IMU_SUPPORT)
-    if(pCfg->USE_IMU)
-        td = para_Td[0][0];
-#else
-        td = para_Td[0][0];
-#endif
+    // if(pCfg->USE_IMU) IMU Support
+    td = para_Td[0][0];
 }
 
 bool Estimator::failureDetection()
@@ -1071,25 +1022,13 @@ void Estimator::optimization()
     loss_function = new ceres::HuberLoss(1.0);
     //loss_function = new ceres::CauchyLoss(1.0 / FOCAL_LENGTH);
     //ceres::LossFunction* loss_function = new ceres::HuberLoss(1.0);
-#if (FEATURE_PERMIT_WITHOUT_IMU_SUPPORT)
     for (int i = 0; i < frame_count + 1; i++)
     {
         ceres::LocalParameterization *local_parameterization = new PoseLocalParameterization();
         problem.AddParameterBlock(para_Pose[i], SIZE_POSE, local_parameterization);
-        if(pCfg->USE_IMU)
-            problem.AddParameterBlock(para_SpeedBias[i], SIZE_SPEEDBIAS);
+        problem.AddParameterBlock(para_SpeedBias[i], SIZE_SPEEDBIAS); // IMU Support
     }
-    if(!pCfg->USE_IMU)
-        problem.SetParameterBlockConstant(para_Pose[0]);
-#else
-    for (int i = 0; i < frame_count + 1; i++)
-    {
-        ceres::LocalParameterization *local_parameterization = new PoseLocalParameterization();
-        problem.AddParameterBlock(para_Pose[i], SIZE_POSE, local_parameterization);
-        problem.AddParameterBlock(para_SpeedBias[i], SIZE_SPEEDBIAS);
-    }
-    problem.SetParameterBlockConstant(para_Pose[0]);
-#endif
+    problem.SetParameterBlockConstant(para_Pose[0]); // IMU Support
 
     for (int i = 0; i < pCfg->NUM_OF_CAM; i++)
     {
@@ -1106,8 +1045,8 @@ void Estimator::optimization()
             problem.SetParameterBlockConstant(para_Ex_Pose[i]);
         }
     }
-    problem.AddParameterBlock(para_Td[0], 1);
 
+    problem.AddParameterBlock(para_Td[0], 1); // time delta estimation
     if (!pCfg->ESTIMATE_TD || Vs[0].norm() < 0.2)
         problem.SetParameterBlockConstant(para_Td[0]);
 
@@ -1119,9 +1058,7 @@ void Estimator::optimization()
                                  last_marginalization_parameter_blocks);
     }
     // - IMU Residuals
-#if (FEATURE_PERMIT_WITHOUT_IMU_SUPPORT)
-    if(pCfg->USE_IMU)
-#endif
+    // if(pCfg->USE_IMU) IMU Support
     {
         for (int i = 0; i < frame_count; i++)
         {
@@ -1159,25 +1096,25 @@ void Estimator::optimization()
                 problem.AddResidualBlock(f_td, loss_function, para_Pose[imu_i], para_Pose[imu_j], para_Ex_Pose[0], para_Feature[feature_index], para_Td[0]);
             }
 
-#if (FEATURE_ENABLE_STEREO_SUPPORT) // stereo only
-            if(pCfg->STEREO && it_per_frame.is_stereo)
-            {                
-                Vector3d pts_j_right = it_per_frame.pointRight;
-                if(imu_i != imu_j)
-                {
-                    ProjectionTwoFrameTwoCamFactor *f = new ProjectionTwoFrameTwoCamFactor(pts_i, pts_j_right, it_per_id.feature_per_frame[0].velocity, it_per_frame.velocityRight,
-                                                                 it_per_id.feature_per_frame[0].cur_td, it_per_frame.cur_td);
-                    problem.AddResidualBlock(f, loss_function, para_Pose[imu_i], para_Pose[imu_j], para_Ex_Pose[0], para_Ex_Pose[1], para_Feature[feature_index], para_Td[0]);
-                }
-                else
-                {
-                    ProjectionOneFrameTwoCamFactor *f = new ProjectionOneFrameTwoCamFactor(pts_i, pts_j_right, it_per_id.feature_per_frame[0].velocity, it_per_frame.velocityRight,
-                                                                 it_per_id.feature_per_frame[0].cur_td, it_per_frame.cur_td);
-                    problem.AddResidualBlock(f, loss_function, para_Ex_Pose[0], para_Ex_Pose[1], para_Feature[feature_index], para_Td[0]);
-                }
+// #if (FEATURE_ENABLE_STEREO_SUPPORT) // stereo only
+//             if(pCfg->STEREO && it_per_frame.is_stereo)
+//             {                
+//                 Vector3d pts_j_right = it_per_frame.pointRight;
+//                 if(imu_i != imu_j)
+//                 {
+//                     ProjectionTwoFrameTwoCamFactor *f = new ProjectionTwoFrameTwoCamFactor(pts_i, pts_j_right, it_per_id.feature_per_frame[0].velocity, it_per_frame.velocityRight,
+//                                                                  it_per_id.feature_per_frame[0].cur_td, it_per_frame.cur_td);
+//                     problem.AddResidualBlock(f, loss_function, para_Pose[imu_i], para_Pose[imu_j], para_Ex_Pose[0], para_Ex_Pose[1], para_Feature[feature_index], para_Td[0]);
+//                 }
+//                 else
+//                 {
+//                     ProjectionOneFrameTwoCamFactor *f = new ProjectionOneFrameTwoCamFactor(pts_i, pts_j_right, it_per_id.feature_per_frame[0].velocity, it_per_frame.velocityRight,
+//                                                                  it_per_id.feature_per_frame[0].cur_td, it_per_frame.cur_td);
+//                     problem.AddResidualBlock(f, loss_function, para_Ex_Pose[0], para_Ex_Pose[1], para_Feature[feature_index], para_Td[0]);
+//                 }
                
-            }
-#endif
+//             }
+// #endif
 
             f_m_cnt++;
         }
@@ -1234,9 +1171,8 @@ void Estimator::optimization()
                                                                            drop_set);
             marginalization_info->addResidualBlockInfo(residual_block_info);
         }
-#if (FEATURE_PERMIT_WITHOUT_IMU_SUPPORT)
-        if(pCfg->USE_IMU)
-#endif
+
+        // if(pCfg->USE_IMU) IMU Support
         {
             if (pre_integrations[1]->sum_dt < 10.0)
             {
@@ -1277,30 +1213,30 @@ void Estimator::optimization()
                                                                                         vector<int>{0, 3});
                         marginalization_info->addResidualBlockInfo(residual_block_info);
                     }
-#if (FEATURE_ENABLE_STEREO_SUPPORT) // stereo only
-                    if(pCfg->STEREO && it_per_frame.is_stereo)
-                    {
-                        Vector3d pts_j_right = it_per_frame.pointRight;
-                        if(imu_i != imu_j)
-                        {
-                            ProjectionTwoFrameTwoCamFactor *f = new ProjectionTwoFrameTwoCamFactor(pts_i, pts_j_right, it_per_id.feature_per_frame[0].velocity, it_per_frame.velocityRight,
-                                                                          it_per_id.feature_per_frame[0].cur_td, it_per_frame.cur_td);
-                            ResidualBlockInfo *residual_block_info = new ResidualBlockInfo(f, loss_function,
-                                                                                           vector<double *>{para_Pose[imu_i], para_Pose[imu_j], para_Ex_Pose[0], para_Ex_Pose[1], para_Feature[feature_index], para_Td[0]},
-                                                                                           vector<int>{0, 4});
-                            marginalization_info->addResidualBlockInfo(residual_block_info);
-                        }
-                        else
-                        {
-                            ProjectionOneFrameTwoCamFactor *f = new ProjectionOneFrameTwoCamFactor(pts_i, pts_j_right, it_per_id.feature_per_frame[0].velocity, it_per_frame.velocityRight,
-                                                                          it_per_id.feature_per_frame[0].cur_td, it_per_frame.cur_td);
-                            ResidualBlockInfo *residual_block_info = new ResidualBlockInfo(f, loss_function,
-                                                                                           vector<double *>{para_Ex_Pose[0], para_Ex_Pose[1], para_Feature[feature_index], para_Td[0]},
-                                                                                           vector<int>{2});
-                            marginalization_info->addResidualBlockInfo(residual_block_info);
-                        }
-                    }
-#endif
+// #if (FEATURE_ENABLE_STEREO_SUPPORT) // stereo only
+//                     if(pCfg->STEREO && it_per_frame.is_stereo)
+//                     {
+//                         Vector3d pts_j_right = it_per_frame.pointRight;
+//                         if(imu_i != imu_j)
+//                         {
+//                             ProjectionTwoFrameTwoCamFactor *f = new ProjectionTwoFrameTwoCamFactor(pts_i, pts_j_right, it_per_id.feature_per_frame[0].velocity, it_per_frame.velocityRight,
+//                                                                           it_per_id.feature_per_frame[0].cur_td, it_per_frame.cur_td);
+//                             ResidualBlockInfo *residual_block_info = new ResidualBlockInfo(f, loss_function,
+//                                                                                            vector<double *>{para_Pose[imu_i], para_Pose[imu_j], para_Ex_Pose[0], para_Ex_Pose[1], para_Feature[feature_index], para_Td[0]},
+//                                                                                            vector<int>{0, 4});
+//                             marginalization_info->addResidualBlockInfo(residual_block_info);
+//                         }
+//                         else
+//                         {
+//                             ProjectionOneFrameTwoCamFactor *f = new ProjectionOneFrameTwoCamFactor(pts_i, pts_j_right, it_per_id.feature_per_frame[0].velocity, it_per_frame.velocityRight,
+//                                                                           it_per_id.feature_per_frame[0].cur_td, it_per_frame.cur_td);
+//                             ResidualBlockInfo *residual_block_info = new ResidualBlockInfo(f, loss_function,
+//                                                                                            vector<double *>{para_Ex_Pose[0], para_Ex_Pose[1], para_Feature[feature_index], para_Td[0]},
+//                                                                                            vector<int>{2});
+//                             marginalization_info->addResidualBlockInfo(residual_block_info);
+//                         }
+//                     }
+// #endif
                 }
             }
         }
@@ -1316,14 +1252,8 @@ void Estimator::optimization()
         std::unordered_map<long, double *> addr_shift;
         for (int i = 1; i <= WINDOW_SIZE; i++)
         {
-#if (FEATURE_PERMIT_WITHOUT_IMU_SUPPORT)
             addr_shift[reinterpret_cast<long>(para_Pose[i])] = para_Pose[i - 1];
-            if(pCfg->USE_IMU)
-                addr_shift[reinterpret_cast<long>(para_SpeedBias[i])] = para_SpeedBias[i - 1];
-#else
-            addr_shift[reinterpret_cast<long>(para_Pose[i])] = para_Pose[i - 1];
-            addr_shift[reinterpret_cast<long>(para_SpeedBias[i])] = para_SpeedBias[i - 1];
-#endif
+            addr_shift[reinterpret_cast<long>(para_SpeedBias[i])] = para_SpeedBias[i - 1]; // IMU Support
         }
         for (int i = 0; i < pCfg->NUM_OF_CAM; i++)
             addr_shift[reinterpret_cast<long>(para_Ex_Pose[i])] = para_Ex_Pose[i];
@@ -1338,7 +1268,7 @@ void Estimator::optimization()
         last_marginalization_parameter_blocks = parameter_blocks;
         
     }
-    else
+    else // New Margin:
     {
         if (last_marginalization_info &&
             std::count(std::begin(last_marginalization_parameter_blocks), std::end(last_marginalization_parameter_blocks), para_Pose[WINDOW_SIZE - 1]))
@@ -1381,25 +1311,13 @@ void Estimator::optimization()
                     continue;
                 else if (i == WINDOW_SIZE)
                 {
-#if (FEATURE_PERMIT_WITHOUT_IMU_SUPPORT)
                     addr_shift[reinterpret_cast<long>(para_Pose[i])] = para_Pose[i - 1];
-                    if(pCfg->USE_IMU)
-                        addr_shift[reinterpret_cast<long>(para_SpeedBias[i])] = para_SpeedBias[i - 1];
-#else
-                    addr_shift[reinterpret_cast<long>(para_Pose[i])] = para_Pose[i - 1];
-                    addr_shift[reinterpret_cast<long>(para_SpeedBias[i])] = para_SpeedBias[i - 1];
-#endif
+                    addr_shift[reinterpret_cast<long>(para_SpeedBias[i])] = para_SpeedBias[i - 1]; //IMU Support
                 }
                 else
                 {
-#if (FEATURE_PERMIT_WITHOUT_IMU_SUPPORT)
                     addr_shift[reinterpret_cast<long>(para_Pose[i])] = para_Pose[i];
-                    if(pCfg->USE_IMU)
-                        addr_shift[reinterpret_cast<long>(para_SpeedBias[i])] = para_SpeedBias[i];
-#else
-                    addr_shift[reinterpret_cast<long>(para_Pose[i])] = para_Pose[i];
-                    addr_shift[reinterpret_cast<long>(para_SpeedBias[i])] = para_SpeedBias[i];
-#endif
+                    addr_shift[reinterpret_cast<long>(para_SpeedBias[i])] = para_SpeedBias[i]; //IMU Support
                 }
             }
             for (int i = 0; i < pCfg->NUM_OF_CAM; i++)
@@ -1435,9 +1353,8 @@ void Estimator::slideWindow()
                 Headers[i] = Headers[i + 1];
                 Rs[i].swap(Rs[i + 1]);
                 Ps[i].swap(Ps[i + 1]);
-#if (FEATURE_PERMIT_WITHOUT_IMU_SUPPORT)
-                if(pCfg->USE_IMU)
-#endif
+                
+                // if(pCfg->USE_IMU) IMU Support
                 {
                     std::swap(pre_integrations[i], pre_integrations[i + 1]);
 
@@ -1454,9 +1371,8 @@ void Estimator::slideWindow()
             Ps[WINDOW_SIZE] = Ps[WINDOW_SIZE - 1];
             Rs[WINDOW_SIZE] = Rs[WINDOW_SIZE - 1];
 
-#if (FEATURE_PERMIT_WITHOUT_IMU_SUPPORT)
-            if(pCfg->USE_IMU)
-#endif
+
+            // if(pCfg->USE_IMU) IMU Support
             {
                 Vs[WINDOW_SIZE] = Vs[WINDOW_SIZE - 1];
                 Bas[WINDOW_SIZE] = Bas[WINDOW_SIZE - 1];
@@ -1488,9 +1404,8 @@ void Estimator::slideWindow()
             Ps[frame_count - 1] = Ps[frame_count];
             Rs[frame_count - 1] = Rs[frame_count];
 
-#if (FEATURE_PERMIT_WITHOUT_IMU_SUPPORT)
-            if(pCfg->USE_IMU)
-#endif
+
+            // if(pCfg->USE_IMU) IMU Support
             {
                 for (unsigned int i = 0; i < dt_buf[frame_count].size(); i++)
                 {
@@ -1636,32 +1551,32 @@ void Estimator::outliersRejection(set<int> &removeIndex)
                 errCnt++;
                 //printf("tmp_error %f\n", FOCAL_LENGTH / 1.5 * tmp_error);
             }
-#if (FEATURE_ENABLE_STEREO_SUPPORT) // stereo only
-            // need to rewrite projecton factor.........
-            if(pCfg->STEREO && it_per_frame.is_stereo)
-            {
+// #if (FEATURE_ENABLE_STEREO_SUPPORT) // stereo only
+//             // need to rewrite projecton factor.........
+//             if(pCfg->STEREO && it_per_frame.is_stereo)
+//             {
                 
-                Vector3d pts_j_right = it_per_frame.pointRight;
-                if(imu_i != imu_j)
-                {            
-                    double tmp_error = reprojectionError(Rs[imu_i], Ps[imu_i], ric[0], tic[0], 
-                                                        Rs[imu_j], Ps[imu_j], ric[1], tic[1],
-                                                        depth, pts_i, pts_j_right);
-                    err += tmp_error;
-                    errCnt++;
-                    //printf("tmp_error %f\n", FOCAL_LENGTH / 1.5 * tmp_error);
-                }
-                else
-                {
-                    double tmp_error = reprojectionError(Rs[imu_i], Ps[imu_i], ric[0], tic[0], 
-                                                        Rs[imu_j], Ps[imu_j], ric[1], tic[1],
-                                                        depth, pts_i, pts_j_right);
-                    err += tmp_error;
-                    errCnt++;
-                    //printf("tmp_error %f\n", FOCAL_LENGTH / 1.5 * tmp_error);
-                }       
-            }
-#endif
+//                 Vector3d pts_j_right = it_per_frame.pointRight;
+//                 if(imu_i != imu_j)
+//                 {            
+//                     double tmp_error = reprojectionError(Rs[imu_i], Ps[imu_i], ric[0], tic[0], 
+//                                                         Rs[imu_j], Ps[imu_j], ric[1], tic[1],
+//                                                         depth, pts_i, pts_j_right);
+//                     err += tmp_error;
+//                     errCnt++;
+//                     //printf("tmp_error %f\n", FOCAL_LENGTH / 1.5 * tmp_error);
+//                 }
+//                 else
+//                 {
+//                     double tmp_error = reprojectionError(Rs[imu_i], Ps[imu_i], ric[0], tic[0], 
+//                                                         Rs[imu_j], Ps[imu_j], ric[1], tic[1],
+//                                                         depth, pts_i, pts_j_right);
+//                     err += tmp_error;
+//                     errCnt++;
+//                     //printf("tmp_error %f\n", FOCAL_LENGTH / 1.5 * tmp_error);
+//                 }       
+//             }
+// #endif
         }
         double ave_err = err / errCnt;
         if(ave_err * FOCAL_LENGTH > 3)

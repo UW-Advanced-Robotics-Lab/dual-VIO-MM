@@ -51,6 +51,8 @@ typedef struct{
 typedef struct{
     int image_frame_dropped_tick = 0;
     int image_valid_counter = 0;
+    double image_process_time = 0;
+    double image_process_delta_time = 0;
 } PerformanceManager_t;
 #endif
 // typedef Matrix<double, 7, 1> Vector7d_t; // for storing <time, acc, gyr>
@@ -116,6 +118,7 @@ void sync_process_IMG()
     NodeBuffer_t * const pB0 = & m_buffer[BASE_DEV];
     NodeBuffer_t * const pB1 = & m_buffer[EE_DEV  ];
     
+    double d0_time_last_submitted = 0;
     while(FOREVER)
     {
         // [Assumption]: cameras are not offline
@@ -212,39 +215,47 @@ void sync_process_IMG()
 
             if(if_image_synced)
             {
-#if (FEATURE_ENABLE_FRAME_DROP_FOR_REAL_TIME) 
-/* FEATURE_ENABLE_FRAME_DROP_FOR_REAL_TIME
-*  @problem: it seems that we are running behind the schedule for the high res image feeds ??? 
-*  @solution: 
-*       Let's try to drop the frame if we are behind the schedule
-*/
                 // measure time difference between the latest image and the current processed image:
                 const double delta_time = d0_time_latest - d0_time; 
+                const double delta_time_input = d0_time - d0_time_last_submitted;
 
-#           if (FEATURE_ENABLE_PERFORMANCE_EVAL)
+#if (FEATURE_ENABLE_PERFORMANCE_EVAL)
                 m_perf.image_valid_counter ++;
-#           endif
+#endif
 
-                if (delta_time < IMAGE_BEHIND_SCHEDULE_TIME_TOLERANCE) // if we are on-schedule, queue for processing
+#if (FEATURE_ENABLE_PROCESS_FRAME_FPS_FOR_RT && FEATURE_ENABLE_DYNAMIC_FRAME_DROP_FOR_RT)
+                if (    (delta_time_input > IMAGE_PROCESSING_INTERVAL)          // if we are within processing FPS
+                    &&  (delta_time < IMAGE_BEHIND_SCHEDULE_TIME_TOLERANCE))    // and, if we are on-schedule, queue for processing
+#elif (FEATURE_ENABLE_DYNAMIC_FRAME_DROP_FOR_RT)
+                if (delta_time < IMAGE_BEHIND_SCHEDULE_TIME_TOLERANCE)
+#elif (FEATURE_ENABLE_PROCESS_FRAME_FPS_FOR_RT)
+                if (delta_time_input > IMAGE_PROCESSING_INTERVAL)
+#endif
                 {
                     // [ decoupled estimators ]
                     // [Later] TODO: we should consider coupling the estimators (stereo for the same states)
                     // TODO: add joint state from the estimators
                     m_est_manager.inputImage(d0_time, d0_img, d1_img, jnt_msg_b); //jnt_msg_E
-                }
-#           if (FEATURE_ENABLE_PERFORMANCE_EVAL) // drop the images if we are behind the schedule
-                else
+                    d0_time_last_submitted = d0_time;
+
+#if (FEATURE_ENABLE_PERFORMANCE_EVAL)
+                    m_perf.image_process_delta_time =ros::Time::now().toSec() - m_perf.image_process_time;
+                    m_perf.image_process_time =ros::Time::now().toSec();
+#endif
+                } // else, drop the images if we are behind the schedule:
+#if (FEATURE_ENABLE_PERFORMANCE_EVAL && (FEATURE_ENABLE_PROCESS_FRAME_FPS_FOR_RT || FEATURE_ENABLE_DYNAMIC_FRAME_DROP_FOR_RT))
+                else if (delta_time > IMAGE_BEHIND_SCHEDULE_TIME_TOLERANCE)
                 {
                     // Performance DEBUG: lets see the time difference between current and latest image.
                     m_perf.image_frame_dropped_tick ++;
                     float drop_rate_pa = (m_perf.image_frame_dropped_tick * 100.0)/(m_perf.image_valid_counter);
-                    PRINT_WARN(" Frame Dropped [delta time=%f], Cumulated Frame Drop Rate: %.2f \%", delta_time, drop_rate_pa);
+                    float fps = 1.0/m_perf.image_process_delta_time;
+                    PRINT_WARN(" Frame Dropped [delta time=%f], Cumulated Frame Drop Rate: %.2f | FPS: %.2f", delta_time, drop_rate_pa, fps);
                 }
-#           endif
-                    
-#else
-                // no guard
-                m_est_manager.inputImage(d0_time, d0_img, d1_img, jnt_msg_b);
+                else
+                {
+                    m_perf.image_frame_dropped_tick ++;
+                }
 #endif
             }
         }

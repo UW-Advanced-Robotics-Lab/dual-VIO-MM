@@ -147,7 +147,7 @@ void printStatistics(const Estimator &estimator, const double t)
     last_path = estimator.Ps[WINDOW_SIZE];
     ROS_DEBUG("sum of path %f", sum_of_path);
     if (estimator.pCfg->ESTIMATE_TD)
-        ROS_INFO("td %f", estimator.td);
+        ROS_INFO("[%d] td %f", estimator.pCfg->DEVICE_ID, estimator.td);
 }
 
 void pubOdometry(const Estimator &estimator, const std_msgs::Header &header)

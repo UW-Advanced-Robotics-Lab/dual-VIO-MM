@@ -134,8 +134,8 @@ d1_g_norm: 9.8            # gravity magnitude #TODO: unified gravity magnitude?
 #     Random walk: 2.672307981517485e-06
 #   T_ib (imu0 to imu0)
 
-# NOTE: fine tuned on May 9 , 11 pm
-#unsynchronization parameters
+# TODO: we need to calibrated td, which is important for estimator accuracy
+#unsynchronization parameters [based on [2023-05-11-15-xx-xx] calibration mei]
 # - [cam0]
 d0_estimate_td: 0         # online estimate time offset between camera and imu
 d0_td: 0.00022326806147822398 # initial value of time offset. unit: s. readed image clock + td = real image clock (IMU clock)

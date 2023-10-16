@@ -51,7 +51,9 @@ using namespace std;
 #define NUM_OF_F            ((int)      (1000))
 #define DEFAULT_GRAVITY     (Eigen::Vector3d(0.0, 0.0, 9.8)) // default G is assumed to be -ve z-axis
 
-#define IMAGE_FPS                               (float)(30)     // [UNUSED]--> implies the frame difference between two cameras can be up to 0.015~0.03333 ms
+#define IMAGE_FPS                               ((float)(30))           // ->implies the frame difference between two cameras can be up to 0.015~0.03333 ms
+#define IMAGE_PROCESSING_FPS                    ((IMAGE_FPS)/2.0)       // set processing rate, ideally below IMAGE FPS
+#define IMAGE_PROCESSING_INTERVAL               ((float)(1.0/(IMAGE_PROCESSING_FPS)))
 
 /* Hyperparams:
 *   @IMAGE_SYNCHRONIZATION_TIME_DELTA_MAX:
@@ -122,15 +124,29 @@ using namespace std;
 // ----------------------------------------------------------------
 // : Feature Definitions :
 // ----------------------------------------------------------------
+#define FEATURE_MODE_RUNTIME                 (DISABLED) // enable: to disable unnecessary features
+
 #define FEATURE_ENABLE_STEREO_SUPPORT        (NOT_IMPLEMENTED) // allow stereo support per device [TODO: let's study stereo later]
 #define FEATURE_ENABLE_PT_CLOUD_SUPPORT      (NOT_IMPLEMENTED) // allow stereo support per device [TODO: let's study stereo later]
 #define FEATURE_ENABLE_8UC1_IMAGE_SUPPORT    (NOT_IMPLEMENTED) // allow 8UC1 image support per device [opt out for runtime]
 #define FEATURE_ENABLE_STANDALONE_SUPPORT    (NOT_IMPLEMENTED) // allow standalone support for one device [opt out for runtime]
 
 // performance related feature support:
-#define FEATURE_ENABLE_PERFORMANCE_EVAL                 ( ENABLED) // report performance
+#define FEATURE_ENABLE_PERFORMANCE_EVAL                 (( ENABLED) & (!FEATURE_MODE_RUNTIME)) // report performance
+
 /* To enforce the real-time performance, we will drop frames if we are n seconds behind the schedule */
-#define FEATURE_ENABLE_FRAME_DROP_FOR_REAL_TIME         ( ENABLED) // set via "IMAGE_BEHIND_SCHEDULE_TIME_TOLERANCE"
+/* FEATURE_ENABLE_FRAME_DROP_FOR_REAL_TIME
+*  @problem: it seems that we are running behind the schedule for the high res image feeds ??? 
+*  @solution: 
+*       Let's try to drop the frame if we are behind the schedule
+*
+*   FEATURE_ENABLE_PROCESS_FRAME_FPS_FOR_RT
+*   @issue: idk why the original code drops frames if threading, inside the Estimator::inputImage
+*   @solution: 
+*       Let's try to drop the frame before the input image
+*/
+#define FEATURE_ENABLE_DYNAMIC_FRAME_DROP_FOR_RT        (DISABLED) // set via "IMAGE_BEHIND_SCHEDULE_TIME_TOLERANCE"
+#define FEATURE_ENABLE_PROCESS_FRAME_FPS_FOR_RT         ( ENABLED) // set via #define IMAGE_PROCESSING_FPS
 
 // other features:
 #define FEATURE_NON_THREADING_SUPPORT                   (DISABLED) // disable non-threading
@@ -142,12 +158,13 @@ using namespace std;
 #define FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT             ( ENABLED) // [WIP]
 
 // debug only features:
-#define FEATURE_CONSOLE_PRINTF                          ( ENABLED)
-#define FEATURE_CONSOLE_DEBUG_PRINTF                    ( ENABLED)
-#define FEATURE_VIZ_ROSOUT_ODOMETRY_SUPPORT             (DISABLED)
+#define FEATURE_CONSOLE_PRINTF                         (( ENABLED) & (!FEATURE_MODE_RUNTIME))
+#define FEATURE_CONSOLE_DEBUG_PRINTF                   (( ENABLED) & (!FEATURE_MODE_RUNTIME))
+#define FEATURE_VIZ_ROSOUT_ODOMETRY_SUPPORT            ((DISABLED) & (!FEATURE_MODE_RUNTIME))
+#define FEATURE_TRACKING_IMAGE_SUPPORT                 (( ENABLED) & (!FEATURE_MODE_RUNTIME)) 
 
 // debug only features (additional images):
-#define FEATURE_DEBUG_IMAGE_AT_CONNECTIONS              (DISABLED)
+#define FEATURE_DEBUG_IMAGE_AT_CONNECTIONS             ((DISABLED) & (!FEATURE_MODE_RUNTIME))
 // ----------------------------------------------------------------
 // : Debug printfs :
 // ----------------------------------------------------------------

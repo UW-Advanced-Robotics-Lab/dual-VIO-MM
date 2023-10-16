@@ -48,19 +48,14 @@ class Estimator
     void initFirstPose(Eigen::Vector3d p, Eigen::Matrix3d r);
     void inputIMU(double t, const Vector3d &linearAcceleration, const Vector3d &angularVelocity);
     void inputFeature(double t, const map<int, vector<pair<int, Eigen::Matrix<double, 7, 1>>>> &featureFrame);
-
-#if (FEATURE_ENABLE_STEREO_SUPPORT)
-    void inputImage(double t, const cv::Mat &_img, const cv::Mat &_img1 = cv::Mat());
-#else
     void inputImage(double t, const cv::Mat &_img);
-#endif
     // void inputImage(double t, const cv::Mat &_img, const cv::Mat &_img1 = cv::Mat());
     void processIMU(double t, double dt, const Vector3d &linear_acceleration, const Vector3d &angular_velocity);
     void processImage(const map<int, vector<pair<int, Eigen::Matrix<double, 7, 1>>>> &image, const double header);
     void processMeasurements();
-#if (FEATURE_ENABLE_STEREO_SUPPORT)
-    void changeSensorType(int use_imu, int use_stereo);
-#endif 
+// #if (FEATURE_ENABLE_STEREO_SUPPORT)
+//     void changeSensorType(int use_imu, int use_stereo);
+// #endif 
 
     // internal
     void clearState();
@@ -110,7 +105,7 @@ class Estimator
     double prevTime, curTime;
     bool openExEstimation;
 
-    std::thread processThread;
+    std::shared_ptr<std::thread> pProcessThread = nullptr;
 
     FeatureTracker featureTracker;
 

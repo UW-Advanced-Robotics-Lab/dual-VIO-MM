@@ -53,11 +53,6 @@ void EstimatorManager::inputImage(double t, const cv::Mat &_img_b, const cv::Mat
         _process_JntVector_from_msg(_jnt_msg, jnt_pos, jnt_vel, jnt_tau);
     }
     // input images:
-#if (FEATURE_ENABLE_STEREO_SUPPORT)
-    pEsts[BASE_DEV]->inputImage(t, _img_b, NO_IMG);
-    pEsts[EE_DEV  ]->inputImage(t, _img_e, NO_IMG);
-#else
     pEsts[BASE_DEV]->inputImage(t, _img_b);
     pEsts[EE_DEV  ]->inputImage(t, _img_e);
-#endif
 }

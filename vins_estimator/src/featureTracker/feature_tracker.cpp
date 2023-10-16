@@ -196,7 +196,7 @@ map<int, vector<pair<int, Eigen::Matrix<double, 7, 1>>>> FeatureTracker::trackIm
         //printf("feature cnt after add %d\n", (int)ids.size());
     }
 
-    cur_un_pts = undistortedPts(cur_pts, m_camera[0]); // <---- FIXME:BUG?
+    cur_un_pts = undistortedPts(cur_pts, m_camera[0]); 
     pts_velocity = ptsVelocity(ids, cur_un_pts, cur_un_pts_map, prev_un_pts_map);
 
     if(!_img1.empty() && stereo_cam)
