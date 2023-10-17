@@ -13,6 +13,7 @@
 #include <cstdlib>
 #include <chrono>
 
+#define TIC_TOC_FUNCTIONAL (1U)
 class TicToc
 {
   public:
@@ -23,16 +24,22 @@ class TicToc
 
     void tic()
     {
+#if (TIC_TOC_FUNCTIONAL)
         start = std::chrono::system_clock::now();
         dt_ms = 0;
+#endif
     }
 
     double toc()
     {
+#if (TIC_TOC_FUNCTIONAL)
         end = std::chrono::system_clock::now();
         std::chrono::duration<double> elapsed_seconds = end - start;
         dt_ms = elapsed_seconds.count() * 1000;
         return dt_ms;
+#else
+        return 0.0;
+#endif
     }
 
     double dt()

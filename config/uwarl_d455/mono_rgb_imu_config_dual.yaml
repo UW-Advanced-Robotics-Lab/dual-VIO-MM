@@ -114,9 +114,9 @@ d0_g_norm: 9.8         # gravity magnitude
 
 # - [cam1]
 d1_acc_n: 0.1414          # accelerometer measurement noise standard deviation. 
-d1_acc_w: 0.00106         # accelerometer bias random work noise standard deviation 
-d1_gyr_n: 0.006463        # gyroscope measurement noise standard deviation. 
-d1_gyr_w: 0.00000267      # gyroscope bias random work noise standard deviation. 
+d1_acc_w: 0.0106         # accelerometer bias random work noise standard deviation 
+d1_gyr_n: 0.06463        # gyroscope measurement noise standard deviation. 
+d1_gyr_w: 0.0000267      # gyroscope bias random work noise standard deviation. 
 d1_g_norm: 9.8            # gravity magnitude #TODO: unified gravity magnitude? 
 # NOTE: imu data is collected when arm is holding up and facing forward with the camera,
 #       hence, it captures the noises in addition to the system noises,
@@ -147,8 +147,8 @@ d1_td: 0.0003475970005734179 # initial value of time offset. unit: s. readed ima
 # - [cam0]
 d0_load_previous_pose_graph: 0        # load and reuse previous pose graph; load from 'pose_graph_save_path'
 d0_pose_graph_save_path: "~/output/pose_graph_c0/" # save and load path
-d0_save_image: 1                      # save image in pose graph for visualization prupose; you can close this function by setting 0 
+d0_save_image: 0                      # save image in pose graph for visualization prupose; you can close this function by setting 0 
 # - [cam1]
 d1_load_previous_pose_graph: 0        # load and reuse previous pose graph; load from 'pose_graph_save_path'
 d1_pose_graph_save_path: "~/output/pose_graph_c1/" # save and load path
-d1_save_image: 1                      # save image in pose graph for visualization prupose; you can close this function by setting 0 
+d1_save_image: 0                      # save image in pose graph for visualization prupose; you can close this function by setting 0 

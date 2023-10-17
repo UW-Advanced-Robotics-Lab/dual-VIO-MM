@@ -228,7 +228,7 @@ void sync_process_IMG()
                 if (delta_time < IMAGE_BEHIND_SCHEDULE_TIME_TOLERANCE)
 #elif (FEATURE_ENABLE_PROCESS_FRAME_FPS_FOR_RT)
                 if (delta_time_input > IMAGE_PROCESSING_INTERVAL)
-#endif
+#endif // otherwise:
                 {
                     // [ decoupled estimators ]
                     // [Later] TODO: we should consider coupling the estimators (stereo for the same states)

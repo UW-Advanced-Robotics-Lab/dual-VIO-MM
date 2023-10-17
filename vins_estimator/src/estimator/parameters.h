@@ -51,11 +51,11 @@ using namespace std;
 #define NUM_OF_F            ((int)      (1000))
 #define DEFAULT_GRAVITY     (Eigen::Vector3d(0.0, 0.0, 9.8)) // default G is assumed to be -ve z-axis
 
-#define IMAGE_FPS                               ((float)(30))           // ->implies the frame difference between two cameras can be up to 0.015~0.03333 ms
-#define IMAGE_PROCESSING_FPS                    ((IMAGE_FPS)/2.0)       // set processing rate, ideally below IMAGE FPS
+#define IMAGE_FPS                               ((float)(30))      // ->implies the frame difference between two cameras can be up to 0.015~0.03333 ms
+#define IMAGE_PROCESSING_FPS                    ((float)(15))      // [run-time,perf] set processing rate [15, 30], reduce if the frame drops are significant
 #define IMAGE_PROCESSING_INTERVAL               ((float)(1.0/(IMAGE_PROCESSING_FPS)))
 
-#define TOPIC_PUBLISH_FPS                       ((int)(10))
+#define TOPIC_PUBLISH_FPS                       ((int)(10))        // [run-time,visual] reduce if the frame drops are significant, visual only
 #define TOPIC_PUBLISH_INTERVAL_MS               ((int)(1000/TOPIC_PUBLISH_FPS))
 /* Hyperparams:
 *   @IMAGE_SYNCHRONIZATION_TIME_DELTA_MAX:
@@ -147,6 +147,7 @@ using namespace std;
 *   @issue: idk why the original code drops frames if threading, inside the Estimator::inputImage
 *   @solution: 
 *       Let's try to drop the frame before the input image
+*   @ solution to above: by isolating visual publisher to a separate thread, we are able to achieve no frame loss with two flags disabled
 */
 #define FEATURE_ENABLE_DYNAMIC_FRAME_DROP_FOR_RT        (DISABLED) // set via "IMAGE_BEHIND_SCHEDULE_TIME_TOLERANCE"
 #define FEATURE_ENABLE_PROCESS_FRAME_FPS_FOR_RT         ( ENABLED) // set via #define IMAGE_PROCESSING_FPS
