@@ -63,16 +63,16 @@ d1_body_T_cam0: !!opencv-matrix
     cols: 4
     dt: d
     data: [ # T_ic:
-            #### based on [2023-05-11-15-42-1_EE_rgb_mei-results-imucam]
-             0.99998975, 0.00059731,  0.0044877,   0.03276503,
-            -0.00059713, 0.99999982, -0.00004132, -0.00029959,
-            -0.00448772, 0.00003864,  0.99998993,  0.04621308,
-             0.,         0.,          0.,          1.]
-            #### based on [2023-05-11-15-43-1_EE_rgb_mei-results-imucam]
-            #    0.99999713,  0.00184888, -0.00152691,  0.03679528,
-            #   -0.00184825,  0.99999821,  0.00041351,  0.0029463 ,
-            #    0.00152767, -0.00041069,  0.99999875,  0.03515003,
-            #    0.        ,  0.        ,  0.        ,  1.         ]
+            #### based on [2023-05-11-15-42-14_EE_rgb_mei-results-imucam]
+            #  0.99998975, 0.00059731,  0.0044877,   0.03276503,
+            # -0.00059713, 0.99999982, -0.00004132, -0.00029959,
+            # -0.00448772, 0.00003864,  0.99998993,  0.04621308,
+            #  0.,         0.,          0.,          1.]
+            #### based on [2023-05-11-15-43-17_EE_rgb_mei-results-imucam]
+               0.99999713,  0.00184888, -0.00152691,  0.03679528,
+              -0.00184825,  0.99999821,  0.00041351,  0.0029463 ,
+               0.00152767, -0.00041069,  0.99999875,  0.03515003,
+               0.        ,  0.        ,  0.        ,  1.         ]
             # T_ic: Extrinsic from "Color" To "Gyro" [Manufacture]
             #     0.999996    ,     0.00212487   ,   -0.00160311    , 0.0289688687771559 ,
             #    -0.00212717  ,     0.999997     ,   -0.00143346    , 0.00740136113017797 ,
@@ -84,7 +84,7 @@ multiple_thread: 1
 
 # [Front-end Configuration] TODO: should we separate settings independently?
 # feature traker paprameters
-max_cnt: 200            # max feature number in feature tracking
+max_cnt: 150            # max feature number in feature tracking
 min_dist: 30            # min distance between two features 
 freq: 0                 # frequence (Hz) of publish tracking result. At least 10Hz for good estimation. If set 0, the frequence will be same as raw image 
 F_threshold: 1.0        # ransac threshold (pixel)
