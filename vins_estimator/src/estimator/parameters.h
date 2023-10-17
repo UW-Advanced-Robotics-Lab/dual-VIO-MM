@@ -83,20 +83,24 @@ using namespace std;
 // ----------------------------------------------------------------
 #define FUSE_TOPIC(BRANCH, LEAF)      ( BRANCH "/" LEAF )// combine string
 // publisher: ----------------------------------------------------
-#define TOPIC_CAMERA_POSE_B           (FUSE_TOPIC("base" , "camera_pose"))
-#define TOPIC_CAMERA_POSE_E           (FUSE_TOPIC("EE"   , "camera_pose"))
+// listened by loop fusion
 #define TOPIC_ODOMETRY_B              (FUSE_TOPIC("base" , "odometry"))
 #define TOPIC_ODOMETRY_E              (FUSE_TOPIC("EE"   , "odometry"))
-#define TOPIC_IMU_PROPAGATE_B         (FUSE_TOPIC("base" , "imu_propagate"))
-#define TOPIC_IMU_PROPAGATE_E         (FUSE_TOPIC("EE"   , "imu_propagate"))
-#define TOPIC_KEY_POSES_B             (FUSE_TOPIC("base" , "key_poses"))
-#define TOPIC_KEY_POSES_E             (FUSE_TOPIC("EE"   , "key_poses"))
-#define TOPIC_KEYFRAME_POINT_B        (FUSE_TOPIC("base" , "keyframe_point"))
-#define TOPIC_KEYFRAME_POINT_E        (FUSE_TOPIC("EE"   , "keyframe_point"))
 #define TOPIC_KEYFRAME_POSE_B         (FUSE_TOPIC("base" , "keyframe_pose"))
 #define TOPIC_KEYFRAME_POSE_E         (FUSE_TOPIC("EE"   , "keyframe_pose"))
 #define TOPIC_EXTRINSIC_B             (FUSE_TOPIC("base" , "extrinsic"))
 #define TOPIC_EXTRINSIC_E             (FUSE_TOPIC("EE"   , "extrinsic"))
+#define TOPIC_KEYFRAME_POINT_B        (FUSE_TOPIC("base" , "keyframe_point"))
+#define TOPIC_KEYFRAME_POINT_E        (FUSE_TOPIC("EE"   , "keyframe_point"))
+#define TOPIC_MARGIN_CLOUD_B          (FUSE_TOPIC("base" , "margin_cloud"))
+#define TOPIC_MARGIN_CLOUD_E          (FUSE_TOPIC("EE"   , "margin_cloud"))
+
+#define TOPIC_CAMERA_POSE_B           (FUSE_TOPIC("base" , "camera_pose"))
+#define TOPIC_CAMERA_POSE_E           (FUSE_TOPIC("EE"   , "camera_pose"))
+#define TOPIC_IMU_PROPAGATE_B         (FUSE_TOPIC("base" , "imu_propagate"))
+#define TOPIC_IMU_PROPAGATE_E         (FUSE_TOPIC("EE"   , "imu_propagate"))
+#define TOPIC_KEY_POSES_B             (FUSE_TOPIC("base" , "key_poses"))
+#define TOPIC_KEY_POSES_E             (FUSE_TOPIC("EE"   , "key_poses"))
 #define TOPIC_CAMERA_POSE_VISUAL_B    (FUSE_TOPIC("base" , "camera_pose_visual"))
 #define TOPIC_CAMERA_POSE_VISUAL_E    (FUSE_TOPIC("EE"   , "camera_pose_visual"))
 #define TOPIC_PATH_B                  (FUSE_TOPIC("base" , "path"))
@@ -105,8 +109,6 @@ using namespace std;
 #define TOPIC_IMAGE_TRACK_E           (FUSE_TOPIC("EE"   , "image_track"))
 #define TOPIC_POINT_CLOUD_B           (FUSE_TOPIC("base" , "point_cloud"))
 #define TOPIC_POINT_CLOUD_E           (FUSE_TOPIC("EE"   , "point_cloud"))
-#define TOPIC_MARGIN_CLOUD_B          (FUSE_TOPIC("base" , "margin_cloud"))
-#define TOPIC_MARGIN_CLOUD_E          (FUSE_TOPIC("EE"   , "margin_cloud"))
 #define PUBLISHER_BUFFER_SIZE         (1000)
 
 #define TOPIC_VICON_PATH_B            (FUSE_TOPIC("base" , "vicon/path"))
