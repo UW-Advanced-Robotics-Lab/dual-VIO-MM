@@ -92,9 +92,9 @@ show_track: 1           # publish tracking image as topic
 flow_back: 1            # perform forward and backward optical flow to improve feature tracking accuracy
 
 # optimization parameters
-max_solver_time: 0.08  # max solver itration time (ms), to guarantee real time
-max_num_iterations: 10   # max solver itrations, to guarantee real time
-keyframe_parallax: 15.0 # keyframe selection threshold (pixel)
+max_solver_time: 0.04  # max solver itration time (ms), to guarantee real time
+max_num_iterations: 8   # max solver itrations, to guarantee real time
+keyframe_parallax: 10.0 # keyframe selection threshold (pixel)
 
 # [IMU Configuration]
 #imu parameters       The more accurate parameters you provide, the better performance
@@ -118,11 +118,6 @@ d0_g_norm: 9.805         # gravity magnitude
 # Random walk: 1.954810193183154e-06
 
 # - [cam1]
-d1_acc_n: 0.1413962190941554          # accelerometer measurement noise standard deviation. 
-d1_acc_w: 0.0010572240682889056         # accelerometer bias random work noise standard deviation 
-d1_gyr_n: 0.00646297668592792        # gyroscope measurement noise standard deviation. 
-d1_gyr_w: 0.000002672307981517485      # gyroscope bias random work noise standard deviation. 
-d1_g_norm: 9.80655            # gravity magnitude #TODO: unified gravity magnitude? 
 # NOTE: imu data is collected when arm is holding up and facing forward with the camera,
 #       hence, it captures the noises in addition to the system noises,
 #       but, the noise may not be suitable for all joint configurations. 
@@ -138,7 +133,11 @@ d1_g_norm: 9.80655            # gravity magnitude #TODO: unified gravity magnitu
 #     Noise density: 0.00045700146412701916
 #     Noise density (discrete): 0.00646297668592792 
 #     Random walk: 2.672307981517485e-06
-#   T_ib (imu0 to imu0)
+d1_acc_n: 0.1413962190941554          # accelerometer measurement noise standard deviation. 
+d1_acc_w: 0.0010572240682889056         # accelerometer bias random work noise standard deviation 
+d1_gyr_n: 0.00646297668592792        # gyroscope measurement noise standard deviation. 
+d1_gyr_w: 0.000002672307981517485      # gyroscope bias random work noise standard deviation. 
+d1_g_norm: 9.80655            # gravity magnitude #TODO: unified gravity magnitude? 
 #### based on [2023-05-11-15-42-14_EE_rgb_mei-results-imucam]
 # IMU0:
 #  ----------------------------
@@ -152,13 +151,11 @@ d1_g_norm: 9.80655            # gravity magnitude #TODO: unified gravity magnitu
 #     Noise density: 0.0001655154510187148
 #     Noise density (discrete): 0.002340741956129662 
 #     Random walk: 2.848286811512562e-06
-#   T_ib (imu0 to imu0)
-#     [[1. 0. 0. 0.]
-#      [0. 1. 0. 0.]
-#      [0. 0. 1. 0.]
-#      [0. 0. 0. 1.]]
-#   time offset with respect to IMU0: 0.0 [s]
-
+# d1_acc_n: 0.014678930355628823          # accelerometer measurement noise standard deviation. 
+# d1_acc_w: 0.000032656995585435125         # accelerometer bias random work noise standard deviation 
+# d1_gyr_n: 0.002340741956129662        # gyroscope measurement noise standard deviation. 
+# d1_gyr_w: 0.000002848286811512562      # gyroscope bias random work noise standard deviation. 
+# d1_g_norm: 9.80655            # gravity magnitude #TODO: unified gravity magnitude? 
 
 # TODO: we need to calibrated td, which is important for estimator accuracy
 #unsynchronization parameters [based on [2023-05-11-15-xx-xx] calibration mei]
@@ -173,8 +170,8 @@ d1_td: 0.00017127300362964996 # initial value of time offset. unit: s. readed im
 # - [cam0]
 d0_load_previous_pose_graph: 0        # load and reuse previous pose graph; load from 'pose_graph_save_path'
 d0_pose_graph_save_path: "~/output/pose_graph_c0/" # save and load path
-d0_save_image: 0                      # save image in pose graph for visualization prupose; you can close this function by setting 0 
+d0_save_image: 1                      # save image in pose graph for visualization prupose; you can close this function by setting 0 
 # - [cam1]
 d1_load_previous_pose_graph: 0        # load and reuse previous pose graph; load from 'pose_graph_save_path'
 d1_pose_graph_save_path: "~/output/pose_graph_c1/" # save and load path
-d1_save_image: 0                      # save image in pose graph for visualization prupose; you can close this function by setting 0 
+d1_save_image: 1                      # save image in pose graph for visualization prupose; you can close this function by setting 0 
