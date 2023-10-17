@@ -103,7 +103,7 @@ d0_acc_n: 0.055815118807207915          # accelerometer measurement noise standa
 d0_acc_w: 0.00005247260402566035       # accelerometer bias random work noise standard deviation.  #0.002
 d0_gyr_n: 0.002285135036652663         # gyroscope measurement noise standard deviation.     #0.05  0.004
 d0_gyr_w: 0.000001954810193183154      # gyroscope bias random work noise standard deviation.     #4.0e-5
-d0_g_norm: 9.8         # gravity magnitude
+d0_g_norm: 9.805         # gravity magnitude
 # NOTE: imu data is collected when the robot is powered on and idling,
 #       hence, it captures the noises with additional system noises,
 #       otherwise, the noise factor would nor perform well with real data.
@@ -122,7 +122,7 @@ d1_acc_n: 0.1413962190941554          # accelerometer measurement noise standard
 d1_acc_w: 0.0010572240682889056         # accelerometer bias random work noise standard deviation 
 d1_gyr_n: 0.00646297668592792        # gyroscope measurement noise standard deviation. 
 d1_gyr_w: 0.000002672307981517485      # gyroscope bias random work noise standard deviation. 
-d1_g_norm: 9.8            # gravity magnitude #TODO: unified gravity magnitude? 
+d1_g_norm: 9.80655            # gravity magnitude #TODO: unified gravity magnitude? 
 # NOTE: imu data is collected when arm is holding up and facing forward with the camera,
 #       hence, it captures the noises in addition to the system noises,
 #       but, the noise may not be suitable for all joint configurations. 
