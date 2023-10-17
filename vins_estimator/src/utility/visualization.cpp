@@ -16,7 +16,6 @@ ros::Publisher pub_key_poses[MAX_NUM_DEVICES];
 ros::Publisher pub_camera_pose[MAX_NUM_DEVICES];
 ros::Publisher pub_camera_pose_visual[MAX_NUM_DEVICES];
 
-nav_msgs::Path path[MAX_NUM_DEVICES]; // buffer
 
 ros::Publisher pub_keyframe_pose[MAX_NUM_DEVICES];
 ros::Publisher pub_keyframe_point[MAX_NUM_DEVICES];
@@ -33,12 +32,36 @@ ros::Publisher pub_image_track[MAX_NUM_DEVICES];
 
 #if (FEATURE_ENABLE_VICON_SUPPORT)
 ros::Publisher pub_vicon[MAX_NUM_DEVICES];
-nav_msgs::Path vicon_path[MAX_NUM_DEVICES]; // buffer
 #endif
 
-CameraPoseVisualization cameraposevisual[MAX_NUM_DEVICES]={
-    CameraPoseVisualization(1, 0, 0, 1), CameraPoseVisualization(1, 0, 0, 1)
-};
+typedef struct{
+#if (FEATURE_ENABLE_VICON_SUPPORT)
+    // GT:
+    nav_msgs::Path      vicon_path; // buffer
+    std::mutex          vicon_guard;
+#endif
+#if (FEATURE_TRACKING_IMAGE_SUPPORT)
+    // Track image:
+    sensor_msgs::ImagePtr   imgTrackMsg;
+    std::mutex              track_guard;
+#endif
+    // visual:
+    nav_msgs::Path              path;
+    nav_msgs::Odometry          odometry;
+
+    visualization_msgs::Marker  key_poses;
+
+    nav_msgs::Odometry          camerapose_odometry;
+    CameraPoseVisualization     cameraposevisual = CameraPoseVisualization(1, 0, 0, 1);
+
+    sensor_msgs::PointCloud     point_cloud;
+    sensor_msgs::PointCloud     margin_cloud;
+
+    std::mutex                  guard;
+} VisualizationBuffer_t;
+VisualizationBuffer_t m_buf[MAX_NUM_DEVICES];
+
+
 static double sum_of_path = 0;
 static Vector3d last_path(0.0, 0.0, 0.0);
 
@@ -51,21 +74,23 @@ void registerPub(ros::NodeHandle &n, const int N_DEVICES)
     for (int i = 0; i < N_DEVICES; i++)
     {
         // TODO: flag unnecessary pubs for run-time performance
-        // Data Publish:
-        pub_camera_pose[i]       = n.advertise<nav_msgs::Odometry>(((i)?(TOPIC_CAMERA_POSE_E):(TOPIC_CAMERA_POSE_B)), PUBLISHER_BUFFER_SIZE);
+        // Data Publish (Sub by LoopFusion, Immediately):
         pub_odometry[i]          = n.advertise<nav_msgs::Odometry>(((i)?(TOPIC_ODOMETRY_E):(TOPIC_ODOMETRY_B)), PUBLISHER_BUFFER_SIZE);
-        pub_latest_odometry[i]   = n.advertise<nav_msgs::Odometry>(((i)?(TOPIC_IMU_PROPAGATE_E):(TOPIC_IMU_PROPAGATE_B)), PUBLISHER_BUFFER_SIZE); // TODO: not being sub
-        pub_key_poses[i]         = n.advertise<visualization_msgs::Marker>(((i)?(TOPIC_KEY_POSES_E):(TOPIC_KEY_POSES_B)), PUBLISHER_BUFFER_SIZE);
-        pub_keyframe_point[i]    = n.advertise<sensor_msgs::PointCloud>(((i)?(TOPIC_KEYFRAME_POINT_E):(TOPIC_KEYFRAME_POINT_B)), PUBLISHER_BUFFER_SIZE);
         pub_keyframe_pose[i]     = n.advertise<nav_msgs::Odometry>(((i)?(TOPIC_KEYFRAME_POSE_E):(TOPIC_KEYFRAME_POSE_B)), PUBLISHER_BUFFER_SIZE);
         pub_extrinsic[i]         = n.advertise<nav_msgs::Odometry>(((i)?(TOPIC_EXTRINSIC_E):(TOPIC_EXTRINSIC_B)), PUBLISHER_BUFFER_SIZE);
+        pub_keyframe_point[i]    = n.advertise<sensor_msgs::PointCloud>(((i)?(TOPIC_KEYFRAME_POINT_E):(TOPIC_KEYFRAME_POINT_B)), PUBLISHER_BUFFER_SIZE);
+        
+        // Data Publish:
+        pub_camera_pose[i]       = n.advertise<nav_msgs::Odometry>(((i)?(TOPIC_CAMERA_POSE_E):(TOPIC_CAMERA_POSE_B)), PUBLISHER_BUFFER_SIZE);
+        pub_latest_odometry[i]   = n.advertise<nav_msgs::Odometry>(((i)?(TOPIC_IMU_PROPAGATE_E):(TOPIC_IMU_PROPAGATE_B)), PUBLISHER_BUFFER_SIZE); // TODO: not being sub
+        pub_key_poses[i]         = n.advertise<visualization_msgs::Marker>(((i)?(TOPIC_KEY_POSES_E):(TOPIC_KEY_POSES_B)), PUBLISHER_BUFFER_SIZE);
 
         // Rviz Visuals:
         pub_camera_pose_visual[i]= n.advertise<visualization_msgs::MarkerArray>(((i)?(TOPIC_CAMERA_POSE_VISUAL_E):(TOPIC_CAMERA_POSE_VISUAL_B)), PUBLISHER_BUFFER_SIZE);
         pub_path[i]              = n.advertise<nav_msgs::Path>(((i)?(TOPIC_PATH_E):(TOPIC_PATH_B)), PUBLISHER_BUFFER_SIZE);
         pub_image_track[i]       = n.advertise<sensor_msgs::Image>(((i)?(TOPIC_IMAGE_TRACK_E):(TOPIC_IMAGE_TRACK_B)), PUBLISHER_BUFFER_SIZE);
         pub_point_cloud[i]       = n.advertise<sensor_msgs::PointCloud>(((i)?(TOPIC_POINT_CLOUD_E):(TOPIC_POINT_CLOUD_B)), PUBLISHER_BUFFER_SIZE);
-        pub_margin_cloud[i]      = n.advertise<sensor_msgs::PointCloud>(((i)?(TOPIC_MARGIN_CLOUD_E):(TOPIC_MARGIN_CLOUD_B)), PUBLISHER_BUFFER_SIZE);
+        pub_margin_cloud[i]      = n.advertise<sensor_msgs::PointCloud>(((i)?(TOPIC_MARGIN_CLOUD_E):(TOPIC_MARGIN_CLOUD_B)), PUBLISHER_BUFFER_SIZE); // (sub by loopfusion for visual)
         
         // vicon rviz visuals: 
 #if (FEATURE_ENABLE_VICON_SUPPORT)
@@ -73,13 +98,23 @@ void registerPub(ros::NodeHandle &n, const int N_DEVICES)
 #endif
 
         // placeholders
-        cameraposevisual[i].setScale(0.1);
-        cameraposevisual[i].setLineWidth(0.01);
+        m_buf[i].cameraposevisual.setScale(0.1);
+        m_buf[i].cameraposevisual.setLineWidth(0.01);
     }
 
 }
 
-void pubLatestOdometry(const Eigen::Vector3d &P, const Eigen::Quaterniond &Q, const Eigen::Vector3d &V, const double t, const int device_id)
+
+void visualization_guard_lock(const Estimator &estimator)
+{
+    m_buf[estimator.pCfg->DEVICE_ID].guard.lock();
+}
+void visualization_guard_unlock(const Estimator &estimator)
+{
+    m_buf[estimator.pCfg->DEVICE_ID].guard.unlock();
+}
+
+void pubLatestOdometry_immediately(const Eigen::Vector3d &P, const Eigen::Quaterniond &Q, const Eigen::Vector3d &V, const double t, const int device_id)
 {
     nav_msgs::Odometry odometry;
     odometry.header.stamp = ros::Time(t);
@@ -97,16 +132,29 @@ void pubLatestOdometry(const Eigen::Vector3d &P, const Eigen::Quaterniond &Q, co
     pub_latest_odometry[device_id].publish(odometry);
 }
 
-void pubTrackImage(const cv::Mat &imgTrack, const double t, const int device_id)
+#if (FEATURE_TRACKING_IMAGE_SUPPORT)
+void queue_TrackImage_safe(const cv::Mat &imgTrack, const double t, const int device_id)
 {
     std_msgs::Header header;
     header.frame_id = "world";
     header.stamp = ros::Time(t);
-    sensor_msgs::ImagePtr imgTrackMsg = cv_bridge::CvImage(header, "bgr8", imgTrack).toImageMsg();
-    pub_image_track[device_id].publish(imgTrackMsg);
+    // queue image:
+    m_buf[device_id].track_guard.lock();
+    m_buf[device_id].imgTrackMsg = cv_bridge::CvImage(header, "bgr8", imgTrack).toImageMsg();
+    m_buf[device_id].track_guard.unlock();
 }
+void pubTrackImage_safe(const int device_id)
+{
+    m_buf[device_id].track_guard.lock();
+    if (m_buf[device_id].imgTrackMsg) // in case of no images
+    {
+        pub_image_track[device_id].publish(m_buf[device_id].imgTrackMsg);
+    }
+    m_buf[device_id].track_guard.unlock();
+}
+#endif
 
-
+#if (FEATURE_ENABLE_STATISTICS_LOGGING)
 void printStatistics(const Estimator &estimator, const double t)
 {
     if (estimator.solver_flag != Estimator::SolverFlag::NON_LINEAR)
@@ -114,6 +162,7 @@ void printStatistics(const Estimator &estimator, const double t)
     //printf("position: %f, %f, %f\r", estimator.Ps[WINDOW_SIZE].x(), estimator.Ps[WINDOW_SIZE].y(), estimator.Ps[WINDOW_SIZE].z());
     ROS_DEBUG_STREAM("position: " << estimator.Ps[WINDOW_SIZE].transpose());
     ROS_DEBUG_STREAM("orientation: " << estimator.Vs[WINDOW_SIZE].transpose());
+
     if (estimator.pCfg->ESTIMATE_EXTRINSIC)
     {
         cv::FileStorage fs(estimator.pCfg->EX_CALIB_RESULT_PATH, cv::FileStorage::WRITE);
@@ -149,12 +198,13 @@ void printStatistics(const Estimator &estimator, const double t)
     if (estimator.pCfg->ESTIMATE_TD)
         ROS_INFO("[%d] td %f", estimator.pCfg->DEVICE_ID, estimator.td);
 }
+#endif
 
-void pubOdometry(const Estimator &estimator, const std_msgs::Header &header)
+void pubOdometry_Immediately(const Estimator &estimator, const std_msgs::Header &header)
 {
     if (estimator.solver_flag == Estimator::SolverFlag::NON_LINEAR)
     {
-        int device_id = estimator.pCfg->DEVICE_ID;
+        const int device_id = estimator.pCfg->DEVICE_ID;
         nav_msgs::Odometry odometry;
         odometry.header = header;
         odometry.header.frame_id = "world";
@@ -178,10 +228,11 @@ void pubOdometry(const Estimator &estimator, const std_msgs::Header &header)
         pose_stamped.header = header;
         pose_stamped.header.frame_id = "world";
         pose_stamped.pose = odometry.pose.pose;
-        path[device_id].header = header;
-        path[device_id].header.frame_id = "world";
-        path[device_id].poses.push_back(pose_stamped);
-        pub_path[device_id].publish(path[device_id]);
+
+        // queue for trajectory visualization
+        m_buf[device_id].path.header = header;
+        m_buf[device_id].path.header.frame_id = "world";
+        m_buf[device_id].path.poses.push_back(pose_stamped);
 
 #if(FEATURE_VIZ_ROSOUT_ODOMETRY_SUPPORT)
         // write result to file
@@ -208,8 +259,15 @@ void pubOdometry(const Estimator &estimator, const std_msgs::Header &header)
     }
 }
 
+void pubOdometryPath_safe(const int device_id)
+{
+    m_buf[device_id].guard.lock();
+    pub_path[device_id].publish(m_buf[device_id].path);
+    m_buf[device_id].guard.unlock();
+}
+
 #if (FEATURE_ENABLE_VICON_SUPPORT)
-void pubViconOdometry(const geometry_msgs::TransformStampedConstPtr &transform_msg, const int device_id)
+void queue_ViconOdometry_safe(const geometry_msgs::TransformStampedConstPtr &transform_msg, const int device_id)
 {
     std_msgs::Header header;
     header.frame_id = "world";
@@ -225,15 +283,22 @@ void pubViconOdometry(const geometry_msgs::TransformStampedConstPtr &transform_m
     geometry_msgs::PoseStamped pose_stamped;
     pose_stamped.header = header;
     pose_stamped.pose = pose;
-    vicon_path[device_id].header = header;
-    vicon_path[device_id].header.frame_id = "world";
-    vicon_path[device_id].poses.push_back(pose_stamped);
+    m_buf[device_id].vicon_guard.lock();
+    m_buf[device_id].vicon_path.header = header;
+    m_buf[device_id].vicon_path.header.frame_id = "world";
+    m_buf[device_id].vicon_path.poses.push_back(pose_stamped);
+    m_buf[device_id].vicon_guard.unlock();
+}
+void pubViconOdometryPath_safe(const int device_id)
+{
     // publish the path:
-    pub_vicon[device_id].publish(vicon_path[device_id]);
+    m_buf[device_id].vicon_guard.lock();
+    pub_vicon[device_id].publish(m_buf[device_id].vicon_path);
+    m_buf[device_id].vicon_guard.unlock();
 }
 #endif
 
-void pubKeyPoses(const Estimator &estimator, const std_msgs::Header &header)
+void queue_KeyPoses_unsafe(const Estimator &estimator, const std_msgs::Header &header)
 {
     if (estimator.key_poses.size() == 0)
         return;
@@ -264,10 +329,18 @@ void pubKeyPoses(const Estimator &estimator, const std_msgs::Header &header)
         pose_marker.z = correct_pose.z();
         key_poses.points.push_back(pose_marker);
     }
-    pub_key_poses[estimator.pCfg->DEVICE_ID].publish(key_poses);
+    const int device_id = estimator.pCfg->DEVICE_ID;
+    m_buf[device_id].key_poses = key_poses;
+}
+void pubKeyPoses_safe(const size_t device_id)
+{
+    visualization_msgs::Marker key_poses;
+    m_buf[device_id].guard.lock();
+    pub_key_poses[device_id].publish(key_poses);
+    m_buf[device_id].guard.unlock();
 }
 
-void pubCameraPose(const Estimator &estimator, const std_msgs::Header &header)
+void queue_CameraPose_unsafe(const Estimator &estimator, const std_msgs::Header &header)
 {
     int idx2 = WINDOW_SIZE - 1;
 
@@ -276,7 +349,7 @@ void pubCameraPose(const Estimator &estimator, const std_msgs::Header &header)
         int i = idx2;
         Vector3d P = estimator.Ps[i] + estimator.Rs[i] * estimator.tic[0];
         Quaterniond R = Quaterniond(estimator.Rs[i] * estimator.ric[0]);
-
+        // pose
         nav_msgs::Odometry odometry;
         odometry.header = header;
         odometry.header.frame_id = "world";
@@ -288,25 +361,33 @@ void pubCameraPose(const Estimator &estimator, const std_msgs::Header &header)
         odometry.pose.pose.orientation.z = R.z();
         odometry.pose.pose.orientation.w = R.w();
 
-        pub_camera_pose[estimator.pCfg->DEVICE_ID].publish(odometry);
-
-        cameraposevisual[estimator.pCfg->DEVICE_ID].reset();
-        cameraposevisual[estimator.pCfg->DEVICE_ID].add_pose(P, R);
+        // pose:
+        m_buf[estimator.pCfg->DEVICE_ID].camerapose_odometry = odometry;
+        // pose visual
+        m_buf[estimator.pCfg->DEVICE_ID].cameraposevisual.reset();
+        m_buf[estimator.pCfg->DEVICE_ID].cameraposevisual.add_pose(P, R);
         
 #if (FEATURE_ENABLE_STEREO_SUPPORT) // for stereo camera pose
         if(estimator.pCfg->STEREO)
         {
             Vector3d P = estimator.Ps[i] + estimator.Rs[i] * estimator.tic[1];
             Quaterniond R = Quaterniond(estimator.Rs[i] * estimator.ric[1]);
-            cameraposevisual.add_pose(P, R);
+            m_buf[estimator.pCfg->DEVICE_ID].cameraposevisual.add_pose(P, R);
         }
 #endif
-        cameraposevisual[estimator.pCfg->DEVICE_ID].publish_by(pub_camera_pose_visual[estimator.pCfg->DEVICE_ID], odometry.header);
     }
 }
 
+void pubCameraPose_safe(const size_t device_id)
+{
+    m_buf[device_id].guard.lock();
+    pub_camera_pose[device_id].publish(m_buf[device_id].camerapose_odometry);
+    m_buf[device_id].cameraposevisual.publish_by(pub_camera_pose_visual[device_id], m_buf[device_id].camerapose_odometry.header);
+    m_buf[device_id].guard.unlock();
+}
 
-void pubPointCloud(const Estimator &estimator, const std_msgs::Header &header)
+
+void queue_PointCloud_unsafe(const Estimator &estimator, const std_msgs::Header &header)
 {
     sensor_msgs::PointCloud point_cloud, loop_point_cloud;
     point_cloud.header = header;
@@ -331,8 +412,8 @@ void pubPointCloud(const Estimator &estimator, const std_msgs::Header &header)
         p.z = w_pts_i(2);
         point_cloud.points.push_back(p);
     }
-    pub_point_cloud[estimator.pCfg->DEVICE_ID].publish(point_cloud);
-
+    m_buf[estimator.pCfg->DEVICE_ID].point_cloud = point_cloud;
+    // pub_point_cloud[estimator.pCfg->DEVICE_ID].publish(point_cloud);
 
     // pub margined potin
     sensor_msgs::PointCloud margin_cloud;
@@ -361,11 +442,19 @@ void pubPointCloud(const Estimator &estimator, const std_msgs::Header &header)
             margin_cloud.points.push_back(p);
         }
     }
-    pub_margin_cloud[estimator.pCfg->DEVICE_ID].publish(margin_cloud);
+    m_buf[estimator.pCfg->DEVICE_ID].margin_cloud = margin_cloud;
+    // pub_margin_cloud[estimator.pCfg->DEVICE_ID].publish(margin_cloud);
 }
 
+void pubPointClouds_safe(const size_t device_id)
+{
+    m_buf[device_id].guard.lock();
+    pub_point_cloud[device_id].publish(m_buf[device_id].point_cloud);
+    pub_margin_cloud[device_id].publish(m_buf[device_id].margin_cloud);
+    m_buf[device_id].guard.unlock();
+}
 
-void pubTF(const Estimator &estimator, const std_msgs::Header &header)
+void pubTF_immediately(const Estimator &estimator, const std_msgs::Header &header)
 {
     if( estimator.solver_flag != Estimator::SolverFlag::NON_LINEAR)
         return;
@@ -415,7 +504,7 @@ void pubTF(const Estimator &estimator, const std_msgs::Header &header)
 
 }
 
-void pubKeyframe(const Estimator &estimator)
+void pubKeyframe_Odometry_and_Points_immediately(const Estimator &estimator)
 {
     // pub camera pose, 2D-3D points of keyframe
     if (estimator.solver_flag == Estimator::SolverFlag::NON_LINEAR && estimator.marginalization_flag == 0)
@@ -436,7 +525,6 @@ void pubKeyframe(const Estimator &estimator)
         odometry.pose.pose.orientation.z = R.z();
         odometry.pose.pose.orientation.w = R.w();
         //printf("time: %f t: %f %f %f r: %f %f %f %f\n", odometry.header.stamp.toSec(), P.x(), P.y(), P.z(), R.w(), R.x(), R.y(), R.z());
-
         pub_keyframe_pose[estimator.pCfg->DEVICE_ID].publish(odometry);
 
 

@@ -55,6 +55,8 @@ using namespace std;
 #define IMAGE_PROCESSING_FPS                    ((IMAGE_FPS)/2.0)       // set processing rate, ideally below IMAGE FPS
 #define IMAGE_PROCESSING_INTERVAL               ((float)(1.0/(IMAGE_PROCESSING_FPS)))
 
+#define TOPIC_PUBLISH_FPS                       ((int)(10))
+#define TOPIC_PUBLISH_INTERVAL_MS               ((int)(1000/TOPIC_PUBLISH_FPS))
 /* Hyperparams:
 *   @IMAGE_SYNCHRONIZATION_TIME_DELTA_MAX:
 *       - Ex: 0.03 sync tolerance: we throw out images if the time between two devices' image is greater than this value
@@ -133,6 +135,7 @@ using namespace std;
 
 // performance related feature support:
 #define FEATURE_ENABLE_PERFORMANCE_EVAL                 (( ENABLED) & (!FEATURE_MODE_RUNTIME)) // report performance
+#define FEATURE_PERFORMANCE_EVAL_THRESHOLD_MS           (50) // report to console when above X ms, else ros debug
 
 /* To enforce the real-time performance, we will drop frames if we are n seconds behind the schedule */
 /* FEATURE_ENABLE_FRAME_DROP_FOR_REAL_TIME
@@ -148,6 +151,7 @@ using namespace std;
 #define FEATURE_ENABLE_DYNAMIC_FRAME_DROP_FOR_RT        (DISABLED) // set via "IMAGE_BEHIND_SCHEDULE_TIME_TOLERANCE"
 #define FEATURE_ENABLE_PROCESS_FRAME_FPS_FOR_RT         ( ENABLED) // set via #define IMAGE_PROCESSING_FPS
 
+#define FEATURE_ENABLE_STATISTICS_LOGGING               ( ENABLED) // `printStatistics`
 // other features:
 #define FEATURE_NON_THREADING_SUPPORT                   (DISABLED) // disable non-threading
 #define FEATURE_ESTIMATOR_THREADING_SUPPORT             (DISABLED) // backward-compatible with threading in estimator
@@ -162,6 +166,7 @@ using namespace std;
 #define FEATURE_CONSOLE_DEBUG_PRINTF                   (( ENABLED) & (!FEATURE_MODE_RUNTIME))
 #define FEATURE_VIZ_ROSOUT_ODOMETRY_SUPPORT            ((DISABLED) & (!FEATURE_MODE_RUNTIME))
 #define FEATURE_TRACKING_IMAGE_SUPPORT                 (( ENABLED) & (!FEATURE_MODE_RUNTIME)) 
+#define FEATURE_PERFORMANCE_DEBUG_PRINTF               (( ENABLED) & (!FEATURE_MODE_RUNTIME)) 
 
 // debug only features (additional images):
 #define FEATURE_DEBUG_IMAGE_AT_CONNECTIONS             ((DISABLED) & (!FEATURE_MODE_RUNTIME))
@@ -180,17 +185,26 @@ using namespace std;
 #   define PRINT_ERROR(...)  {}// Do Nothing
 #endif
 #if (FEATURE_CONSOLE_DEBUG_PRINTF)
-#   define PRINT_DEBUG_FULL(...)  {printf("%s %s:%d", __TIME__, __FILE__, __LINE__); printf(" \033[0;33m > [DEBUG-FULL] \033[0m "); PRINTF(__VA_ARGS__);}
-#   define PRINT_DEBUG(...)  {printf(" \033[0;33m > [DEBUG-INFO] \033[0m "); PRINTF(__VA_ARGS__);}
-#   define PRINT_ARRAY(array, length) {printf(" \033[0;33m > [DEBUG-ARR] ["); for(int i = 0; i < length; i++){printf("%f\t", array[i]);} PRINTF("] \033[0m ");}
+#   define PRINT_DEBUG_FULL(...)        {printf("%s %s:%d", __TIME__, __FILE__, __LINE__); printf(" \033[0;33m > [DEBUG-FULL] \033[0m "); PRINTF(__VA_ARGS__);}
+#   define PRINT_DEBUG(...)             {printf(" \033[0;33m > [DEBUG-INFO] \033[0m "); PRINTF(__VA_ARGS__);}
+#   define PRINT_ROS_DEBUG(...)         {printf(" \033[0;33m > [DEBUG-INFO] \033[0m "); PRINTF(__VA_ARGS__); ROS_DEBUG(__VA_ARGS__);}
+#   define PRINT_ARRAY(array, length)   {printf(" \033[0;33m > [DEBUG-ARR] ["); for(int i = 0; i < length; i++){printf("%f\t", array[i]);} PRINTF("] \033[0m ");}
 #   define PRINT_ARRAY_DIFF(array1, array2, length) {printf(" \033[0;33m > [DEBUG-ARR] ["); for(int i = 0; i < length; i++){printf("%f\t", (array1[i]-array2[i]));} PRINTF("] \033[0m ");}
 #else
-#   define PRINT_DEBUG_FULL(...)  {}// Do Nothing
-#   define PRINT_DEBUG(...)  {}// Do Nothing
-#   define PRINT_ARRAY(...)  {}// Do Nothing
-#   define PRINT_ARRAY_DIFF(...)  {}// Do Nothing
+#   define PRINT_DEBUG_FULL(...)    {}// Do Nothing
+#   define PRINT_DEBUG(...)         {}// Do Nothing
+#   define PRINT_ROS_DEBUG(...)     {ROS_DEBUG(__VA_ARGS__);}
+#   define PRINT_ARRAY(...)         {}// Do Nothing
+#   define PRINT_ARRAY_DIFF(...)    {}// Do Nothing
 #endif
 
+#if (FEATURE_ENABLE_PERFORMANCE_EVAL & FEATURE_CONSOLE_DEBUG_PRINTF)
+#   define TIK(PM)   {PM.tic();}
+#   define TOK(PM)   {if (PM.toc() > FEATURE_PERFORMANCE_EVAL_THRESHOLD_MS) { PRINT_DEBUG("%s Performance: %.2f ms", #PM, PM.dt()); }; }
+#else // precompile elimination for run-time performance
+#   define TIK(PM)   {} // do nothing
+#   define TOK(PM)   {} // do nothing
+#endif
 // ----------------------------------------------------------------
 // : Definitions :
 // ----------------------------------------------------------------

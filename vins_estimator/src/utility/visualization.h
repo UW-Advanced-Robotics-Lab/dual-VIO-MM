@@ -42,30 +42,41 @@
 
 void registerPub(ros::NodeHandle &n, const int N_DEVICES);
 
-void pubLatestOdometry(const Eigen::Vector3d &P, const Eigen::Quaterniond &Q, const Eigen::Vector3d &V, const double t, const int device_id);
-void pubTrackImage(const cv::Mat &imgTrack, const double t, const int device_id);
+void visualization_guard_lock(const Estimator &estimator);
+void visualization_guard_unlock(const Estimator &estimator);
 
+void pubLatestOdometry_immediately(const Eigen::Vector3d &P, const Eigen::Quaterniond &Q, const Eigen::Vector3d &V, const double t, const int device_id);
+
+#if (FEATURE_TRACKING_IMAGE_SUPPORT)
+void queue_TrackImage_safe(const cv::Mat &imgTrack, const double t, const int device_id);
+void pubTrackImage_safe(const int device_id);
+#endif
+#if (FEATURE_ENABLE_STATISTICS_LOGGING)
 void printStatistics(const Estimator &estimator, const double t);
+#endif
 
-void pubOdometry(const Estimator &estimator, const std_msgs::Header &header);
-
-void pubInitialGuess(const Estimator &estimator, const std_msgs::Header &header);
-
-void pubKeyPoses(const Estimator &estimator, const std_msgs::Header &header);
-
-void pubCameraPose(const Estimator &estimator, const std_msgs::Header &header);
-
-void pubPointCloud(const Estimator &estimator, const std_msgs::Header &header);
-
-void pubTF(const Estimator &estimator, const std_msgs::Header &header);
-
-void pubKeyframe(const Estimator &estimator);
-
-void pubRelocalization(const Estimator &estimator);
-
-void pubCar(const Estimator & estimator, const std_msgs::Header &header);
+void pubOdometry_Immediately(const Estimator &estimator, const std_msgs::Header &header);
+void pubOdometryPath_safe(const int device_id);
 
 #if (FEATURE_ENABLE_VICON_SUPPORT)
 // vicon:
-void pubViconOdometry(const geometry_msgs::TransformStampedConstPtr &transform_msg, const int device_id);
+void queue_ViconOdometry_safe(const geometry_msgs::TransformStampedConstPtr &transform_msg, const int device_id);
+void pubViconOdometryPath_safe(const int device_id);
 #endif
+
+void queue_KeyPoses_unsafe(const Estimator &estimator, const std_msgs::Header &header);
+void pubKeyPoses_safe(const size_t device_id);
+
+void queue_CameraPose_unsafe(const Estimator &estimator, const std_msgs::Header &header);
+void pubCameraPose_safe(const size_t device_id);
+
+void queue_PointCloud_unsafe(const Estimator &estimator, const std_msgs::Header &header);
+void pubPointClouds_safe(const size_t device_id);
+
+void pubTF_immediately(const Estimator &estimator, const std_msgs::Header &header);
+
+void pubKeyframe_Odometry_and_Points_immediately(const Estimator &estimator);
+
+// void pubRelocalization(const Estimator &estimator);???
+// void pubCar(const Estimator & estimator, const std_msgs::Header &header);
+

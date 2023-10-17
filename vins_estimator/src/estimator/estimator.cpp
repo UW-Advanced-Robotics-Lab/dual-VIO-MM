@@ -163,7 +163,7 @@ void Estimator::inputImage(double t, const cv::Mat &_img)
     TicToc featureTrackerTime;
 
     featureFrame = featureTracker.trackImage(t, _img);
-    //printf("featureTracker time: %f\n", featureTrackerTime.toc());
+    TOK(featureTrackerTime);
 
     // push feature buffer , threading
     {     
@@ -182,7 +182,7 @@ void Estimator::inputImage(double t, const cv::Mat &_img)
     if ((pCfg->SHOW_TRACK) && (inputImageCnt % 2 == 0))// publish at lower rate
     {
         cv::Mat imgTrack = featureTracker.getTrackImage();
-        pubTrackImage(imgTrack, t, pCfg->DEVICE_ID);
+        queue_TrackImage_safe(imgTrack, t, pCfg->DEVICE_ID);
     }
 #endif
 }
@@ -199,7 +199,7 @@ void Estimator::inputIMU(double t, const Vector3d &linearAcceleration, const Vec
     {
         mPropagate.lock();
         fastPredictIMU(t, linearAcceleration, angularVelocity);
-        pubLatestOdometry(latest_P, latest_Q, latest_V, t, pCfg->DEVICE_ID);
+        pubLatestOdometry_immediately(latest_P, latest_Q, latest_V, t, pCfg->DEVICE_ID);
         mPropagate.unlock();
     }
 }
@@ -262,8 +262,11 @@ bool Estimator::IMUAvailable(double t)
 
 void Estimator::processMeasurements()
 {
-    while (1)
+    const std::chrono::milliseconds rate(TOPIC_PUBLISH_INTERVAL_MS); 
+    TicToc ellapsed_process;
+    while (FOREVER)
     {
+        TIK(ellapsed_process);
         //printf("process measurments\n");
         pair<double, map<int, vector<pair<int, Eigen::Matrix<double, 7, 1> > > > > feature;
         vector<pair<double, Eigen::Vector3d>> accVector, gyrVector;
@@ -310,32 +313,45 @@ void Estimator::processMeasurements()
             // Publish:
             {
                 mProcess.lock();
+                // Begin Process:
+                
                 processImage(feature.second, feature.first);
                 prevTime = curTime;
 
+#if (FEATURE_ENABLE_STATISTICS_LOGGING)
                 printStatistics(*this, 0);
+#endif
 
                 // publish 
                 std_msgs::Header header;
                 header.frame_id = "world";
                 header.stamp = ros::Time(feature.first);
-                    pubOdometry(*this, header);
-                    pubKeyPoses(*this, header);
-                    pubCameraPose(*this, header);
-                    pubPointCloud(*this, header);
-                    pubKeyframe(*this);
-                    pubTF(*this, header);
-                mProcess.unlock();
+                // immediate updates:
+                {
+                    pubKeyframe_Odometry_and_Points_immediately(*this);
+                    pubTF_immediately(*this, header);
+                }
+                // visualization updates:
+                visualization_guard_lock(*this);
+                {
+                    pubOdometry_Immediately(*this, header);
+                    queue_KeyPoses_unsafe(*this, header);
+                    queue_CameraPose_unsafe(*this, header);
+                    queue_PointCloud_unsafe(*this, header);
+                }
+                visualization_guard_unlock(*this);
                 
-                // printf("Plotting ... \n");
+                // End-of-publishing
+                mProcess.unlock();
             }
+            TOK(ellapsed_process);
         }
 // #if (FEATURE_NON_THREADING_SUPPORT)
 //         if (! pCfg->MULTIPLE_THREAD)
 //             break;
 // #endif
-        // std::chrono::milliseconds dura(1);
-        // std::this_thread::sleep_for(dura);
+        std::chrono::milliseconds dura(1);
+        std::this_thread::sleep_for(dura);
     }
 }
 
@@ -551,7 +567,7 @@ void Estimator::processImage(const map<int, vector<pair<int, Eigen::Matrix<doubl
             predictPtsInNextFrame();
         }
             
-        ROS_DEBUG("solver costs: %fms", t_solve.toc());
+        TOK(t_solve);
 
         if (failureDetection())
         {
@@ -1113,7 +1129,7 @@ void Estimator::optimization()
     }
 
     ROS_DEBUG("visual measurement count: %d", f_m_cnt);
-    //printf("prepare for ceres: %f \n", t_prepare.toc());
+    TOK(t_prepare);
 
     ceres::Solver::Options options;
 
@@ -1133,7 +1149,7 @@ void Estimator::optimization()
     ceres::Solve(options, &problem, &summary);
     //cout << summary.BriefReport() << endl;
     ROS_DEBUG("Iterations : %d", static_cast<int>(summary.iterations.size()));
-    //printf("solver costs: %f \n", t_solver.toc());
+    TOK(t_solver);
 
     double2vector();
     //printf("frame_count: %d \n", frame_count);
@@ -1235,11 +1251,11 @@ void Estimator::optimization()
 
         TicToc t_pre_margin;
         marginalization_info->preMarginalize();
-        ROS_DEBUG("pre marginalization %f ms", t_pre_margin.toc());
+        TOK(t_pre_margin);
         
         TicToc t_margin;
         marginalization_info->marginalize();
-        ROS_DEBUG("marginalization %f ms", t_margin.toc());
+        TOK(t_margin);
 
         std::unordered_map<long, double *> addr_shift;
         for (int i = 1; i <= WINDOW_SIZE; i++)
@@ -1289,12 +1305,12 @@ void Estimator::optimization()
             TicToc t_pre_margin;
             ROS_DEBUG("begin marginalization");
             marginalization_info->preMarginalize();
-            ROS_DEBUG("end pre marginalization, %f ms", t_pre_margin.toc());
+            TOK(t_pre_margin);
 
             TicToc t_margin;
             ROS_DEBUG("begin marginalization");
             marginalization_info->marginalize();
-            ROS_DEBUG("end marginalization, %f ms", t_margin.toc());
+            TOK(t_margin);
             
             std::unordered_map<long, double *> addr_shift;
             for (int i = 0; i <= WINDOW_SIZE; i++)
@@ -1326,13 +1342,12 @@ void Estimator::optimization()
             
         }
     }
-    //printf("whole marginalization costs: %f \n", t_whole_marginalization.toc());
-    //printf("whole time for ceres: %f \n", t_whole.toc());
+    TOK(t_whole_marginalization);
+    TOK(t_whole);
 }
 
 void Estimator::slideWindow()
 {
-    TicToc t_margin;
     if (marginalization_flag == MARGIN_OLD)
     {
         double t_0 = Headers[0];

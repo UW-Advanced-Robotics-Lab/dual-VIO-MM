@@ -18,7 +18,6 @@
 #include <cv_bridge/cv_bridge.h>
 #include <opencv2/opencv.hpp>
 #include "estimator/parameters.h"
-#include "utility/visualization.h"
 #include "estimator/estimator_manager.h"
 
 // ----------------------------------------------------------------
@@ -53,7 +52,7 @@ typedef struct{
     int image_valid_counter = 0;
     double image_process_time = 0;
     double image_process_delta_time = 0;
-} PerformanceManager_t;
+} RosNodeTestManager_t;
 #endif
 // typedef Matrix<double, 7, 1> Vector7d_t; // for storing <time, acc, gyr>
 
@@ -70,15 +69,14 @@ NodeBuffer_t   m_buffer[MAX_NUM_DEVICES];
 std::shared_ptr<ArmConfig_t> pArmCfg = std::make_shared<ArmConfig_t>();
 ArmBuffer_t    m_arm;
 #endif
-#if (FEATURE_ENABLE_VICON_SUPPORT)
-ViconBuffer_t  m_GT[MAX_NUM_DEVICES]; // UNUSED
-#endif
 
 // Estimators:
 EstimatorManager m_est_manager(pCfgs);
 
 // Performance:
-PerformanceManager_t m_perf;
+#if (FEATURE_ENABLE_PERFORMANCE_EVAL)
+RosNodeTestManager_t m_perf;
+#endif
 
 ////////////////////////////////////////
 ///////   PRIVATE FUNCTION     /////////
@@ -309,15 +307,6 @@ void arm_pose_callback(const geometry_msgs::PoseStampedConstPtr &pose_msg)
     m_arm.pose_mutex.unlock();
 }
 #endif
-#if (FEATURE_ENABLE_VICON_SUPPORT)
-void vicon_pub_callback(const geometry_msgs::TransformStampedConstPtr &transform_msg, const int device_id)
-{
-    // m_GT[device_id].vicon_mutex.lock();
-    // m_GT[device_id].vicon_buf.push(transform_msg);
-    // m_GT[device_id].vicon_mutex.unlock();
-    pubViconOdometry(transform_msg, device_id);
-}
-#endif
 
 void restart_callback(const std_msgs::BoolConstPtr &restart_msg)
 {
@@ -350,8 +339,9 @@ int main(int argc, char **argv)
     const int N_DEVICES = readParameters(config_file, pCfgs, pArmCfg);
 #else
     const int N_DEVICES = readParameters(config_file, pCfgs);
-#endif
-    // IMPORTANT: we need to set the parameters for each estimator, before we can use it
+#endif    
+    // Register Visual Publisher:
+    m_est_manager.registerPublishers(n, N_DEVICES);
     m_est_manager.restartManager();
 
 #if (FEATURE_ENABLE_PERFORMANCE_EVAL)
@@ -367,8 +357,6 @@ int main(int argc, char **argv)
     ROS_WARN("waiting for image and imu...");
     ROS_DEBUG("waiting for image and imu...");
 
-    registerPub(n, N_DEVICES);
-
     // Subscribe: TODO: (minor) eventually, we should utilize the boost::bind cast instead of explicit function
     ros::Subscriber sub_d0_imu = n.subscribe(pCfgs[BASE_DEV]->IMU_TOPIC, SUB_IMU_BUFFER_SIZE, d0_imu_callback, ros::TransportHints().tcpNoDelay());
     ros::Subscriber sub_d1_imu = n.subscribe(pCfgs[EE_DEV  ]->IMU_TOPIC, SUB_IMU_BUFFER_SIZE, d1_imu_callback, ros::TransportHints().tcpNoDelay());
@@ -381,10 +369,10 @@ int main(int argc, char **argv)
 #if (FEATURE_ENABLE_VICON_SUPPORT)
     ros::Subscriber sub_d0_vicon = n.subscribe< geometry_msgs::TransformStamped>(
         pCfgs[BASE_DEV]->VICON_TOPIC, SUB_ARM_BUFFER_SIZE, 
-        boost::bind(vicon_pub_callback, _1, BASE_DEV)); //, ros::TransportHints().tcpNoDelay());
+        boost::bind(callback_viconOdometry, _1, BASE_DEV)); //, ros::TransportHints().tcpNoDelay());
     ros::Subscriber sub_d1_vicon = n.subscribe< geometry_msgs::TransformStamped>(
         pCfgs[EE_DEV  ]->VICON_TOPIC, SUB_ARM_BUFFER_SIZE, 
-        boost::bind(vicon_pub_callback, _1, EE_DEV)); //, ros::TransportHints().tcpNoDelay());
+        boost::bind(callback_viconOdometry, _1, EE_DEV)); //, ros::TransportHints().tcpNoDelay());
 #endif
     
     PRINT_INFO("==== [ Subscriptions Completed ] ==== ");

@@ -24,15 +24,23 @@ class TicToc
     void tic()
     {
         start = std::chrono::system_clock::now();
+        dt_ms = 0;
     }
 
     double toc()
     {
         end = std::chrono::system_clock::now();
         std::chrono::duration<double> elapsed_seconds = end - start;
-        return elapsed_seconds.count() * 1000;
+        dt_ms = elapsed_seconds.count() * 1000;
+        return dt_ms;
+    }
+
+    double dt()
+    {
+        return dt_ms;
     }
 
   private:
     std::chrono::time_point<std::chrono::system_clock> start, end;
+    double dt_ms;
 };
