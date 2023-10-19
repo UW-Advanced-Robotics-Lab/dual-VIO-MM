@@ -138,6 +138,9 @@ using namespace std;
 #define FEATURE_ENABLE_PERFORMANCE_EVAL                 (( ENABLED) & (!FEATURE_MODE_RUNTIME)) // report performance
 #define FEATURE_PERFORMANCE_EVAL_THRESHOLD_MS           (50) // report to console when above X ms, else ros debug
 
+// other feature support more than originally supported:
+#define FEATURE_ASSUME_INIT_IMU_TO_BE_ZEROED_ABSOLUTELY  (DISABLED)  // originally, it is zeroed against the initial value, true to set to zero at the init.
+
 /* To enforce the real-time performance, we will drop frames if we are n seconds behind the schedule */
 /* FEATURE_ENABLE_FRAME_DROP_FOR_REAL_TIME
 *  @problem: it seems that we are running behind the schedule for the high res image feeds ??? 
@@ -161,7 +164,8 @@ using namespace std;
 #define FEATURE_PERMIT_WITHOUT_IMU_SUPPORT              (FEATURE_ENABLE_STEREO_SUPPORT) // since there is no support from stereo, we will assume imu to be enabled all the time
 // vicon support:
 #define FEATURE_ENABLE_VICON_SUPPORT                    ( ENABLED) // to feed vicon data and output as nav_msg::path for visualization
-#define FEATURE_ENABLE_VICON_ZEROING_SUPPORT                ( ENABLED) // zeroing vicon
+#define FEATURE_ENABLE_VICON_ZEROING_SUPPORT                ( ENABLED) // zeroing vicons independently
+#define FEATURE_ENABLE_VICON_ZEROING_WRT_BASE_SUPPORT       ( ENABLED) // zeroing vicons wrt base
 #define FEATURE_ENABLE_ALIGN_EST_BEG_SUPPORT                (DISABLED) // start alignment when estimator posting
 // arm odometry support:
 #define FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT             ( ENABLED) // [WIP]

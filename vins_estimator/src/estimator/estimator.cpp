@@ -395,8 +395,14 @@ void Estimator::processIMU(double t, double dt, const Vector3d &linear_accelerat
     if (!first_imu)
     {
         first_imu = true;
+#if (FEATURE_ASSUME_INIT_IMU_TO_BE_ZEROED_ABSOLUTELY)
+        acc_0 = Vector3d::Zero();
+        gyr_0 = Vector3d::Zero();
+#else
+        // aeroing with respect to current a and w
         acc_0 = linear_acceleration;
         gyr_0 = angular_velocity;
+#endif
     }
 
     if (!pre_integrations[frame_count])
@@ -413,7 +419,8 @@ void Estimator::processIMU(double t, double dt, const Vector3d &linear_accelerat
         linear_acceleration_buf[frame_count].push_back(linear_acceleration);
         angular_velocity_buf[frame_count].push_back(angular_velocity);
 
-        int j = frame_count;         
+        // midPointIntegration in global frame:
+        int j = frame_count;
         Vector3d un_acc_0 = Rs[j] * (acc_0 - Bas[j]) - g;
         Vector3d un_gyr = 0.5 * (gyr_0 + angular_velocity) - Bgs[j];
         Rs[j] *= Utility::deltaQ(un_gyr * dt).toRotationMatrix();

@@ -285,7 +285,7 @@ void queue_ViconOdometry_safe(const geometry_msgs::TransformStampedConstPtr &tra
     
     geometry_msgs::Pose pose;
 
-#if (!FEATURE_ENABLE_VICON_ZEROING_SUPPORT)    
+#if (!FEATURE_ENABLE_VICON_ZEROING_SUPPORT && !FEATURE_ENABLE_VICON_ZEROING_WRT_BASE_SUPPORT)    
     pose.position.x = transform_msg->transform.translation.x;
     pose.position.y = transform_msg->transform.translation.y;
     pose.position.z = transform_msg->transform.translation.z;
@@ -312,28 +312,35 @@ void queue_ViconOdometry_safe(const geometry_msgs::TransformStampedConstPtr &tra
                             transform_msg->transform.rotation.w);
 
     R = q.toRotationMatrix();
-    
+
+    // Capture & Reset the first pose to the origin
+    bool init_vicon = (m_buf[device_id].vicon_path.poses.size() == 0);
+
 #   if (FEATURE_ENABLE_ALIGN_EST_BEG_SUPPORT)
     // Capture & Reset the first pose as the origin till the estimator starts to publish
     // Note: it seems that the estimator may already predicting during the initialization
-    if (m_buf[device_id].vicon_path.poses.size() == 0 || !is_estimator_publishing) 
-#   else
-    // Capture & Reset the first pose to the origin
-    if (m_buf[device_id].vicon_path.poses.size() == 0) 
+    init_vicon |= (!is_estimator_publishing);    
 #   endif
+#   if (FEATURE_ENABLE_VICON_ZEROING_WRT_BASE_SUPPORT)
+    init_vicon &= (device_id == BASE_DEV); // only init on base device;
+#   endif
+    // capture:
+    if (init_vicon) 
     {
+#   if (FEATURE_ENABLE_VICON_ZEROING_WRT_BASE_SUPPORT)
+        // R^T , -p : for offset correction
+        m_buf[BASE_DEV].vicon_R0 = R.transpose();
+        m_buf[BASE_DEV].vicon_p0 = -p;
+        m_buf[EE_DEV].vicon_R0 = R.transpose();
+        m_buf[EE_DEV].vicon_p0 = -p;
+#   else
         // R^T , -p : for offset correction
         m_buf[device_id].vicon_R0 = R.transpose();
         m_buf[device_id].vicon_p0 = -p;
-
-        p = Eigen::Vector3d(0, 0, 0);
-        q = Eigen::Quaterniond(0, 0, 0, 0);
+#   endif // (FEATURE_ENABLE_VICON_ZEROING_WRT_BASE_SUPPORT)
     }
-    else // apply zeroing correction
+    // apply zeroing correction:
     {
-        // zeroing:
-        // estimator.Ps[i] + estimator.Rs[i] * estimator.tic[0];
-        // Quaterniond R = Quaterniond(estimator.Rs[i] * estimator.ric[0]);
         p = p + m_buf[device_id].vicon_p0;
         R = m_buf[device_id].vicon_R0 * R;
         q = Eigen::Quaterniond(R);
