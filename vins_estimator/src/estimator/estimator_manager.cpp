@@ -135,6 +135,6 @@ void EstimatorManager::publishVisualization()
 #if (FEATURE_ENABLE_VICON_SUPPORT)
 void callback_viconOdometry(const geometry_msgs::TransformStampedConstPtr &transform_msg, const int device_id)
 {
-    queue_ViconOdometry_safe(transform_msg, device_id);
+    queue_ViconOdometry_safe(transform_msg, device_id); // NOTE: should be behind the estimator time (0.1s ish)
 }
 #endif

@@ -217,7 +217,7 @@ void Estimator::inputFeature(double t, const map<int, vector<pair<int, Eigen::Ma
 }
 
 
-bool Estimator::getIMUInterval(double t0, double t1, vector<pair<double, Eigen::Vector3d>> &accVector, 
+bool Estimator::getIMUInterval_unsafe(double t0, double t1, vector<pair<double, Eigen::Vector3d>> &accVector, 
                                 vector<pair<double, Eigen::Vector3d>> &gyrVector)
 {
     if(accBuf.empty())
@@ -237,8 +237,8 @@ bool Estimator::getIMUInterval(double t0, double t1, vector<pair<double, Eigen::
         while (accBuf.front().first < t1)
         {
             accVector.push_back(accBuf.front());
-            accBuf.pop();
             gyrVector.push_back(gyrBuf.front());
+            accBuf.pop();
             gyrBuf.pop();
         }
         accVector.push_back(accBuf.front());
@@ -272,27 +272,23 @@ void Estimator::processMeasurements()
         vector<pair<double, Eigen::Vector3d>> accVector, gyrVector;
         if(!featureBuf.empty())
         {
+            mBuf.lock();
             feature = featureBuf.front();
+            featureBuf.pop();
+            // PRINT_DEBUG("feature buffer size: %d\n",featureBuf.size());
+            mBuf.unlock();
+
             curTime = feature.first + td;
-            
-            while (! IMUAvailable(feature.first + td)) //IMU Support
+            while (! IMUAvailable(curTime)) //IMU Support
             {
                 
                 PRINT_WARN("wait for imu ... \n");
-// #if (FEATURE_NON_THREADING_SUPPORT)
-//                 if (! pCfg->MULTIPLE_THREAD)
-//                     return;
-// #endif
-                std::chrono::milliseconds dura(5);
+                std::chrono::milliseconds dura(1);
                 std::this_thread::sleep_for(dura);
             }
             mBuf.lock();
-
-            getIMUInterval(prevTime, curTime, accVector, gyrVector); //IMU Support
-
-            featureBuf.pop();
+            getIMUInterval_unsafe(prevTime, curTime, accVector, gyrVector); //IMU Support
             mBuf.unlock();
-            // PRINT_DEBUG("feature buffer size: %d\n",featureBuf.size());
 
             // if(pCfg->USE_IMU) IMU Support
             {
@@ -301,28 +297,34 @@ void Estimator::processMeasurements()
                 for(size_t i = 0; i < accVector.size(); i++)
                 {
                     double dt;
-                    if(i == 0)
+                    if(i == 0) // head
                         dt = accVector[i].first - prevTime;
                     else if (i == accVector.size() - 1)
+                    {
+                        // only sample the partial of the tail imu data up to the time the frame was captured
                         dt = curTime - accVector[i - 1].first;
-                    else
+                        // double dt2 = accVector[i].first - accVector[i - 1].first;
+                        // PRINT_DEBUG("dt=%f|%f, ~%f", dt, dt2, dt2-dt); // diff is 0.001s
+                    }
+                    else // middle
                         dt = accVector[i].first - accVector[i - 1].first;
                     processIMU(accVector[i].first, dt, accVector[i].second, gyrVector[i].second);
                 }
             }
-            // Publish:
+            // Process Image and Publish:
             {
                 mProcess.lock();
-                // Begin Process:
                 
+                // Process Image: 
                 processImage(feature.second, feature.first);
                 prevTime = curTime;
 
 #if (FEATURE_ENABLE_STATISTICS_LOGGING)
+                // Print Statistics:
                 printStatistics(*this, 0);
 #endif
 
-                // publish 
+                /*** Publish ***/
                 std_msgs::Header header;
                 header.frame_id = "world";
                 header.stamp = ros::Time(feature.first);
@@ -330,11 +332,11 @@ void Estimator::processMeasurements()
                 {
                     pubKeyframe_Odometry_and_Points_immediately(*this);
                     pubTF_immediately(*this, header);
+                    pubOdometry_Immediately(*this, header);
                 }
                 // visualization updates:
                 visualization_guard_lock(*this);
                 {
-                    pubOdometry_Immediately(*this, header);
                     queue_KeyPoses_unsafe(*this, header);
                     queue_CameraPose_unsafe(*this, header);
                     queue_PointCloud_unsafe(*this, header);
@@ -350,7 +352,7 @@ void Estimator::processMeasurements()
 //         if (! pCfg->MULTIPLE_THREAD)
 //             break;
 // #endif
-        std::chrono::milliseconds dura(1);
+        std::chrono::milliseconds dura(10);
         std::this_thread::sleep_for(dura);
     }
 }

@@ -8,6 +8,7 @@
  *******************************************************/
 
 #include "visualization.h"
+// #include "eigen_conversions/eigen_msg.h" // instead we can use MsgToEigen directly
 
 using namespace ros;
 using namespace Eigen;
@@ -39,6 +40,10 @@ typedef struct{
     // GT:
     nav_msgs::Path      vicon_path; // buffer
     std::mutex          vicon_guard;
+#   if (FEATURE_ENABLE_VICON_ZEROING_SUPPORT)
+    Eigen::Vector3d     vicon_p0;
+    Eigen::Matrix3d     vicon_R0;
+#   endif
 #endif
 #if (FEATURE_TRACKING_IMAGE_SUPPORT)
     // Track image:
@@ -48,6 +53,7 @@ typedef struct{
     // visual:
     nav_msgs::Path              path;
     nav_msgs::Odometry          odometry;
+    double                      latest_path_time;
 
     visualization_msgs::Marker  key_poses;
 
@@ -230,9 +236,13 @@ void pubOdometry_Immediately(const Estimator &estimator, const std_msgs::Header 
         pose_stamped.pose = odometry.pose.pose;
 
         // queue for trajectory visualization
+        m_buf[device_id].guard.lock();
         m_buf[device_id].path.header = header;
         m_buf[device_id].path.header.frame_id = "world";
         m_buf[device_id].path.poses.push_back(pose_stamped);
+        m_buf[device_id].guard.unlock();
+        
+        m_buf[device_id].latest_path_time = header.stamp.toSec(); // atomic
 
 #if(FEATURE_VIZ_ROSOUT_ODOMETRY_SUPPORT)
         // write result to file
@@ -274,12 +284,70 @@ void queue_ViconOdometry_safe(const geometry_msgs::TransformStampedConstPtr &tra
     header.stamp = transform_msg->header.stamp; // copy the timestamp, TODO: should we do a sync?
     
     geometry_msgs::Pose pose;
-    //TODO: opt, static cast
+
+#if (!FEATURE_ENABLE_VICON_ZEROING_SUPPORT)    
     pose.position.x = transform_msg->transform.translation.x;
     pose.position.y = transform_msg->transform.translation.y;
     pose.position.z = transform_msg->transform.translation.z;
     pose.orientation = transform_msg->transform.rotation;
+#else
+#   if (FEATURE_ENABLE_ALIGN_EST_BEG_SUPPORT)
+        // Note: the vicon data is behind the schedule ~0.1s, so we need to recognize when path is generating
+        const double delta_time = (m_buf[device_id].latest_path_time - header.stamp.toSec());
+        // the vicon data should be behind but within 1s.
+        const bool is_estimator_publishing = (delta_time > -1); 
+        // PRINT_DEBUG("Delta Time: last estimator - vicon:%f", delta_time);
+#   endif
+    // zeroing the pose
+    Eigen::Vector3d     p;
+    Eigen::Quaterniond  q;
+    Eigen::Matrix3d     R;
+    
+    p = Eigen::Vector3d(transform_msg->transform.translation.x,
+                        transform_msg->transform.translation.y,
+                        transform_msg->transform.translation.z);
+    q = Eigen::Quaterniond( transform_msg->transform.rotation.x,
+                            transform_msg->transform.rotation.y,
+                            transform_msg->transform.rotation.y,
+                            transform_msg->transform.rotation.w);
 
+    R = q.toRotationMatrix();
+    
+#   if (FEATURE_ENABLE_ALIGN_EST_BEG_SUPPORT)
+    // Capture & Reset the first pose as the origin till the estimator starts to publish
+    // Note: it seems that the estimator may already predicting during the initialization
+    if (m_buf[device_id].vicon_path.poses.size() == 0 || !is_estimator_publishing) 
+#   else
+    // Capture & Reset the first pose to the origin
+    if (m_buf[device_id].vicon_path.poses.size() == 0) 
+#   endif
+    {
+        // R^T , -p : for offset correction
+        m_buf[device_id].vicon_R0 = R.transpose();
+        m_buf[device_id].vicon_p0 = -p;
+
+        p = Eigen::Vector3d(0, 0, 0);
+        q = Eigen::Quaterniond(0, 0, 0, 0);
+    }
+    else // apply zeroing correction
+    {
+        // zeroing:
+        // estimator.Ps[i] + estimator.Rs[i] * estimator.tic[0];
+        // Quaterniond R = Quaterniond(estimator.Rs[i] * estimator.ric[0]);
+        p = p + m_buf[device_id].vicon_p0;
+        R = m_buf[device_id].vicon_R0 * R;
+        q = Eigen::Quaterniond(R);
+    }
+    // apply transformation to pose:
+    pose.position.x = p(0);
+    pose.position.y = p(1);
+    pose.position.z = p(2);
+    pose.orientation.x = q.x();
+    pose.orientation.y = q.y();
+    pose.orientation.z = q.z();
+    pose.orientation.w = q.w();
+#endif
+    // push back
     geometry_msgs::PoseStamped pose_stamped;
     pose_stamped.header = header;
     pose_stamped.pose = pose;

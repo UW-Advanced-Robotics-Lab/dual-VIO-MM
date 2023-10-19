@@ -52,7 +52,7 @@ using namespace std;
 #define DEFAULT_GRAVITY     (Eigen::Vector3d(0.0, 0.0, 9.8)) // default G is assumed to be -ve z-axis
 
 #define IMAGE_FPS                               ((float)(30))      // ->implies the frame difference between two cameras can be up to 0.015~0.03333 ms
-#define IMAGE_PROCESSING_FPS                    ((float)(15))      // [run-time,perf] set processing rate [15, 30], reduce if the frame drops are significant
+#define IMAGE_PROCESSING_FPS                    ((float)(30))      // [run-time,perf] set processing rate [15, 30], reduce if the frame drops are significant
 #define IMAGE_PROCESSING_INTERVAL               ((float)(1.0/(IMAGE_PROCESSING_FPS)))
 
 #define TOPIC_PUBLISH_FPS                       ((int)(10))        // [run-time,visual] reduce if the frame drops are significant, visual only
@@ -161,6 +161,8 @@ using namespace std;
 #define FEATURE_PERMIT_WITHOUT_IMU_SUPPORT              (FEATURE_ENABLE_STEREO_SUPPORT) // since there is no support from stereo, we will assume imu to be enabled all the time
 // vicon support:
 #define FEATURE_ENABLE_VICON_SUPPORT                    ( ENABLED) // to feed vicon data and output as nav_msg::path for visualization
+#define FEATURE_ENABLE_VICON_ZEROING_SUPPORT                ( ENABLED) // zeroing vicon
+#define FEATURE_ENABLE_ALIGN_EST_BEG_SUPPORT                (DISABLED) // start alignment when estimator posting
 // arm odometry support:
 #define FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT             ( ENABLED) // [WIP]
 

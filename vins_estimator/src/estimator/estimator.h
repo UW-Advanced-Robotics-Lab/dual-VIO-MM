@@ -69,8 +69,8 @@ class Estimator
     void vector2double();
     void double2vector();
     bool failureDetection();
-    bool getIMUInterval(double t0, double t1, vector<pair<double, Eigen::Vector3d>> &accVector, 
-                                              vector<pair<double, Eigen::Vector3d>> &gyrVector);
+    bool getIMUInterval_unsafe(double t0, double t1, vector<pair<double, Eigen::Vector3d>> &accVector, 
+                                                     vector<pair<double, Eigen::Vector3d>> &gyrVector);
     void getPoseInWorldFrame(Eigen::Matrix4d &T);
     void getPoseInWorldFrame(int index, Eigen::Matrix4d &T);
     void predictPtsInNextFrame();
