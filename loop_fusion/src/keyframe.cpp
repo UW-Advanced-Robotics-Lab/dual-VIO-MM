@@ -192,6 +192,7 @@ void KeyFrame::FundmantalMatrixRANSAC(const std::vector<cv::Point2f> &matched_2d
                                       const std::vector<cv::Point2f> &matched_2d_old_norm,
                                       vector<uchar> &status)
 {
+	const double FOCAL_LENGTH = pCfg->FOCAL_LENGTH;
 	int n = (int)matched_2d_cur_norm.size();
 	for (int i = 0; i < n; i++)
 		status.push_back(0);
@@ -200,7 +201,7 @@ void KeyFrame::FundmantalMatrixRANSAC(const std::vector<cv::Point2f> &matched_2d
         vector<cv::Point2f> tmp_cur(n), tmp_old(n);
         for (int i = 0; i < (int)matched_2d_cur_norm.size(); i++)
         {
-            double FOCAL_LENGTH = 460.0;
+            // double FOCAL_LENGTH = 460.0;
             double tmp_x, tmp_y;
             tmp_x = FOCAL_LENGTH * matched_2d_cur_norm[i].x + pCfg->COL / 2.0;
             tmp_y = FOCAL_LENGTH * matched_2d_cur_norm[i].y + pCfg->ROW / 2.0;

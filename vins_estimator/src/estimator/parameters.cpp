@@ -66,6 +66,7 @@
         // # Camera topic
         fsSettings[pre_+"image0_topic"] >> cfg->IMAGE_TOPICS[0];
         fsSettings[pre_+"image1_topic"] >> cfg->IMAGE_TOPICS[1];
+        fsSettings[pre_+"focal_length"] >> cfg->FOCAL_LENGTH;
 
         // # feature traker paprameters
         cfg->MAX_CNT         = fsSettings["max_cnt"];
@@ -78,7 +79,7 @@
         // # optimization parameters
         cfg->SOLVER_TIME    = fsSettings["max_solver_time"];
         cfg->NUM_ITERATIONS = fsSettings["max_num_iterations"];
-        cfg->MIN_PARALLAX   = static_cast<float>(fsSettings["keyframe_parallax"]) / FOCAL_LENGTH;
+        cfg->MIN_PARALLAX   = static_cast<float>(fsSettings["keyframe_parallax"]) / cfg->FOCAL_LENGTH;
 
         // # other parameters
         cfg->INIT_DEPTH = 5.0;

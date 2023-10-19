@@ -46,13 +46,12 @@ using namespace std;
 // ----------------------------------------------------------------
 // : Hyper-Parameters :
 // ----------------------------------------------------------------
-#define FOCAL_LENGTH        ((double)   (460.0))
 #define WINDOW_SIZE         ((int)      (10))
 #define NUM_OF_F            ((int)      (1000))
 #define DEFAULT_GRAVITY     (Eigen::Vector3d(0.0, 0.0, 9.8)) // default G is assumed to be -ve z-axis
 
 #define IMAGE_FPS                               ((float)(30))      // ->implies the frame difference between two cameras can be up to 0.015~0.03333 ms
-#define IMAGE_PROCESSING_FPS                    ((float)(30))      // [run-time,perf] set processing rate [15, 30], reduce if the frame drops are significant
+#define IMAGE_PROCESSING_FPS                    ((float)(15))      // [run-time,perf] set processing rate [15, 30], reduce if the frame drops are significant
 #define IMAGE_PROCESSING_INTERVAL               ((float)(1.0/(IMAGE_PROCESSING_FPS)))
 
 #define TOPIC_PUBLISH_FPS                       ((int)(10))        // [run-time,visual] reduce if the frame drops are significant, visual only
@@ -153,6 +152,7 @@ using namespace std;
 */
 #define FEATURE_ENABLE_DYNAMIC_FRAME_DROP_FOR_RT        (DISABLED) // set via "IMAGE_BEHIND_SCHEDULE_TIME_TOLERANCE"
 #define FEATURE_ENABLE_PROCESS_FRAME_FPS_FOR_RT         ( ENABLED) // set via #define IMAGE_PROCESSING_FPS
+#define FEATURE_ENABLE_PROCESS_FRAME_FPS_FOR_RT_INSIDE_INPUT_IMG    (! FEATURE_ENABLE_PROCESS_FRAME_FPS_FOR_RT)
 
 #define FEATURE_ENABLE_STATISTICS_LOGGING               ( ENABLED) // `printStatistics`
 // other features:
@@ -256,7 +256,7 @@ typedef struct{
     int                 NUM_OF_CAM;     // number of cameras
     int                 STEREO;         // auto-assign stereo: if n_cam = 2
     int                 ROW, COL;       // ?
-
+    double              FOCAL_LENGTH; // ((double)   (460.0)) //>>>???? why hardcoded
 // [IMU]:
     std::string         IMU_TOPIC;                      // 
     int                 USE_IMU;                        // if imu

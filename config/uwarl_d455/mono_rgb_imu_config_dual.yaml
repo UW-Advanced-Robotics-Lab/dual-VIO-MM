@@ -34,6 +34,10 @@ output_path: "~/output"
 d0_cam0_calib: "color_base_mei.yaml"
 d1_cam0_calib: "color_EE_mei.yaml"
 
+# [Focal Length: Fx, Fy]
+d0_focal_length: 799.2 # should be imported from calib file
+d1_focal_length: 734.4 # should be imported from calib file
+
 image_width: 1280
 image_height: 720
 
@@ -64,15 +68,15 @@ d1_body_T_cam0: !!opencv-matrix
     dt: d
     data: [ # T_ic:
             #### based on [2023-05-11-15-42-14_EE_rgb_mei-results-imucam]
-            #  0.99998975, 0.00059731,  0.0044877,   0.03276503,
-            # -0.00059713, 0.99999982, -0.00004132, -0.00029959,
-            # -0.00448772, 0.00003864,  0.99998993,  0.04621308,
-            #  0.,         0.,          0.,          1.]
+             0.99998975, 0.00059731,  0.0044877,   0.03276503,
+            -0.00059713, 0.99999982, -0.00004132, -0.00029959,
+            -0.00448772, 0.00003864,  0.99998993,  0.04621308,
+             0.,         0.,          0.,          1.]
             #### based on [2023-05-11-15-43-17_EE_rgb_mei-results-imucam]
-               0.99999713,  0.00184888, -0.00152691,  0.03679528,
-              -0.00184825,  0.99999821,  0.00041351,  0.0029463 ,
-               0.00152767, -0.00041069,  0.99999875,  0.03515003,
-               0.        ,  0.        ,  0.        ,  1.         ]
+            #    0.99999713,  0.00184888, -0.00152691,  0.03679528,
+            #   -0.00184825,  0.99999821,  0.00041351,  0.0029463 ,
+            #    0.00152767, -0.00041069,  0.99999875,  0.03515003,
+            #    0.        ,  0.        ,  0.        ,  1.         ]
             # T_ic: Extrinsic from "Color" To "Gyro" [Manufacture]
             #     0.999996    ,     0.00212487   ,   -0.00160311    , 0.0289688687771559 ,
             #    -0.00212717  ,     0.999997     ,   -0.00143346    , 0.00740136113017797 ,
@@ -133,10 +137,10 @@ d0_g_norm: 9.805         # gravity magnitude
 #     Noise density: 0.00045700146412701916
 #     Noise density (discrete): 0.00646297668592792 
 #     Random walk: 2.672307981517485e-06
-d1_acc_n: 0.283          # accelerometer measurement noise standard deviation. 
-d1_acc_w: 0.00106         # accelerometer bias random work noise standard deviation 
-d1_gyr_n: 0.006463        # gyroscope measurement noise standard deviation. 
-d1_gyr_w: 0.00002672307981517485      # gyroscope bias random work noise standard deviation. 
+d1_acc_n: 0.1414          # accelerometer measurement noise standard deviation. 
+d1_acc_w: 0.0010572       # accelerometer bias random work noise standard deviation 
+d1_gyr_n: 0.0064630       # gyroscope measurement noise standard deviation. 
+d1_gyr_w: 0.00000267      # gyroscope bias random work noise standard deviation. 
 d1_g_norm: 9.80655            # gravity magnitude #TODO: unified gravity magnitude? 
 #### based on [2023-05-11-15-42-14_EE_rgb_mei-results-imucam]
 # IMU0:
@@ -164,7 +168,7 @@ d0_estimate_td: 0         # online estimate time offset between camera and imu
 d0_td: 0.00022326806147822398 # initial value of time offset. unit: s. readed image clock + td = real image clock (IMU clock)
 # - [cam1]
 d1_estimate_td: 0         # online estimate time offset between camera and imu
-d1_td: 0.0003475970005734179 # initial value of time offset. unit: s. readed image clock + td = real image clock (IMU clock)
+d1_td: 0.00019177130552464367 # initial value of time offset. unit: s. readed image clock + td = real image clock (IMU clock)
 
 #loop closure parameters
 # - [cam0]

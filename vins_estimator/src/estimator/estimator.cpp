@@ -97,6 +97,7 @@ void Estimator::clearState()
 
 void Estimator::setParameter()
 {
+	const double FOCAL_LENGTH = pCfg->FOCAL_LENGTH;
     mProcess.lock();
     for (int i = 0; i < pCfg->NUM_OF_CAM; i++)
     {
@@ -167,9 +168,9 @@ void Estimator::inputImage(double t, const cv::Mat &_img)
 
     // push feature buffer , threading
     {     
-// #if (FEATURE_ENABLE_PROCESS_FRAME_FPS_FOR_RT) 
-//         if(inputImageCnt % 2 == 0) // NOTE: idk why it is dropping frame here, but likely is to minimize the rate of processing
-// #endif
+#if (FEATURE_ENABLE_PROCESS_FRAME_FPS_FOR_RT_INSIDE_INPUT_IMG) 
+        if(inputImageCnt % 2 == 0) // NOTE: idk why it is dropping frame here, but likely is to minimize the rate of processing
+#endif
         {
             mBuf.lock();
             featureBuf.push(make_pair(t, featureFrame));
@@ -1535,6 +1536,7 @@ double Estimator::reprojectionError(Matrix3d &Ri, Vector3d &Pi, Matrix3d &rici, 
 void Estimator::outliersRejection(set<int> &removeIndex)
 {
     //return;
+	const double FOCAL_LENGTH = pCfg->FOCAL_LENGTH;
     int feature_index = -1;
     for (auto &it_per_id : f_manager.feature)
     {

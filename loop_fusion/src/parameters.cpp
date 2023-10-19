@@ -43,6 +43,7 @@ int readParameters(
         cfg->USE_IMU = CV_YAML_TO_BOOL(fsSettings[pre_+"imu"]);
 
         // cache:
+        fsSettings[pre_+"focal_length"] >> cfg->FOCAL_LENGTH;
         fsSettings[pre_+"output_path"] >> cfg->OUTPUT_PATH;
         fsSettings[pre_+"image0_topic"] >> cfg->IMAGE_TOPIC;        
         fsSettings[pre_+"pose_graph_save_path"] >> cfg->POSE_GRAPH_SAVE_PATH;

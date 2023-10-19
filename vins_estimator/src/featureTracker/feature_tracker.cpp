@@ -307,6 +307,7 @@ map<int, vector<pair<int, Eigen::Matrix<double, 7, 1>>>> FeatureTracker::trackIm
 
 void FeatureTracker::rejectWithF()
 {
+	const double FOCAL_LENGTH = pCfg->FOCAL_LENGTH;
     if (cur_pts.size() >= 8)
     {
         ROS_DEBUG("FM ransac begins");
@@ -365,6 +366,7 @@ void FeatureTracker::readIntrinsicParameterArray(const string calib_file[], cons
 
 void FeatureTracker::showUndistortion(const string &name)
 {
+	const double FOCAL_LENGTH = pCfg->FOCAL_LENGTH;
     cv::Mat undistortedImg(row + 600, col + 600, CV_8UC1, cv::Scalar(0));
     vector<Eigen::Vector2d> distortedp, undistortedp;
     for (int i = 0; i < col; i++)

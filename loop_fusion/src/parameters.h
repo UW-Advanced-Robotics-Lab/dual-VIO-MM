@@ -140,6 +140,8 @@ typedef struct{
     int                     DEBUG_IMAGE;
     bool                    USE_IMU;
     bool                    LOAD_PREVIOUS_POSE_GRAPH;
+    
+    double                  FOCAL_LENGTH;// ((double)   (460.0)) //>>>???? why hardcoded
 
     // path configs:
     std::string             BRIEF_PATTERN_FILE;
