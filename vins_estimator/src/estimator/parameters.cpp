@@ -182,7 +182,7 @@
         cam0Path_ = configPath_ + "/" + cam0Calib_;
         
         // - cache:
-        cfg->CAM_NAMES[0] = cam0Path_;
+        cfg->CAM_MODEL_PATH[0] = cam0Path_;
         PRINT_INFO("cam0 path: %s", cam0Path_.c_str() );
 
 #if (FEATURE_ENABLE_STEREO_SUPPORT)
@@ -195,7 +195,7 @@
             fsSettings[pre_+"cam1_calib"] >> cam0Calib_;
             cam0Path_ = configPath_ + "/" + cam0Calib_; 
             PRINT_INFO("%s cam1 path", can0Path.c_str() );
-            cfg->CAM_NAMES[1] = cam0Path_;
+            cfg->CAM_MODEL_PATH[1] = cam0Path_;
             
             // - transformation:
             cv::Mat cv_T;
@@ -204,7 +204,7 @@
             cv::cv2eigen(cv_T, T);
 
             // cache:
-            cfg->CAM_NAMES[0] = cam0Path_;
+            cfg->CAM_MODEL_PATH[0] = cam0Path_;
             cfg->RIC[1] = T.block<3, 3>(0, 0);
             cfg->TIC[1] = T.block<3, 1>(0, 3);
         }

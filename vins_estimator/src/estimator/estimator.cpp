@@ -112,7 +112,7 @@ void Estimator::setParameter()
     td = pCfg->TD;
     g = pCfg->G;
     cout << "set g " << g.transpose() << endl;
-    featureTracker.readIntrinsicParameterArray(pCfg->CAM_NAMES, pCfg->NUM_OF_CAM);
+    featureTracker.readIntrinsicParameterArray(pCfg->CAM_MODEL_PATH, pCfg->NUM_OF_CAM);
     mProcess.unlock();
 }
 

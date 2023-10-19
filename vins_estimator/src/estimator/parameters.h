@@ -250,8 +250,8 @@ typedef struct{
     int                 DEVICE_ID;
 // [Imaging Cameras]:
     std::string         IMAGE_TOPICS[MAX_NUM_CAMERAS]; // ros topic
-    // std::vector<std::string> CAM_NAMES;
-    std::string         CAM_NAMES[MAX_NUM_CAMERAS]; // cameras intrinsic
+    // std::vector<std::string> CAM_MODEL_PATH;
+    std::string         CAM_MODEL_PATH[MAX_NUM_CAMERAS]; // cameras intrinsic
     // - camera parameters:
     int                 NUM_OF_CAM;     // number of cameras
     int                 STEREO;         // auto-assign stereo: if n_cam = 2

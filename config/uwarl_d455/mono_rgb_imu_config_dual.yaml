@@ -30,10 +30,17 @@ d1_vicon_topic: "/vicon/cam_EE/cam_EE"
 # [Output Path]
 output_path: "~/output"
 
+#### TODO: implement camera model for Inverse Brown Conrady Model, or utilize rs driver `rsutil.h` to use manufacture model
 # [Calib. File Dependencies]
+# d0_cam0_calib: "color_base_IBC.yaml"
+# d1_cam0_calib: "color_EE_IBC.yaml"
+# # [Focal Length: Fx, Fy]
+# d0_focal_length: 642 # should be imported from calib file
+# d1_focal_length: 642 # should be imported from calib file
+
+## [Calib. File Dependencies]
 d0_cam0_calib: "color_base_mei.yaml"
 d1_cam0_calib: "color_EE_mei.yaml"
-
 # [Focal Length: Fx, Fy]
 d0_focal_length: 799.2 # should be imported from calib file
 d1_focal_length: 723.7 # should be imported from calib file
