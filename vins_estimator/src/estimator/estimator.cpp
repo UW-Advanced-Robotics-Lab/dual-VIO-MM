@@ -180,7 +180,8 @@ void Estimator::inputImage(double t, const cv::Mat &_img)
 
 #if (FEATURE_TRACKING_IMAGE_SUPPORT)
     // publish:
-    if ((pCfg->SHOW_TRACK) && (inputImageCnt % 2 == 0))// publish at lower rate
+    // if ((pCfg->SHOW_TRACK) && (inputImageCnt % 2 == 0))// publish at lower rate
+    if (pCfg->SHOW_TRACK)// queue safely
     {
         cv::Mat imgTrack = featureTracker.getTrackImage();
         queue_TrackImage_safe(imgTrack, t, pCfg->DEVICE_ID);
