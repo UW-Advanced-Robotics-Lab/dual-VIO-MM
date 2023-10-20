@@ -29,10 +29,15 @@ class EstimatorManager
         void restartManager();
         // interface:
         void inputIMU(const size_t DEV_ID, const double t, const Vector3d &linearAcceleration, const Vector3d &angularVelocity);
+#if (FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT)
         void inputImage(double t, const cv::Mat &_img_b, const cv::Mat &_img_e, const sensor_msgs::JointStateConstPtr &jnt_msg=NULL);
+#else
+        void inputImage(double t, const cv::Mat &_img_b, const cv::Mat &_img_e);
+#endif
         // callbacks:
         // thread:
         void publishVisualization();
+
     private:
         std::shared_ptr<DeviceConfig_t> pCfgs[MAX_NUM_DEVICES];
         std::shared_ptr<Estimator>      pEsts[MAX_NUM_DEVICES];

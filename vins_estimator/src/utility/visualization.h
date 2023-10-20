@@ -80,3 +80,7 @@ void pubKeyframe_Odometry_and_Points_immediately(const Estimator &estimator);
 // void pubRelocalization(const Estimator &estimator);???
 // void pubCar(const Estimator & estimator, const std_msgs::Header &header);
 
+#if (FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT)
+void queue_Arm(double t, const Vector7d_t &_arm);
+void pubArmOdometry_safe();
+#endif

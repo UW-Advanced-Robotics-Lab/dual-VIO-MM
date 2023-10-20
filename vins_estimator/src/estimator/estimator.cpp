@@ -206,17 +206,17 @@ void Estimator::inputIMU(double t, const Vector3d &linearAcceleration, const Vec
     }
 }
 
-void Estimator::inputFeature(double t, const map<int, vector<pair<int, Eigen::Matrix<double, 7, 1>>>> &featureFrame)
-{
-    mBuf.lock();
-    featureBuf.push(make_pair(t, featureFrame));
-    mBuf.unlock();
+// void Estimator::inputFeature(double t, const map<int, vector<pair<int, Eigen::Matrix<double, 7, 1>>>> &featureFrame)
+// {
+//     mBuf.lock();
+//     featureBuf.push(make_pair(t, featureFrame));
+//     mBuf.unlock();
 
-// #if (FEATURE_NON_THREADING_SUPPORT)
-//     if(!pCfg->MULTIPLE_THREAD)
-//         processMeasurements();
-// #endif
-}
+// // #if (FEATURE_NON_THREADING_SUPPORT)
+// //     if(!pCfg->MULTIPLE_THREAD)
+// //         processMeasurements();
+// // #endif
+// }
 
 
 bool Estimator::getIMUInterval_unsafe(double t0, double t1, vector<pair<double, Eigen::Vector3d>> &accVector, 

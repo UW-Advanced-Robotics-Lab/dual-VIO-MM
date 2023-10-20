@@ -76,7 +76,8 @@ void EstimatorManager::inputIMU(const size_t DEV_ID, const double t, const Vecto
     pEsts[DEV_ID]->inputIMU(t, acc, gyr);
 }
 
-static void _process_JntVector_from_msg(const sensor_msgs::JointStateConstPtr &_jnt_msg, Vector7d_t &jnt_pos, Vector7d_t &jnt_vel, Vector7d_t &jnt_tau)
+#if (FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT)
+inline void _process_JntVector_from_msg(const sensor_msgs::JointStateConstPtr &_jnt_msg, Vector7d_t &jnt_pos, Vector7d_t &jnt_vel, Vector7d_t &jnt_tau)
 {
     // PRINT_ARRAY(_jnt_msg->position, 7);
     for (int i = 0; i < 7; ++i) {
@@ -94,11 +95,20 @@ void EstimatorManager::inputImage(double t, const cv::Mat &_img_b, const cv::Mat
     {
         Vector7d_t jnt_pos, jnt_vel, jnt_tau;
         _process_JntVector_from_msg(_jnt_msg, jnt_pos, jnt_vel, jnt_tau);
+        queue_Arm(t, jnt_pos);
     }
     // input images:
     pEsts[BASE_DEV]->inputImage(t, _img_b);
     pEsts[EE_DEV  ]->inputImage(t, _img_e);
 }
+#else
+void EstimatorManager::inputImage(double t, const cv::Mat &_img_b, const cv::Mat &_img_e)
+{
+    // input images:
+    pEsts[BASE_DEV]->inputImage(t, _img_b);
+    pEsts[EE_DEV  ]->inputImage(t, _img_e);
+}
+#endif 
 
 void EstimatorManager::publishVisualization()
 {
@@ -120,6 +130,9 @@ void EstimatorManager::publishVisualization()
             pubPointClouds_safe(dev_id);
 #if (FEATURE_TRACKING_IMAGE_SUPPORT)
             pubTrackImage_safe(dev_id);
+#endif
+#if (FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT)
+            pubArmOdometry_safe();
 #endif
         }
         auto end_time = std::chrono::high_resolution_clock::now();

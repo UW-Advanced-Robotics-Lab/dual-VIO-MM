@@ -233,7 +233,11 @@ void sync_process_IMG()
                     // [ decoupled estimators ]
                     // [Later] TODO: we should consider coupling the estimators (stereo for the same states)
                     // TODO: add joint state from the estimators
+#if (FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT)
                     m_est_manager.inputImage(d0_time, d0_img, d1_img, jnt_msg_b); //jnt_msg_E
+#else
+                    m_est_manager.inputImage(d0_time, d0_img, d1_img);
+#endif 
                     d0_time_last_submitted = d0_time;
 
 #if (FEATURE_ENABLE_PERFORMANCE_EVAL)

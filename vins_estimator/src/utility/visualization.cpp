@@ -35,6 +35,11 @@ ros::Publisher pub_image_track[MAX_NUM_DEVICES];
 ros::Publisher pub_vicon[MAX_NUM_DEVICES];
 #endif
 
+#if (FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT)
+queue<pair<double, Vector7d_t>> armBuf;
+std::mutex arm_mutex;
+#endif
+
 typedef struct{
 #if (FEATURE_ENABLE_VICON_SUPPORT)
     // GT:
@@ -119,6 +124,22 @@ void visualization_guard_unlock(const Estimator &estimator)
 {
     m_buf[estimator.pCfg->DEVICE_ID].guard.unlock();
 }
+
+#if (FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT)
+void queue_Arm(double t, const Vector7d_t &_arm)
+{
+    arm_mutex.lock();
+    armBuf.push(make_pair(t, _arm));
+    arm_mutex.unlock();
+}
+void pubArmOdometry_safe()
+{
+    arm_mutex.lock();
+    while(armBuf.empty())
+        armBuf.pop(); // empty now, TODO: we should process batches here, and send out as odometry path
+    arm_mutex.unlock();
+}
+#endif
 
 void pubLatestOdometry_immediately(const Eigen::Vector3d &P, const Eigen::Quaterniond &Q, const Eigen::Vector3d &V, const double t, const int device_id)
 {
