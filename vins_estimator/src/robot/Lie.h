@@ -1,8 +1,13 @@
-/*
-* @Credits:
-    - some inspiration from https://github.com/Le0nX/ModernRoboticsCpp/blob/master/src/modern_robotics.cpp
-    - based on Murrays, Intro to Robotics Manipulation
-    - based on Park, ModernRobotics
+/* [ An Ultra-light-weight Lie Algebra library based on Eigen ]
+ * @Notation:
+ *   The notation is based on Murrays, aka: (v,w) instead of (w,v) and uppoer triangle matrices
+ * @Credits:
+ *   - some inspiration from https://github.com/Le0nX/ModernRoboticsCpp/blob/master/src/modern_robotics.cpp
+ *   - based on Murrays, Intro to Robotics Manipulation
+ *   - based on Park, ModernRobotics
+ * @author: 
+ *   - Jack Xu @ projectbyjx@gmail.com
+ * ----------------------------------------------------------------
 */
 #ifndef LIE_H
 #define LIE_H
@@ -11,10 +16,14 @@
 #include <vector>
 #include <eigen3/Eigen/Dense>
 
-#define NEAR_ZERO_TOL   (double)(1e-6)
-#define NEAR_ZERO(x)    (std::abs(x) < NEAR_ZERO_TOL)
-class Lie { 
-public:
+#define NEAR_ZERO_TOL       (double)(1e-6)
+#define NEAR_INFINITY_TOL   (double)(1e9)
+#define AT_NEAR_ZERO           (double)(NEAR_ZERO_TOL * 0.1)
+#define AT_NEAR_INFINITY       (double)(NEAR_INFINITY_TOL * 10)
+
+#define NEAR_ZERO(x)        (std::abs(x) < NEAR_ZERO_TOL)
+
+namespace Lie {
 // ----------------------------------------------------------------
 // : Definitions :
 // ----------------------------------------------------------------
@@ -127,6 +136,20 @@ public:
         return Lie::inverse_SO3xR3(R, p);
     }
 
+    // SE3 prod_chain_forward(const SE3 mat[], const size_t N){
+    //     SE3 m_ret = mat[0];
+    //     for(size_t i = 1; i < N; i ++)
+    //     {
+    //         m_ret = m_ret * mat[i];
+    //     }
+    // }
+    // SE3 prod_chain_reverse(const SE3 mat[], const size_t N){
+    //     SE3 m_ret = mat[0];
+    //     for(size_t i = 1; i < N; i ++)
+    //     {
+    //         m_ret = mat[i] * m_ret;
+    //     }
+    // }
     // Adjoint Transformation --------------------------------
     /* Ad: A linear Transformations for a particular T\in SE3, that can be applied to the lie algebra g\in se3-R6
     * For each group element g in G with a linear transformation Ad(g) on the lie algebra g
@@ -154,8 +177,16 @@ public:
         return Lie::invAd(R, p);
     }
 
+    Mat6x6d ad(const R3& v, const R3& w)
+    {
+        so3 hat_w = Lie::HAT_R3_to_so3(w);
+        so3 hat_v = Lie::HAT_R3_to_so3(v);
+        Mat6x6d m_ret;
+        m_ret = hat_w, hat_v, so3::Zero(), hat_w;
+    }
+
     // Rodrigue exp/Exp Map --------------------------------
-    /* Lift from Lie Algebra to Manifold
+    /* Retract from Lie Algebra to Manifold
     * exp: so3 --exp--> SO3
     * Exp: R3/R3xR  --Exp--> SO3
     * Exp: R6/R6xR  --Exp--> SE3
@@ -232,7 +263,7 @@ public:
     }
     // Log Map --------------------------------
     /* Lift->solve->retract
-    * Log Map is used to retract from the manifold to the tangent space
+    * Log Map is used to lift from the manifold to the tangent space (local)
     * NOTE: The below formulation is not a smooth map of R, for a smooth map, 
     *   please consider cubic fitting formulation in Geometric Robotics Book
     */
@@ -327,7 +358,62 @@ public:
         }
         return hat_xi;
     }
+
+
+    // Projection Map --------------------------------
+    SO3 project_to_SO3(const Mat3x3d& M)
+    {
+		Eigen::JacobiSVD<Eigen::MatrixXd> svd(M, Eigen::ComputeFullU | Eigen::ComputeFullV);
+		SO3 R = svd.matrixU() * svd.matrixV().transpose();
+		if (R.determinant() < 0)
+        {
+            // In this case the result may be far from M; reverse sign of 3rd column
+			R.col(2) *= -1;
+        }
+        return R;
+    }
+
+    SE3 project_to_SE3(const Mat4x4d& M)
+    {
+        SO3 R; R3 p; SE3 T;
+        Lie::SO3xR3_from_SE3(R,p,M);
+        Lie::SE3_from_SO3xR3(T,Lie::project_to_SO3(R),p);
+    }
+
+    double distance_to_SO3(const Mat3x3d& M)
+    {
+        double dist = AT_NEAR_INFINITY;
+        if (M.determinant() > NEAR_ZERO_TOL)
+        {
+            // Ideally it should be close to identity by definition:
+            dist = (M.transpose() * M - SO3::Identity()).norm();
+        }
+        return dist;
+    }
+
+    double distance_to_SE3(const Mat4x4d& M)
+    {
+        double dist = AT_NEAR_INFINITY;
+        SO3 R = M.block<3,3>(0,0);
+        SE3 T;
+        if (R.determinant() > NEAR_ZERO_TOL)
+        {
+            T << R.transpose() * R, R3::Zero(), M.row(3);
+            T -= SE3::Identity();
+            dist = T.norm();
+        }
+        return dist;
+    }
+	
+	inline bool if_SO3(const Mat3x3d& M) {
+		return NEAR_ZERO(Lie::distance_to_SO3(M));
+	}
+
+	inline bool TestIfSE3(const Eigen::Matrix4d& T) {
+		return NEAR_ZERO(Lie::distance_to_SE3(T));
+    }
+
 };
 
 
-#endif // LIE_H
+#endif  // LIE_H
