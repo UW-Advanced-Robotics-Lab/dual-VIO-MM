@@ -42,8 +42,8 @@ output_path: "~/output"
 d0_cam0_calib: "color_base_mei.yaml"
 d1_cam0_calib: "color_EE_mei.yaml"
 # [Focal Length: Fx, Fy]
-d0_focal_length: 799.2 # should be imported from calib file
-d1_focal_length: 723.7 # should be imported from calib file
+d0_focal_length: 798.2 # should be imported from calib file
+d1_focal_length: 733.7 # should be imported from calib file
 
 image_width: 1280
 image_height: 720
@@ -60,10 +60,14 @@ d0_body_T_cam0: !!opencv-matrix
     dt: d
     data: [ # T_ic:
             #### based on [2023-05-11-15-47-26_base_rgb_mei-imu]
-               0.9998882, -0.00193321, 0.01482754, 0.02478332,
-               0.00201731, 0.99998196, -0.00565838, -0.01078818,
-               -0.01481633, 0.00568766, 0.99987406, 0.0356058,
-               0., 0., 0., 1. ]
+               # 0.9998882, -0.00193321, 0.01482754, 0.02478332,
+               # 0.00201731, 0.99998196, -0.00565838, -0.01078818,
+               # -0.01481633, 0.00568766, 0.99987406, 0.0356058,
+               # 0., 0., 0., 1. ]
+                0.99995788, -0.00166744,  0.00902576,  0.01383521,
+                0.00173777,  0.99996815, -0.0077903 , -0.00641467,
+               -0.00901248,  0.00780565,  0.99992892,  0.03030069,
+                0.        ,  0.        ,  0.        ,  1.        ]
             # T_ic: Extrinsic from "Color" To "Gyro" [Manufacture]
                 # 0.999992   ,    -0.00371369   ,  -0.00152836    ,  0.0289912428706884  ,
                 # 0.00371287 ,     0.999993     ,  -0.000541772   ,  0.00741964485496283 ,
@@ -79,11 +83,19 @@ d1_body_T_cam0: !!opencv-matrix
             # -0.00059713, 0.99999982, -0.00004132, -0.00029959,
             # -0.00448772, 0.00003864,  0.99998993,  0.04621308,
             #  0.,         0.,          0.,          1.]
+             0.99998948,  0.00055183,  0.00455268,  0.03373913,
+            -0.00055247,  0.99999984,  0.00014049,  0.00000485,
+            -0.0045526 , -0.000143  ,  0.99998963,  0.05212471,
+             0.        ,  0.        ,  0.        ,  1.        ] #v2
             #### based on [2023-05-11-15-43-17_EE_rgb_mei-results-imucam]
-               0.99999713,  0.00184888, -0.00152691,  0.03679528,
-              -0.00184825,  0.99999821,  0.00041351,  0.0029463 ,
-               0.00152767, -0.00041069,  0.99999875,  0.03515003,
-               0.        ,  0.        ,  0.        ,  1.         ]
+            #    0.99999713,  0.00184888, -0.00152691,  0.03679528,
+            #   -0.00184825,  0.99999821,  0.00041351,  0.0029463 ,
+            #    0.00152767, -0.00041069,  0.99999875,  0.03515003,
+            #    0.        ,  0.        ,  0.        ,  1.         ]
+            #  0.99999054,  0.00216234, -0.00377372,  0.05026032,
+            # -0.00215316,  0.99999472,  0.00243427, -0.00277024,
+            #  0.00377897, -0.00242612,  0.99998992,  0.03864878,
+            #  0.        ,  0.        ,  0.        ,  1.        ] #v2
             # T_ic: Extrinsic from "Color" To "Gyro" [Manufacture]
             #     0.999996    ,     0.00212487   ,   -0.00160311    , 0.0289688687771559 ,
             #    -0.00212717  ,     0.999997     ,   -0.00143346    , 0.00740136113017797 ,
@@ -172,10 +184,13 @@ d1_g_norm: 9.80655            # gravity magnitude #TODO: unified gravity magnitu
 #unsynchronization parameters [based on [2023-05-11-15-xx-xx] calibration mei]
 # - [cam0]
 d0_estimate_td: 0         # online estimate time offset between camera and imu
-d0_td: 0.00022326806147822398 # initial value of time offset. unit: s. readed image clock + td = real image clock (IMU clock)
+# d0_td: 0.00022326806147822398 # initial value of time offset. unit: s. readed image clock + td = real image clock (IMU clock)
+d0_td: 0.00023573806770265347 # initial value of time offset. unit: s. readed image clock + td = real image clock (IMU clock)
 # - [cam1]
 d1_estimate_td: 0         # online estimate time offset between camera and imu
-d1_td: 0.0003475970005734179 # initial value of time offset. unit: s. readed image clock + td = real image clock (IMU clock)
+# d1_td: 0.0003475970005734179 # initial value of time offset. unit: s. readed image clock + td = real image clock (IMU clock)
+d1_td: 0.0003422667651021994 # [14]
+# d1_td: 0.00011939373101626204 # [17]
 
 #loop closure parameters
 # - [cam0]
