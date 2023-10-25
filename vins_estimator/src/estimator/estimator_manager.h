@@ -41,7 +41,7 @@ class EstimatorManager
         // callbacks:
         // thread:
         void publishVisualization_thread();
-        void processMeasurements_thread(size_t device_id);
+        void processMeasurements_thread();
 
     private:
 #if (FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT)
@@ -57,7 +57,7 @@ class EstimatorManager
         std::shared_ptr<DeviceConfig_t> pCfgs[MAX_NUM_DEVICES];
         std::shared_ptr<Estimator>      pEsts[MAX_NUM_DEVICES];
 
-        std::shared_ptr<std::thread>    pProcessThread[MAX_NUM_DEVICES] = {nullptr, nullptr};
+        std::shared_ptr<std::thread>    pProcessThread = nullptr;
         std::shared_ptr<std::thread>    pPublishThread = nullptr;
 
 };

@@ -17,17 +17,11 @@ EstimatorManager::EstimatorManager(std::shared_ptr<DeviceConfig_t> _pCfgs[])
 
 EstimatorManager::~EstimatorManager()
 {
-    if (pProcessThread[BASE_DEV] != nullptr)
+    if (pProcessThread != nullptr)
     {
-        pProcessThread[BASE_DEV]->join();
-        PRINT_WARN("join base estimator thread \n");
-        pProcessThread[BASE_DEV].reset();
-    }
-    if (pProcessThread[EE_DEV  ] != nullptr)
-    {
-        pProcessThread[EE_DEV  ]->join();
-        PRINT_WARN("join ee estimator thread \n");
-        pProcessThread[EE_DEV  ].reset();
+        pProcessThread->join();
+        PRINT_WARN("join base & ee estimator thread \n");
+        pProcessThread.reset();
     }
     if (pPublishThread != nullptr)
     {
@@ -55,13 +49,9 @@ void EstimatorManager::restartManager()
     pEsts[EE_DEV  ]->setParameter();
 
     // activate threads if not already:
-    if (pProcessThread[BASE_DEV] == nullptr)
+    if (pProcessThread == nullptr)
     {
-        pProcessThread[BASE_DEV] = std::make_shared<std::thread>(& EstimatorManager::processMeasurements_thread, this, BASE_DEV);
-    }
-    if (pProcessThread[EE_DEV  ] == nullptr)
-    {
-        pProcessThread[EE_DEV  ] = std::make_shared<std::thread>(& EstimatorManager::processMeasurements_thread, this, EE_DEV);
+        pProcessThread = std::make_shared<std::thread>(& EstimatorManager::processMeasurements_thread, this);
     }
     if (pPublishThread == nullptr)
     {
@@ -70,21 +60,30 @@ void EstimatorManager::restartManager()
     PRINT_DEBUG("[EstimatorManager::restartManager] Manager Ready!");
 }
 
-void EstimatorManager::processMeasurements_thread(size_t device_id)
+void EstimatorManager::processMeasurements_thread()
 {
     TicToc ellapsed_process;
-    TicToc ellapsed_process_arm;
+    TicToc ellapsed_process_i;
     while (FOREVER)
     {
-        TIK(ellapsed_process);
-        pEsts[device_id]->processMeasurements_once();
-        TOK(ellapsed_process);
+        TIK(ellapsed_process_i);
+
+        TIK(ellapsed_process_i);
+        pEsts[BASE_DEV]->processMeasurements_once();
+        TOK_TAG(ellapsed_process_i, "base");
         
+        TIK(ellapsed_process_i);
+        pEsts[EE_DEV  ]->processMeasurements_once();
+        TOK_TAG(ellapsed_process_i, "EE");
+
 #if (FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT)
-        TIK(ellapsed_process_arm);
+        TIK(ellapsed_process_i);
         this->processArm_AllAtOnce();
-        TOK(ellapsed_process_arm);
+        TOK_TAG(ellapsed_process_i, "arm");
 #endif 
+
+        TOK(ellapsed_process_i);
+
 
         std::chrono::milliseconds dura(10);
         std::this_thread::sleep_for(dura);

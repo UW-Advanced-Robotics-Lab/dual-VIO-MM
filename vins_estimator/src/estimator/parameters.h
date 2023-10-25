@@ -214,10 +214,12 @@ using namespace std;
 #   define TIK(PM)          {PM.tic();}
 #   define TOK(PM)          {if (PM.toc() > FEATURE_PERFORMANCE_EVAL_THRESHOLD_MS) { PRINT_DEBUG("%s Performance: %.2f ms", #PM, PM.dt()); }; }
 #   define TOK_FORCE(PM)    { PRINT_DEBUG("%s Performance: %.2f ms", #PM, PM.dt()); }
+#   define TOK_TAG(PM, TAG) {if (PM.toc() > FEATURE_PERFORMANCE_EVAL_THRESHOLD_MS) { PRINT_DEBUG("%s Performance [%s]: %.2f ms", #PM, TAG, PM.dt()); }; }
 #else // precompile elimination for run-time performance
 #   define TIK(PM)          {} // do nothing
 #   define TOK(PM)          {} // do nothing
 #   define TOK_FORCE(PM)    {} // do nothing
+#   define TOK_TAG(PM, TAG) {} // do nothing
 #endif
 // ----------------------------------------------------------------
 // : Definitions :
