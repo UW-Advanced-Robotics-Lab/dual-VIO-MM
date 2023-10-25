@@ -262,100 +262,104 @@ bool Estimator::IMUAvailable(double t)
         return false;
 }
 
-void Estimator::processMeasurements()
+void Estimator::processMeasurements_thread()
 {
-    const std::chrono::milliseconds rate(TOPIC_PUBLISH_INTERVAL_MS); 
     TicToc ellapsed_process;
     while (FOREVER)
     {
         TIK(ellapsed_process);
-        //printf("process measurments\n");
-        pair<double, map<int, vector<pair<int, Eigen::Matrix<double, 7, 1> > > > > feature;
-        vector<pair<double, Eigen::Vector3d>> accVector, gyrVector;
-        if(!featureBuf.empty())
-        {
-            mBuf.lock();
-            feature = featureBuf.front();
-            featureBuf.pop();
-            // PRINT_DEBUG("feature buffer size: %d\n",featureBuf.size());
-            mBuf.unlock();
+        this->processMeasurements_once();
+        TOK(ellapsed_process);
 
-            curTime = feature.first + td;
-            while (! IMUAvailable(curTime)) //IMU Support
-            {
-                
-                PRINT_WARN("wait for imu ... \n");
-                std::chrono::milliseconds dura(1);
-                std::this_thread::sleep_for(dura);
-            }
-            mBuf.lock();
-            getIMUInterval_unsafe(prevTime, curTime, accVector, gyrVector); //IMU Support
-            mBuf.unlock();
-
-            // if(pCfg->USE_IMU) IMU Support
-            {
-                if(!initFirstPoseFlag)
-                    initFirstIMUPose(accVector);
-                for(size_t i = 0; i < accVector.size(); i++)
-                {
-                    double dt;
-                    if(i == 0) // head
-                        dt = accVector[i].first - prevTime;
-                    else if (i == accVector.size() - 1)
-                    {
-                        // only sample the partial of the tail imu data up to the time the frame was captured
-                        dt = curTime - accVector[i - 1].first;
-                        // double dt2 = accVector[i].first - accVector[i - 1].first;
-                        // PRINT_DEBUG("dt=%f|%f, ~%f", dt, dt2, dt2-dt); // diff is 0.001s
-                    }
-                    else // middle
-                        dt = accVector[i].first - accVector[i - 1].first;
-                    processIMU(accVector[i].first, dt, accVector[i].second, gyrVector[i].second);
-                }
-            }
-            // Process Image and Publish:
-            {
-                mProcess.lock();
-                
-                // Process Image: 
-                processImage(feature.second, feature.first);
-                prevTime = curTime;
-
-#if (FEATURE_ENABLE_STATISTICS_LOGGING)
-                // Print Statistics:
-                printStatistics(*this, 0);
-#endif
-
-                /*** Publish ***/
-                std_msgs::Header header;
-                header.frame_id = "world";
-                header.stamp = ros::Time(feature.first);
-                // immediate updates:
-                {
-                    pubKeyframe_Odometry_and_Points_immediately(*this);
-                    pubTF_immediately(*this, header);
-                    pubOdometry_Immediately(*this, header);
-                }
-                // visualization updates:
-                visualization_guard_lock(*this);
-                {
-                    queue_KeyPoses_unsafe(*this, header);
-                    queue_CameraPose_unsafe(*this, header);
-                    queue_PointCloud_unsafe(*this, header);
-                }
-                visualization_guard_unlock(*this);
-                
-                // End-of-publishing
-                mProcess.unlock();
-            }
-            TOK(ellapsed_process);
-        }
-// #if (FEATURE_NON_THREADING_SUPPORT)
-//         if (! pCfg->MULTIPLE_THREAD)
-//             break;
-// #endif
+        // #if (FEATURE_NON_THREADING_SUPPORT)
+        //         if (! pCfg->MULTIPLE_THREAD)
+        //             break;
+        // #endif
         std::chrono::milliseconds dura(10);
         std::this_thread::sleep_for(dura);
+    }
+}
+void Estimator::processMeasurements_once()
+{
+    //printf("process measurments\n");
+    pair<double, map<int, vector<pair<int, Eigen::Matrix<double, 7, 1> > > > > feature;
+    vector<pair<double, Eigen::Vector3d>> accVector, gyrVector;
+    if(!featureBuf.empty())
+    {
+        mBuf.lock();
+        feature = featureBuf.front();
+        featureBuf.pop();
+        // PRINT_DEBUG("feature buffer size: %d\n",featureBuf.size());
+        mBuf.unlock();
+
+        curTime = feature.first + td;
+        while (! IMUAvailable(curTime)) //IMU Support
+        {
+            
+            PRINT_WARN("wait for imu ... \n");
+            std::chrono::milliseconds dura(1);
+            std::this_thread::sleep_for(dura);
+        }
+        mBuf.lock();
+        getIMUInterval_unsafe(prevTime, curTime, accVector, gyrVector); //IMU Support
+        mBuf.unlock();
+
+        // if(pCfg->USE_IMU) IMU Support
+        {
+            if(!initFirstPoseFlag)
+                initFirstIMUPose(accVector);
+            for(size_t i = 0; i < accVector.size(); i++)
+            {
+                double dt;
+                if(i == 0) // head
+                    dt = accVector[i].first - prevTime;
+                else if (i == accVector.size() - 1)
+                {
+                    // only sample the partial of the tail imu data up to the time the frame was captured
+                    dt = curTime - accVector[i - 1].first;
+                    // double dt2 = accVector[i].first - accVector[i - 1].first;
+                    // PRINT_DEBUG("dt=%f|%f, ~%f", dt, dt2, dt2-dt); // diff is 0.001s
+                }
+                else // middle
+                    dt = accVector[i].first - accVector[i - 1].first;
+                processIMU(accVector[i].first, dt, accVector[i].second, gyrVector[i].second);
+            }
+        }
+        // Process Image and Publish:
+        {
+            mProcess.lock();
+            
+            // Process Image: 
+            processImage(feature.second, feature.first);
+            prevTime = curTime;
+
+#if (FEATURE_ENABLE_STATISTICS_LOGGING)
+            // Print Statistics:
+            printStatistics(*this, 0);
+#endif
+
+            /*** Publish ***/
+            std_msgs::Header header;
+            header.frame_id = "world";
+            header.stamp = ros::Time(feature.first);
+            // immediate updates:
+            {
+                pubKeyframe_Odometry_and_Points_immediately(*this);
+                pubTF_immediately(*this, header);
+                pubOdometry_Immediately(*this, header);
+            }
+            // visualization updates:
+            visualization_guard_lock(*this);
+            {
+                queue_KeyPoses_unsafe(*this, header);
+                queue_CameraPose_unsafe(*this, header);
+                queue_PointCloud_unsafe(*this, header);
+            }
+            visualization_guard_unlock(*this);
+            
+            // End-of-publishing
+            mProcess.unlock();
+        }
     }
 }
 

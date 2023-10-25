@@ -18,6 +18,10 @@
 #include "parameters.h"
 #include "../utility/visualization.h"
 
+#if (FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT)
+#include "../robot/ArmModel.h"
+#endif
+
 class EstimatorManager
 {
     public:
@@ -29,23 +33,33 @@ class EstimatorManager
         void restartManager();
         // interface:
         void inputIMU(const size_t DEV_ID, const double t, const Vector3d &linearAcceleration, const Vector3d &angularVelocity);
-#if (FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT)
-        void inputImage(double t, const cv::Mat &_img_b, const cv::Mat &_img_e, const sensor_msgs::JointStateConstPtr &jnt_msg=NULL);
-#else
         void inputImage(double t, const cv::Mat &_img_b, const cv::Mat &_img_e);
+
+#if (FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT)
+        void inputArm(double t, const sensor_msgs::JointStateConstPtr &_jnt_msg);
 #endif
         // callbacks:
         // thread:
-        void publishVisualization();
+        void publishVisualization_thread();
+        void processMeasurements_thread(size_t device_id);
 
     private:
+#if (FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT)
+        typedef struct{
+            queue<pair<double, Vector7d_t>> data;
+            std::mutex                      guard;
+        } arm_buffer_t;
+        arm_buffer_t                    arm_buf;
+        std::shared_ptr<ArmModel>       pArm;
+        void processArm_AllAtOnce();
+#endif
+
         std::shared_ptr<DeviceConfig_t> pCfgs[MAX_NUM_DEVICES];
         std::shared_ptr<Estimator>      pEsts[MAX_NUM_DEVICES];
 
         std::shared_ptr<std::thread>    pProcessThread[MAX_NUM_DEVICES] = {nullptr, nullptr};
         std::shared_ptr<std::thread>    pPublishThread = nullptr;
 
-        // static void _process_JntVector_from_msg(const sensor_msgs::JointStateConstPtr &_jnt_msg, Vector7d_t &jnt_pos, Vector7d_t &jnt_vel, Vector7d_t &jnt_tau);
 };
 
 #if (FEATURE_ENABLE_VICON_SUPPORT)

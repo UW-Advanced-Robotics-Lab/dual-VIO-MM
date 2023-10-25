@@ -1,0 +1,28 @@
+%YAML 1.0
+---
+#common parameters
+#support: 1 imu 1 cam; 1 imu 2 cam: 2 cam; 
+num_of_joints: 7
+
+arm_joint_topic: "/wam/joint_states"
+arm_pose_topic: "/wam/pose"
+
+L_SHOULDER:   0.346
+L_ARM:        0.55
+L_ELBOW:      0.3
+L_WRIST:      0.06
+W_ELBOW_JNT:  0.045
+
+
+summit_T_wam: !!opencv-matrix
+    rows: 4
+    cols: 4
+    dt: d
+    data: [ 1, 0, 0, 0.14,
+            0, 1, 0, 0,
+            0, 0, 1, 0.405,
+            0, 0, 0, 1 ]
+
+
+
+

@@ -36,9 +36,14 @@ ros::Publisher pub_vicon[MAX_NUM_DEVICES];
 #endif
 
 #if (FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT)
-queue<pair<double, Vector7d_t>> armBuf;
-std::mutex arm_mutex;
+ros::Publisher pub_arm_odometry[MAX_NUM_DEVICES];
 #endif
+
+typedef struct{
+    double              t;
+    Eigen::Vector3d     p;
+    Eigen::Quaterniond  q;
+} pose_data_t;
 
 typedef struct{
 #if (FEATURE_ENABLE_VICON_SUPPORT)
@@ -54,6 +59,11 @@ typedef struct{
     // Track image:
     sensor_msgs::ImagePtr   imgTrackMsg;
     std::mutex              track_guard;
+#endif
+#if (FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT)
+    queue<pose_data_t>          arm_vicon_odom_buf;
+    nav_msgs::Path              arm_path;
+    std::mutex                  arm_guard;
 #endif
     // visual:
     nav_msgs::Path              path;
@@ -105,7 +115,11 @@ void registerPub(ros::NodeHandle &n, const int N_DEVICES)
         
         // vicon rviz visuals: 
 #if (FEATURE_ENABLE_VICON_SUPPORT)
-        pub_vicon[i] = n.advertise<nav_msgs::Path>(((i)?(TOPIC_VICON_PATH_E):(TOPIC_VICON_PATH_B)), PUBLISHER_BUFFER_SIZE);
+        pub_vicon[i]            = n.advertise<nav_msgs::Path>(((i)?(TOPIC_VICON_PATH_E):(TOPIC_VICON_PATH_B)), PUBLISHER_BUFFER_SIZE);
+#endif
+
+#if (FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT)
+        pub_arm_odometry[i]     = n.advertise<nav_msgs::Path>(((i)?(TOPIC_ARM_PATH_E):(TOPIC_ARM_PATH_B)), PUBLISHER_BUFFER_SIZE);
 #endif
 
         // placeholders
@@ -126,18 +140,69 @@ void visualization_guard_unlock(const Estimator &estimator)
 }
 
 #if (FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT)
-void queue_Arm(double t, const Vector7d_t &_arm)
+void queue_ArmOdometry_safe(const double t, const Lie::SE3& T, const int device_id)
 {
-    arm_mutex.lock();
-    armBuf.push(make_pair(t, _arm));
-    arm_mutex.unlock();
+    std_msgs::Header header;
+    header.frame_id = "world";
+    header.stamp = ros::Time(t); // copy the timestamp, TODO: should we do a sync?
+
+    // fetch the latest vicon pose:
+    bool vicon_odom_ok;
+    pose_data_t pose_v;
+    
+    m_buf[device_id].arm_guard.lock();
+    vicon_odom_ok = !m_buf[device_id].arm_vicon_odom_buf.empty();
+    while (! m_buf[device_id].arm_vicon_odom_buf.empty())
+    {
+        pose_v = m_buf[device_id].arm_vicon_odom_buf.front(); 
+        // pop till latest pose:
+        if (pose_v.t < t)
+            m_buf[device_id].arm_vicon_odom_buf.pop();
+        else
+            break;
+    }
+    m_buf[device_id].arm_guard.unlock();
+    
+     // apply transformation on top of the base trajectory:
+    Lie::SO3 R_base = pose_v.q.toRotationMatrix();
+    Lie::SE3 T_base = Lie::SE3_from_SO3xR3(R_base, pose_v.p);
+    T_base = T * T_base;
+    // PRINT_DEBUG("> ArmOdometry [%f]: \n %s", t, Lie::to_string(T_base).c_str());
+    // transform to quaternions:
+    Lie::SO3 R; Lie::R3 p;
+    Lie::SO3xR3_from_SE3(R, p, T_base);
+    Eigen::Quaterniond q = Eigen::Quaterniond(R);
+
+    // apply transformation to pose:
+    geometry_msgs::Pose pose;
+    pose.position.x = p(0);
+    pose.position.y = p(1);
+    pose.position.z = p(2);
+    pose.orientation.x = q.x();
+    pose.orientation.y = q.y();
+    pose.orientation.z = q.z();
+    pose.orientation.w = q.w();
+
+    // push back
+    geometry_msgs::PoseStamped pose_stamped;
+    if (vicon_odom_ok)
+    {
+        PRINT_DEBUG("vicon odom ok");
+        pose_stamped.header = header;
+        pose_stamped.pose = pose;
+        m_buf[device_id].arm_guard.lock();
+        m_buf[device_id].arm_path.header = header;
+        m_buf[device_id].arm_path.header.frame_id = "world";
+        m_buf[device_id].arm_path.poses.push_back(pose_stamped);
+        m_buf[device_id].arm_guard.unlock();
+    }
 }
-void pubArmOdometry_safe()
+void pubArmOdometry_safe(const int device_id)
 {
-    arm_mutex.lock();
-    while(armBuf.empty())
-        armBuf.pop(); // empty now, TODO: we should process batches here, and send out as odometry path
-    arm_mutex.unlock();
+    // publish the path:
+    m_buf[device_id].arm_guard.lock();
+    pub_arm_odometry[device_id].publish(m_buf[device_id].arm_path);
+    m_buf[device_id].arm_guard.unlock();
 }
 #endif
 
@@ -344,6 +409,7 @@ void queue_ViconOdometry_safe(const geometry_msgs::TransformStampedConstPtr &tra
 #   endif
 #   if (FEATURE_ENABLE_VICON_ZEROING_WRT_BASE_SUPPORT)
     init_vicon &= (device_id == BASE_DEV); // only init on base device;
+    // FIXME: we should fix the initial ee device? if ee queued earlier than base, but no need, if we are processing base before ee
 #   endif
     // capture:
     if (init_vicon) 
@@ -375,6 +441,7 @@ void queue_ViconOdometry_safe(const geometry_msgs::TransformStampedConstPtr &tra
     pose.orientation.z = q.z();
     pose.orientation.w = q.w();
 #endif
+    const pose_data_t odom_buf = pose_data_t{.t=header.stamp.toSec(), .p=p, .q=q};
     // push back
     geometry_msgs::PoseStamped pose_stamped;
     pose_stamped.header = header;
@@ -384,6 +451,11 @@ void queue_ViconOdometry_safe(const geometry_msgs::TransformStampedConstPtr &tra
     m_buf[device_id].vicon_path.header.frame_id = "world";
     m_buf[device_id].vicon_path.poses.push_back(pose_stamped);
     m_buf[device_id].vicon_guard.unlock();
+#if (FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT)
+    m_buf[device_id].arm_guard.lock();
+    m_buf[device_id].arm_vicon_odom_buf.push(odom_buf);
+    m_buf[device_id].arm_guard.unlock();
+#endif
 }
 void pubViconOdometryPath_safe(const int device_id)
 {

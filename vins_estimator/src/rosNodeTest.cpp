@@ -233,12 +233,12 @@ void sync_process_IMG()
                     // [ decoupled estimators ]
                     // [Later] TODO: we should consider coupling the estimators (stereo for the same states)
                     // TODO: add joint state from the estimators
+                    m_est_manager.inputImage(d0_time, d0_img, d1_img); 
 #if (FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT)
-                    m_est_manager.inputImage(d0_time, d0_img, d1_img, jnt_msg_b); //jnt_msg_E
-#else
-                    m_est_manager.inputImage(d0_time, d0_img, d1_img);
+                    m_est_manager.inputArm(d0_time, jnt_msg_b); //jnt_msg_E
 #endif 
-                    d0_time_last_submitted = d0_time;
+
+                    d0_time_last_submitted = d0_time; // to compute run-time processing rate
 
 #if (FEATURE_ENABLE_PERFORMANCE_EVAL)
                     m_perf.image_process_delta_time =ros::Time::now().toSec() - m_perf.image_process_time;

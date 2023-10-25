@@ -52,7 +52,8 @@ class Estimator
     // void inputImage(double t, const cv::Mat &_img, const cv::Mat &_img1 = cv::Mat());
     void processIMU(double t, double dt, const Vector3d &linear_acceleration, const Vector3d &angular_velocity);
     void processImage(const map<int, vector<pair<int, Eigen::Matrix<double, 7, 1>>>> &image, const double header);
-    void processMeasurements();
+    void processMeasurements_thread();
+    void processMeasurements_once();
 // #if (FEATURE_ENABLE_STEREO_SUPPORT)
 //     void changeSensorType(int use_imu, int use_stereo);
 // #endif 

@@ -27,12 +27,13 @@ Panels:
   - Class: rviz/Time
     Name: Time
     SyncMode: 0
-    SyncSource: BASE/color
+    SyncSource: ""
   - Class: rviz/Displays
     Help Height: 0
     Name: Displays
     Property Tree Widget:
-      Expanded: ~
+      Expanded:
+        - /Arm1/base1
       Splitter Ratio: 0.5
     Tree Height: 201
 Preferences:
@@ -136,7 +137,7 @@ Visualization Manager:
           Marker Topic: /vins_estimator/EE/camera_pose_visual
           Name: CameraMarker
           Namespaces:
-            CameraPoseVisualization: true
+            {}
           Queue Size: 100
           Value: true
         - Alpha: 1
@@ -240,7 +241,7 @@ Visualization Manager:
           Marker Topic: /vins_estimator/base/camera_pose_visual
           Name: CameraMarker
           Namespaces:
-            CameraPoseVisualization: true
+            {}
           Queue Size: 100
           Value: true
         - Alpha: 1
@@ -440,7 +441,7 @@ Visualization Manager:
           Marker Topic: /loop_fusion/base/camera_pose_visual
           Name: loopCamera
           Namespaces:
-            CameraPoseVisualization: true
+            {}
           Queue Size: 100
           Value: true
         - Alpha: 1
@@ -641,6 +642,58 @@ Visualization Manager:
           Value: true
       Enabled: true
       Name: Vicon
+    - Class: rviz/Group
+      Displays:
+        - Alpha: 1
+          Buffer Length: 1
+          Class: rviz/Path
+          Color: 171; 171; 85
+          Enabled: true
+          Head Diameter: 0.30000001192092896
+          Head Length: 0.20000000298023224
+          Length: 0.30000001192092896
+          Line Style: Lines
+          Line Width: 0.029999999329447746
+          Name: base
+          Offset:
+            X: 0
+            Y: 0
+            Z: 0
+          Pose Color: 255; 85; 255
+          Pose Style: None
+          Queue Size: 10
+          Radius: 0.029999999329447746
+          Shaft Diameter: 0.10000000149011612
+          Shaft Length: 0.10000000149011612
+          Topic: /vins_estimator/base/arm/path
+          Unreliable: false
+          Value: true
+        - Alpha: 1
+          Buffer Length: 1
+          Class: rviz/Path
+          Color: 169; 107; 171
+          Enabled: true
+          Head Diameter: 0.30000001192092896
+          Head Length: 0.20000000298023224
+          Length: 0.30000001192092896
+          Line Style: Lines
+          Line Width: 0.029999999329447746
+          Name: EE
+          Offset:
+            X: 0
+            Y: 0
+            Z: 0
+          Pose Color: 255; 85; 255
+          Pose Style: None
+          Queue Size: 10
+          Radius: 0.029999999329447746
+          Shaft Diameter: 0.10000000149011612
+          Shaft Length: 0.10000000149011612
+          Topic: /vins_estimator/EE/arm/path
+          Unreliable: false
+          Value: true
+      Enabled: true
+      Name: Arm
   Enabled: true
   Global Options:
     Background Color: 0; 0; 0

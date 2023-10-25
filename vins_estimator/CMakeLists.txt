@@ -34,6 +34,10 @@ include_directories(
 catkin_package()
 
 add_library(vins_lib
+    src/robot/Lie.cpp         # <--- Lie Algebra
+    src/robot/RBT.cpp         # <--- Rigid Body Transform
+    src/robot/OpenChain.cpp   # <--- Open Chain Manipulator
+    src/robot/ArmModel.cpp    # <--- arm model
     src/estimator/parameters.cpp
     src/estimator/estimator.cpp
     src/estimator/feature_manager.cpp

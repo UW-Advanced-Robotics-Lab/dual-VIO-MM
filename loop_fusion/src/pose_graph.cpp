@@ -1069,7 +1069,7 @@ void PoseGraph::loadPoseGraph()
             image, loop_index, loop_info, keypoints, keypoints_norm, brief_descriptors,
             pCfg, pLoop);
         loadKeyFrame(keyframe, 0);
-        if (cnt % 20 == 0)
+        if (cnt % 20 == 0)//FIXME: investiage this
         {
             publish();
         }

@@ -113,6 +113,9 @@ using namespace std;
 #define TOPIC_VICON_PATH_B            (FUSE_TOPIC("base" , "vicon/path"))
 #define TOPIC_VICON_PATH_E            (FUSE_TOPIC("EE"   , "vicon/path"))
 
+#define TOPIC_ARM_PATH_B              (FUSE_TOPIC("base" , "arm/path"))
+#define TOPIC_ARM_PATH_E              (FUSE_TOPIC("EE"   , "arm/path"))
+
 // buffer size: -----------------------------
 #define SUB_IMG_BUFFER_SIZE         (30U)
 #define SUB_IMU_BUFFER_SIZE         (100U)
@@ -165,7 +168,7 @@ using namespace std;
 // vicon support:
 #define FEATURE_ENABLE_VICON_SUPPORT                    ( ENABLED) // to feed vicon data and output as nav_msg::path for visualization
 #define FEATURE_ENABLE_VICON_ZEROING_SUPPORT                ( ENABLED) // zeroing vicons independently
-#define FEATURE_ENABLE_VICON_ZEROING_WRT_BASE_SUPPORT       ( ENABLED) // zeroing vicons wrt base
+#define FEATURE_ENABLE_VICON_ZEROING_WRT_BASE_SUPPORT       ( ENABLED) // zeroing vicons wrt base, TODO: need a better way 
 #define FEATURE_ENABLE_ALIGN_EST_BEG_SUPPORT                (DISABLED) // start alignment when estimator posting
 // arm odometry support:
 #define FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT             ( ENABLED) // [WIP]
@@ -208,11 +211,13 @@ using namespace std;
 #endif
 
 #if (FEATURE_ENABLE_PERFORMANCE_EVAL & FEATURE_CONSOLE_DEBUG_PRINTF)
-#   define TIK(PM)   {PM.tic();}
-#   define TOK(PM)   {if (PM.toc() > FEATURE_PERFORMANCE_EVAL_THRESHOLD_MS) { PRINT_DEBUG("%s Performance: %.2f ms", #PM, PM.dt()); }; }
+#   define TIK(PM)          {PM.tic();}
+#   define TOK(PM)          {if (PM.toc() > FEATURE_PERFORMANCE_EVAL_THRESHOLD_MS) { PRINT_DEBUG("%s Performance: %.2f ms", #PM, PM.dt()); }; }
+#   define TOK_FORCE(PM)    { PRINT_DEBUG("%s Performance: %.2f ms", #PM, PM.dt()); }
 #else // precompile elimination for run-time performance
-#   define TIK(PM)   {} // do nothing
-#   define TOK(PM)   {} // do nothing
+#   define TIK(PM)          {} // do nothing
+#   define TOK(PM)          {} // do nothing
+#   define TOK_FORCE(PM)    {} // do nothing
 #endif
 // ----------------------------------------------------------------
 // : Definitions :
