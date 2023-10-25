@@ -172,8 +172,8 @@ void ArmModel::_compute_spatial_FK_unsafe()
     for (std::size_t i = 0; i < ARM_NUM_LINKS; i++)
     {
         Lie::SE3 exp_xi_theta_i = Lie::Exp_SE3_from_TwistAngle(m_arm.sXi_[i]);
-        s_G_st = s_G_st * exp_xi_theta_i;
-        m_arm.sG_[i] = (s_G_st * m_arm.sG0_[i]);
+        s_G_st = s_G_st * exp_xi_theta_i;           // exp(xi * theta) = exp_0 * ... * exp_i;
+        m_arm.sG_[i] = (s_G_st * m_arm.sG0_[i]);    // g_st(theta) = exp(xi * theta) * g_st(0);
     }
 }
 

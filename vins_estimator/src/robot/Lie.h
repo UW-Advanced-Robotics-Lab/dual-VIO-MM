@@ -111,14 +111,16 @@ namespace Lie {
     so3 log_so3_from_SO3(const SO3& R);
     R3 Log_R3_from_SO3(const SO3& R);
     se3 log_se3_from_SE3(const SE3& T);
-
-    // Projection Map --------------------------------
+ 
+// Projection Map --------------------------------
     SO3 project_to_SO3(const Mat3x3d& M);
     SE3 project_to_SE3(const Mat4x4d& M);
     double distance_to_SO3(const Mat3x3d& M);
     double distance_to_SE3(const Mat4x4d& M);
 	bool if_SO3(const Mat3x3d& M);
 	bool TestIfSE3(const Eigen::Matrix4d& T);
+
+// Debug Utils --------------------------------
     std::string to_string(const Eigen::MatrixXd& M);
 } /* namespace Lie */
 

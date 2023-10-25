@@ -164,13 +164,27 @@ void queue_ArmOdometry_safe(const double t, const Lie::SE3& T, const int device_
     m_buf[device_id].arm_guard.unlock();
     
      // apply transformation on top of the base trajectory:
-    Lie::SO3 R_base = pose_v.q.toRotationMatrix();
-    Lie::SE3 T_base = Lie::SE3_from_SO3xR3(R_base, pose_v.p);
-    T_base = T * T_base;
-    // PRINT_DEBUG("> ArmOdometry [%f]: \n %s", t, Lie::to_string(T_base).c_str());
+    Lie::SO3 R_v = pose_v.q.toRotationMatrix();
+    Lie::SE3 T_v = Lie::SE3_from_SO3xR3(R_v, pose_v.p);
+    // - T * T_v:
+    T_v = T * T_v;
     // transform to quaternions:
     Lie::SO3 R; Lie::R3 p;
-    Lie::SO3xR3_from_SE3(R, p, T_base);
+    Lie::SO3xR3_from_SE3(R, p, T_v);
+    // PRINT_DEBUG("> ArmOdometry [%f]: \n R=\n%s \n p=\n%s", t, Lie::to_string(R).c_str(), Lie::to_string(p).c_str());
+
+    /* [ Decomposed T * T_v ]:
+        - Question: I do not know why the decomposed matrices are not working, the rotation does not match with SE3?
+            - possibly because of the floating errors
+    */ 
+    // Lie::SO3 R2 = T.block<3,3>(0,0) * R_v;
+    // Lie::R3 p2 = T.block<3,3>(0,0) * pose_v.p + T.block<3,1>(0,3);
+    // R2 = Lie::project_to_SO3(R2);
+    // R2 = R2.transpose() * R - Lie::SO3::Identity();
+    // p2 = p2 - p;
+    // PRINT_DEBUG("> ArmOdometry [%f]: \n R.T R=\n%s \n Delta p =\n%s \n", t, 
+    //     Lie::to_string(R2).c_str(), Lie::to_string(p2).c_str());
+
     Eigen::Quaterniond q = Eigen::Quaterniond(R);
 
     // apply transformation to pose:
@@ -187,7 +201,7 @@ void queue_ArmOdometry_safe(const double t, const Lie::SE3& T, const int device_
     geometry_msgs::PoseStamped pose_stamped;
     if (vicon_odom_ok)
     {
-        PRINT_DEBUG("vicon odom ok");
+        // PRINT_DEBUG("vicon odom ok");
         pose_stamped.header = header;
         pose_stamped.pose = pose;
         m_buf[device_id].arm_guard.lock();
