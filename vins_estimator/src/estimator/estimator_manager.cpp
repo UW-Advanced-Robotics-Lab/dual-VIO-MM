@@ -115,7 +115,7 @@ void EstimatorManager::processMeasurements_thread()
                         if ((armVector.first - feature[0].first) >= -0.00001)
                         {
                             // process:
-                            // this->processArm(armVector[id].first, armVector[id].second);
+                            this->processArm_unsafe(armVector.first, armVector.second);
                             break;
                         }
                     }
@@ -271,18 +271,50 @@ void EstimatorManager::inputArm(double t,
         PRINT_ERROR("Joint Messages are not Available!!!!");
     }
 }
-void EstimatorManager::processArm(const double t, const Vector7d_t& jnt_vec)
+void EstimatorManager::processArm_unsafe(const double t, const Vector7d_t& jnt_vec)
 {
     const Lie::SE3 Te = pArm->getCamEE();
     const Lie::SE3 Tb = pArm->getCamBase();
+    if (pEsts[BASE_DEV]->solver_flag == Estimator::SolverFlag::NON_LINEAR)
     {
-        // process:
-        Lie::SE3 T;
+
+        Lie::R3 p_c, v_c; Lie::SO3 R_c;
+        // fetch R,p previous
+        p_c = pEsts[BASE_DEV]->Ps[WINDOW_SIZE];
+        v_c = pEsts[BASE_DEV]->Vs[WINDOW_SIZE];
+        R_c = pEsts[BASE_DEV]->Rs[WINDOW_SIZE];
+
+        Lie::SO3 R_corr; // convert from camera axis back to world axis
+        R_corr <<   0, -1,  0,
+                    0,  0, -1,
+                    1,  0,  0;
+        Lie::SE3 T_c = Lie::SE3_from_SO3xR3(R_c * R_corr, p_c);
+        
+        // PRINT_DEBUG("jnt: %s", Lie::to_string(jnt_vec.transpose()).c_str());
+        // compute theta --> SE3:
+        Lie::SE3 g_st;
+        // pArm->setAngles_unsafely(Vector7d_t::Zero());
         pArm->setAngles_unsafely(jnt_vec);
         pArm->processJntAngles_unsafely();
-        pArm->getEndEffectorPose_unsafely(T);
-        // queue for viz:
-        queue_ArmOdometry_safe(t, T, Tb, Te, BASE_DEV); // TODO: process base here
+        pArm->getEndEffectorPose_unsafely(g_st);
+        
+        Lie::SE3 T_b = T_c;
+        
+        // rebase base cam frame onto the summit base frame
+        Lie::SE3 Tc_b = Lie::inverse_SE3(Tb);
+        T_b = T_b * Tc_b;
+
+        // rebase arm config onto the base frame
+        T_b = T_b * g_st;
+
+        // apply tool tip frame
+        T_b = T_b * Te;
+
+        // PRINT_DEBUG("> ArmOdometry [%f]: \n R=\n%s \n p=\n%s", t, Lie::to_string(R).c_str(), Lie::to_string(p).c_str());
+        Lie::SO3xR3_from_SE3(arm_buf.R_result, arm_buf.p_result, T_b);
+        
+        // publish immediately:
+        queue_ArmOdometry_safe(t, arm_buf.R_result, arm_buf.p_result, BASE_DEV);
     }
 }
 #endif 

@@ -140,66 +140,11 @@ void visualization_guard_unlock(const Estimator &estimator)
 }
 
 #if (FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT)
-void queue_ArmOdometry_safe(const double t, const Lie::SE3& T, const Lie::SE3& Tb, const Lie::SE3& Te, const int device_id)
+void queue_ArmOdometry_safe(const double t, const Lie::SO3& R, const Lie::R3& p, const int device_id)
 {
     std_msgs::Header header;
     header.frame_id = "world";
-    header.stamp = ros::Time(t); // copy the timestamp, TODO: should we do a sync?
-
-    // fetch the latest vicon pose:
-    bool vicon_odom_ok;
-    pose_data_t pose_v;
-    
-    m_buf[device_id].arm_guard.lock();
-    vicon_odom_ok = !m_buf[device_id].arm_vicon_odom_buf.empty();
-    while (! m_buf[device_id].arm_vicon_odom_buf.empty())
-    {
-        pose_v = m_buf[device_id].arm_vicon_odom_buf.front(); 
-        // pop till latest pose:
-        if (pose_v.t < t)
-            m_buf[device_id].arm_vicon_odom_buf.pop();
-        else
-            break;
-    }
-    m_buf[device_id].arm_guard.unlock();
-    
-    PRINT_DEBUG("q: %s", Lie::to_string(pose_v.q).c_str());
-
-     // apply transformation on top of the base trajectory:
-    Lie::SO3 Rs_c = pose_v.q.toRotationMatrix();
-    Lie::R3 ps_c = pose_v.p;
-    // - T * T_v:
-    Lie::SE3 Tc_b = Lie::inverse_SE3(Tb);
-    // PRINT_DEBUG("Tb_inv = \n%s\n", Lie::to_string(Tb_inv).c_str());
-    
-    Lie::SO3 Rc_b; Lie::R3 pc_b;
-    Lie::SO3xR3_from_SE3(Rc_b, pc_b, Tc_b);
-
-    // R_v = R_b.transpose() * R_v;
-    Lie::SO3 R; Lie::R3 p;
-    R = Rs_c * Rc_b;
-    p = ps_c + Rs_c * pc_b;
-    
-    // PRINT_DEBUG("> ArmOdometry [%f]: \n R=\n%s \n p=\n%s", t, Lie::to_string(R).c_str(), Lie::to_string(p).c_str());
-    
-    // PRINT_DEBUG("Te = \n%s\n", Lie::to_string(Te).c_str());
-    // T_v = Te * T_v;
-    // PRINT_DEBUG("T_v = \n%s\n", Lie::to_string(T_v).c_str());
-    
-    // transform to quaternions:
-    // PRINT_DEBUG("> ArmOdometry [%f]: \n R=\n%s \n p=\n%s", t, Lie::to_string(R).c_str(), Lie::to_string(p).c_str());
-
-    /* [ Decomposed T * T_v ]:
-        - Question: I do not know why the decomposed matrices are not working, the rotation does not match with SE3?
-            - possibly because of the floating errors
-    */ 
-    // Lie::SO3 R2 = T.block<3,3>(0,0) * R_v;
-    // Lie::R3 p2 = T.block<3,3>(0,0) * pose_v.p + T.block<3,1>(0,3);
-    // R2 = Lie::project_to_SO3(R2);
-    // R2 = R2.transpose() * R - Lie::SO3::Identity();
-    // p2 = p2 - p;
-    // PRINT_DEBUG("> ArmOdometry [%f]: \n R.T R=\n%s \n Delta p =\n%s \n", t, 
-    //     Lie::to_string(R2).c_str(), Lie::to_string(p2).c_str());
+    header.stamp = ros::Time(t);
 
     Eigen::Quaterniond q = Eigen::Quaterniond(R);
 
@@ -215,17 +160,14 @@ void queue_ArmOdometry_safe(const double t, const Lie::SE3& T, const Lie::SE3& T
 
     // push back
     geometry_msgs::PoseStamped pose_stamped;
-    if (vicon_odom_ok)
-    {
-        // PRINT_DEBUG("vicon odom ok");
-        pose_stamped.header = header;
-        pose_stamped.pose = pose;
-        m_buf[device_id].arm_guard.lock();
-        m_buf[device_id].arm_path.header = header;
-        m_buf[device_id].arm_path.header.frame_id = "world";
-        m_buf[device_id].arm_path.poses.push_back(pose_stamped);
-        m_buf[device_id].arm_guard.unlock();
-    }
+    // PRINT_DEBUG("vicon odom ok");
+    pose_stamped.header = header;
+    pose_stamped.pose = pose;
+    m_buf[device_id].arm_guard.lock();
+    m_buf[device_id].arm_path.header = header;
+    m_buf[device_id].arm_path.header.frame_id = "world";
+    m_buf[device_id].arm_path.poses.push_back(pose_stamped);
+    m_buf[device_id].arm_guard.unlock();
 }
 void pubArmOdometry_safe(const int device_id)
 {
@@ -483,12 +425,6 @@ void queue_ViconOdometry_safe(const geometry_msgs::TransformStampedConstPtr &tra
     m_buf[device_id].vicon_path.header.frame_id = "world";
     m_buf[device_id].vicon_path.poses.push_back(pose_stamped);
     m_buf[device_id].vicon_guard.unlock();
-#if (FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT)
-    const pose_data_t odom_buf = pose_data_t{.t=header.stamp.toSec(), .p=p, .q=q};
-    m_buf[device_id].arm_guard.lock();
-    m_buf[device_id].arm_vicon_odom_buf.push(odom_buf);
-    m_buf[device_id].arm_guard.unlock();
-#endif
 }
 void pubViconOdometryPath_safe(const int device_id)
 {

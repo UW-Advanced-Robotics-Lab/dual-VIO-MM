@@ -182,7 +182,7 @@ using namespace std;
 #define FEATURE_VIZ_ROSOUT_ODOMETRY_SUPPORT            ((DISABLED) & (!FEATURE_MODE_RUNTIME))
 #define FEATURE_TRACKING_IMAGE_SUPPORT                 (( ENABLED) & (!FEATURE_MODE_RUNTIME)) 
 #define FEATURE_PERFORMANCE_DEBUG_PRINTF               (( ENABLED) & (!FEATURE_MODE_RUNTIME)) 
-#define FEATURE_VIZ_PUBLISH                            ((DISABLED) & (!FEATURE_MODE_RUNTIME)) 
+#define FEATURE_VIZ_PUBLISH                            (( ENABLED) & (!FEATURE_MODE_RUNTIME)) 
 // debug only features (additional images):
 #define FEATURE_DEBUG_IMAGE_AT_CONNECTIONS             ((DISABLED) & (!FEATURE_MODE_RUNTIME))
 // ----------------------------------------------------------------
