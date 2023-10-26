@@ -1,4 +1,5 @@
 #include "estimator_manager.h"
+#include "../robot/Lie.h"
 
 EstimatorManager::EstimatorManager(std::shared_ptr<DeviceConfig_t> _pCfgs[])
 {
@@ -62,33 +63,175 @@ void EstimatorManager::restartManager()
 
 void EstimatorManager::processMeasurements_thread()
 {
+    const std::chrono::milliseconds rate(EST_MANAGER_PROCESSING_INTERVAL_MS); 
+    double prevTime[MAX_NUM_DEVICES] = {0.0, 0.0};
+
     TicToc ellapsed_process;
     TicToc ellapsed_process_i;
     while (FOREVER)
     {
-        TIK(ellapsed_process_i);
+        auto start_time = std::chrono::high_resolution_clock::now();
 
-        TIK(ellapsed_process_i);
-        pEsts[BASE_DEV]->processMeasurements_once();
-        TOK_TAG(ellapsed_process_i, "base");
-        
-        TIK(ellapsed_process_i);
-        pEsts[EE_DEV  ]->processMeasurements_once();
-        TOK_TAG(ellapsed_process_i, "EE");
+        TIK(ellapsed_process);
+        // Processing Tasks:
+        {
+            pair<double, map<int, vector<pair<int, Eigen::Matrix<double, 7, 1> > > > > feature[MAX_NUM_DEVICES];
+            vector<pair<double, Eigen::Vector3d>> accVector[MAX_NUM_DEVICES], gyrVector[MAX_NUM_DEVICES];
+            pair<double, Vector7d_t> armVector;
+            double curTime[MAX_NUM_DEVICES];
 
-#if (FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT)
-        TIK(ellapsed_process_i);
-        this->processArm_AllAtOnce();
-        TOK_TAG(ellapsed_process_i, "arm");
-#endif 
+            const bool is_base_avail = (pEsts[BASE_DEV]->featureBuf.empty() == false);
+            const bool is_EE_avail   = (pEsts[EE_DEV  ]->featureBuf.empty() == false);
 
-        TOK(ellapsed_process_i);
+            // Only process when both features are available:
+            if (is_base_avail && is_EE_avail)
+            {
+                // fetch features:
+                TIK(ellapsed_process_i);
+                for(size_t id = BASE_DEV; id < MAX_NUM_DEVICES; id++)
+                {
+                    pEsts[id]->mBuf.lock();
+                    feature[id] = pEsts[id]->featureBuf.front();
+                    pEsts[id]->featureBuf.pop(); // drop frame buffer
+                    pEsts[id]->mBuf.unlock();
+                    curTime[id] = feature[id].first + pEsts[id]->td;
+                }
+                TOK_TAG(ellapsed_process_i, "fetch_features");
 
+#           if (FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT)
+                TIK(ellapsed_process_i);
+                bool is_arm_avail = (this->arm_buf.data.empty() == false);
+                if (is_arm_avail)
+                {
+                    while (this->arm_buf.data.empty() == false) // ideally one loop needed, but loop to drop excessive in case
+                    {
+                        // acquire:
+                        this->arm_buf.guard.lock();
+                        armVector = this->arm_buf.data.front();
+                        this->arm_buf.data.pop();
+                        this->arm_buf.guard.unlock();
+                        // queue:
+                        // PRINT_DEBUG("Delta Time dt=%f , dt=%f \n", (armVector.first - feature[0].first), (feature[1].first - feature[0].first));
+                        if ((armVector.first - feature[0].first) >= -0.00001)
+                        {
+                            // process:
+                            // this->processArm(armVector[id].first, armVector[id].second);
+                            break;
+                        }
+                    }
+                }
+                else
+                {
+                    PRINT_DEBUG("Arm is NOT available");
+                }
+                TOK_TAG(ellapsed_process_i, "fetch_arm_odom");
+#           endif
 
-        std::chrono::milliseconds dura(10);
-        std::this_thread::sleep_for(dura);
+                const bool is_base_imu_avail    = pEsts[BASE_DEV]->IMUAvailable(curTime[BASE_DEV]);
+                const bool is_EE_imu_avail      = pEsts[EE_DEV  ]->IMUAvailable(curTime[EE_DEV  ]);
+                
+                // fetch and process:
+                if (is_base_imu_avail && is_EE_imu_avail)
+                {
+                    // fetch IMU:
+                    TIK(ellapsed_process_i);
+                    for(size_t id = BASE_DEV; id < MAX_NUM_DEVICES; id++)
+                    {
+                        // fetch imu buffers from the time window:
+                        pEsts[id]->mBuf.lock();
+                        // pEsts[id]->featureBuf.pop(); // drop frame buffer
+                        pEsts[id]->getIMUInterval_unsafe(prevTime[id], curTime[id], accVector[id], gyrVector[id]);
+                        pEsts[id]->mBuf.unlock();
+                        
+                        // initialize:
+                        if (! pEsts[id]->initFirstPoseFlag)
+                            pEsts[id]->initFirstIMUPose(accVector[id]);
+                    }
+                    TOK_TAG(ellapsed_process_i, "fetch_imu");
+
+                    // process imu iteratively:
+                    TIK(ellapsed_process_i);
+                    for(size_t id = BASE_DEV; id < MAX_NUM_DEVICES; id++)
+                    {
+                        for(size_t i = 0; i < accVector[id].size(); i++)
+                        {
+                            double dt;
+                            if(i == 0) // head
+                                dt = accVector[id][i].first - prevTime[id];
+                            else if (i == accVector[id].size() - 1)
+                            {
+                                // only sample the partial of the tail imu data up to the time the frame was captured
+                                dt = curTime[id] - accVector[id][i - 1].first;
+                                // double dt2 = accVector[i].first - accVector[i - 1].first;
+                                // PRINT_DEBUG("dt=%f|%f, ~%f", dt, dt2, dt2-dt); // idff is 0.001s
+                            }
+                            else // middle
+                                dt = accVector[id][i].first - accVector[id][i - 1].first;
+                            pEsts[id]->processIMU(accVector[id][i].first, dt, accVector[id][i].second, gyrVector[id][i].second);
+                        }
+                    }
+                    TOK_TAG(ellapsed_process_i, "imu_process");
+
+                    // process Image:
+                    TIK(ellapsed_process_i);
+                    for(size_t id = BASE_DEV; id < MAX_NUM_DEVICES; id++)
+                    {
+                        pEsts[id]->mProcess.lock();
+                        pEsts[id]->processImage(feature[id].second, feature[id].first);
+                        prevTime[id] = curTime[id];
+
+                        /*** Publish ***/
+#                   if (FEATURE_ENABLE_STATISTICS_LOGGING)
+                        // Print Statistics:
+                        printStatistics(*pEsts[id], 0);
+#                   endif
+
+                        // Publish:
+                        std_msgs::Header header;
+                        header.frame_id = "world";
+                        header.stamp = ros::Time(feature[id].first);
+                        // immediate updates:
+                        {
+                            pubKeyframe_Odometry_and_Points_immediately(*pEsts[id]);
+                            pubTF_immediately(*pEsts[id], header);
+                            pubOdometry_Immediately(*pEsts[id], header);
+                        }
+#                   if (FEATURE_VIZ_PUBLISH)
+                        // visualization updates:
+                        visualization_guard_lock(*pEsts[id]);
+                        {
+                            queue_KeyPoses_unsafe(*pEsts[id], header);
+                            queue_CameraPose_unsafe(*pEsts[id], header);
+                            queue_PointCloud_unsafe(*pEsts[id], header);
+                        }
+                        visualization_guard_unlock(*pEsts[id]);
+#                   endif
+                        
+                        // End-of-publishing
+                        pEsts[id]->mProcess.unlock();
+                    }
+                    TOK_TAG(ellapsed_process_i, "image_process_and_publish");
+                }
+                else
+                {
+                    PRINT_WARN("wait for imu ... \n");
+                }
+            }
+
+        }
+        TOK_IF(ellapsed_process,EST_MANAGER_PROCESSING_INTERVAL_MS);
+
+        // dynamic sleeping:
+        auto end_time = std::chrono::high_resolution_clock::now();
+        auto elapsed_time = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
+        // Sleep for the remaining time to achieve the fixed rate:
+        if (elapsed_time < rate) {
+            std::this_thread::sleep_for(rate - elapsed_time);
+        }
     }
 }
+
+
 
 void EstimatorManager::registerPublishers(ros::NodeHandle &n, const int N_DEVICES)
 {
@@ -105,43 +248,42 @@ void EstimatorManager::inputIMU(const size_t DEV_ID, const double t, const Vecto
 }
 
 #if (FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT)
-void EstimatorManager::inputArm(double t, const sensor_msgs::JointStateConstPtr &_jnt_msg)
+void EstimatorManager::inputArm(double t, 
+    const sensor_msgs::JointStateConstPtr &_jnt_msg_b)
+    // const sensor_msgs::JointStateConstPtr &_jnt_msg_E)
 {
     // input joints:
-    if (_jnt_msg)
+    Vector7d_t jnt_msg_b;
+    // Vector7d_t jnt_vel, jnt_tau;
+    if (_jnt_msg_b)
     {
-        Vector7d_t jnt_pos, jnt_vel, jnt_tau;
-        // PRINT_ARRAY(_jnt_msg->position, 7);
         for (int i = 0; i < ARM_NUM_DOF; ++i) {
-            jnt_pos(i) = _jnt_msg->position[i];
-            jnt_vel(i) = _jnt_msg->velocity[i];
-            jnt_tau(i) = _jnt_msg->effort[i];
+            jnt_msg_b(i) = _jnt_msg_b->position[i];
+            // jnt_msg_E(i) = _jnt_msg_E->position[i];
         }
-        // std::cout << jnt_pos << std::endl;
         this->arm_buf.guard.lock();
-        this->arm_buf.data.push(make_pair(t, jnt_pos));
+        this->arm_buf.data.push(make_pair(t, jnt_msg_b));
+        // this->arm_buf.data[EE_DEV  ].push(make_pair(t, jnt_msg_E));
         this->arm_buf.guard.unlock();
     }
+    else
+    {
+        PRINT_ERROR("Joint Messages are not Available!!!!");
+    }
 }
-void EstimatorManager::processArm_AllAtOnce()
+void EstimatorManager::processArm(const double t, const Vector7d_t& jnt_vec)
 {
-    arm_buf.guard.lock();
-    // PRINT_INFO("pubArmOdometry_safe");
-    while(!arm_buf.data.empty())
+    const Lie::SE3 Te = pArm->getCamEE();
+    const Lie::SE3 Tb = pArm->getCamBase();
     {
         // process:
         Lie::SE3 T;
-        double t = arm_buf.data.front().first;
-        pArm->setAngles_unsafely(arm_buf.data.front().second);
+        pArm->setAngles_unsafely(jnt_vec);
         pArm->processJntAngles_unsafely();
         pArm->getEndEffectorPose_unsafely(T);
-        // PRINT_DEBUG("> ArmOdometry [%f]: \n %s", armBuf.front().first, Lie::to_string(T));
-        // empty now, TODO: we should process batches here, and send out as odometry path
-        arm_buf.data.pop(); 
         // queue for viz:
-        queue_ArmOdometry_safe(t, T, BASE_DEV); // TODO: process base here
+        queue_ArmOdometry_safe(t, T, Tb, Te, BASE_DEV); // TODO: process base here
     }
-    arm_buf.guard.unlock();
 }
 #endif 
 
@@ -161,7 +303,7 @@ void EstimatorManager::publishVisualization_thread()
     {
         auto start_time = std::chrono::high_resolution_clock::now();
         TIK(ellapsed_publisher);
-        // Tasks:
+        // Publishing Tasks:
         for(int dev_id=BASE_DEV; dev_id<MAX_NUM_DEVICES; dev_id++)
         {
             // publishing topics:
@@ -177,11 +319,13 @@ void EstimatorManager::publishVisualization_thread()
             pubArmOdometry_safe(dev_id);
 #endif
         }
+        TOK_IF(ellapsed_publisher,TOPIC_PUBLISH_INTERVAL_MS);
+        
+        // dynamic sleeping:
         auto end_time = std::chrono::high_resolution_clock::now();
         auto elapsed_time = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
         // Sleep for the remaining time to achieve the fixed rate:
         if (elapsed_time < rate) {
-            TOK(ellapsed_publisher);
             std::this_thread::sleep_for(rate - elapsed_time);
         }
     }

@@ -122,6 +122,7 @@ namespace Lie {
 
 // Debug Utils --------------------------------
     std::string to_string(const Eigen::MatrixXd& M);
+    std::string to_string(const Eigen::Quaterniond& q);
 } /* namespace Lie */
 
 

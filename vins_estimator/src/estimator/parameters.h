@@ -54,6 +54,9 @@ using namespace std;
 #define IMAGE_PROCESSING_FPS                    ((float)(15))      // [run-time,perf] set processing rate [15, 30], reduce if the frame drops are significant
 #define IMAGE_PROCESSING_INTERVAL               ((float)(1.0/(IMAGE_PROCESSING_FPS)))
 
+#define EST_MANAGER_PROCESSING_FPS              ((int)(20))
+#define EST_MANAGER_PROCESSING_INTERVAL_MS      ((int)(1000/EST_MANAGER_PROCESSING_FPS))
+
 #define TOPIC_PUBLISH_FPS                       ((int)(10))        // [run-time,visual] reduce if the frame drops are significant, visual only
 #define TOPIC_PUBLISH_INTERVAL_MS               ((int)(1000/TOPIC_PUBLISH_FPS))
 /* Hyperparams:
@@ -75,7 +78,7 @@ using namespace std;
 //[Later] TODO: should we parameterize as config hyper parameter? depending on the hardware, the rate might be dfifferent.
 #define IMAGE_SYNCHRONIZATION_TIME_DELTA_MAX    (double)(0.03) 
 #define IMAGE_BEHIND_SCHEDULE_TIME_TOLERANCE    (double)(0.06) 
-#define IMAGE_ARM_SYNC_TIME_DELTA_MAX           (double)(0.002)  // 500 Hz --> 0.002 s --> tol: 0.002 s: allowance of 1-2 ticks
+#define IMAGE_ARM_SYNC_TIME_DELTA_MAX           (double)(0.004)  // 500 Hz --> 0.002 s --> tol: 0.002 s: allowance of 1-2 ticks
 
 // ----------------------------------------------------------------
 // : ROS TOPICS :
@@ -179,7 +182,7 @@ using namespace std;
 #define FEATURE_VIZ_ROSOUT_ODOMETRY_SUPPORT            ((DISABLED) & (!FEATURE_MODE_RUNTIME))
 #define FEATURE_TRACKING_IMAGE_SUPPORT                 (( ENABLED) & (!FEATURE_MODE_RUNTIME)) 
 #define FEATURE_PERFORMANCE_DEBUG_PRINTF               (( ENABLED) & (!FEATURE_MODE_RUNTIME)) 
-
+#define FEATURE_VIZ_PUBLISH                            ((DISABLED) & (!FEATURE_MODE_RUNTIME)) 
 // debug only features (additional images):
 #define FEATURE_DEBUG_IMAGE_AT_CONNECTIONS             ((DISABLED) & (!FEATURE_MODE_RUNTIME))
 // ----------------------------------------------------------------
@@ -215,11 +218,13 @@ using namespace std;
 #   define TOK(PM)          {if (PM.toc() > FEATURE_PERFORMANCE_EVAL_THRESHOLD_MS) { PRINT_DEBUG("%s Performance: %.2f ms", #PM, PM.dt()); }; }
 #   define TOK_FORCE(PM)    { PRINT_DEBUG("%s Performance: %.2f ms", #PM, PM.dt()); }
 #   define TOK_TAG(PM, TAG) {if (PM.toc() > FEATURE_PERFORMANCE_EVAL_THRESHOLD_MS) { PRINT_DEBUG("%s Performance [%s]: %.2f ms", #PM, TAG, PM.dt()); }; }
+#   define TOK_IF(PM, MS)   {if (PM.toc() > MS) { PRINT_DEBUG("%s Performance: %.2f ms", #PM, PM.dt()); }; }
 #else // precompile elimination for run-time performance
 #   define TIK(PM)          {} // do nothing
 #   define TOK(PM)          {} // do nothing
 #   define TOK_FORCE(PM)    {} // do nothing
 #   define TOK_TAG(PM, TAG) {} // do nothing
+#   define TOK_IF(PM, MS)   {} // do nothing
 #endif
 // ----------------------------------------------------------------
 // : Definitions :

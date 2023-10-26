@@ -97,6 +97,8 @@ ArmModel::~ArmModel()
 
 const Lie::SE3 T0_summit = Lie::SE3::Identity();
 const Lie::R3 summit_dP_wam = Lie::R3(0.14,0,0.405);
+const Lie::R3 summit_dP_cam_base = Lie::R3(0.346,0,0.397);
+const Lie::R3 wam_dP_cam_ee = Lie::R3(0,-0.11,0.018);
 
 void ArmModel::_model_initialization_unsafe()
 {
@@ -139,6 +141,10 @@ void ArmModel::_model_initialization_unsafe()
         m_arm.sXi_[i].vw = RBT::twist_from_axis_point(w_, m_arm.sG0_[i].block<3,1>(0,3));
         m_arm.sXi_[i].theta = 0; // zero config
     }
+    // - init base cam transformation:
+    m_arm.sG_cam_base = Lie::SE3_from_SO3xR3(R_summit, summit_dP_cam_base);
+    // - init tool cam transformation:
+    m_arm.tG_cam_EE = Lie::SE3_from_SO3xR3(Lie::SO3::Identity(), wam_dP_cam_ee);
 }
 
 void ArmModel::acquireLock() {m_arm.guard.lock();}
@@ -215,4 +221,10 @@ bool ArmModel::getEndEffectorPose_unsafely(Lie::SE3& T){
         // m_arm.guard.unlock();
     }
     return success;
+}
+Lie::SE3 ArmModel::getCamEE(){
+    return m_arm.tG_cam_EE;
+}
+Lie::SE3 ArmModel::getCamBase(){
+    return m_arm.sG_cam_base;
 }

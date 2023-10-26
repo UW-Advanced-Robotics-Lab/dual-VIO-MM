@@ -389,5 +389,11 @@ namespace Lie {
         ss << M;
         return ss.str();
     }
+    std::string to_string(const Eigen::Quaterniond& q)
+    {
+        std::stringstream ss;
+        ss << "Quaternion (x,y,z,w): "  << q.x() << ", " << q.y() << ", " << q.z()  << ", " << q.w() << std::endl;
+        return ss.str();
+    }
 } /* namespace Lie */
 

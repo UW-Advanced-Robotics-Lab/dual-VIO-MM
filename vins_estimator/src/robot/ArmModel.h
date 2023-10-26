@@ -35,10 +35,17 @@ public:
     bool getEndEffectorPose_unsafely(Lie::SE3& T);
     // lock release:
     void releaseLock();
+    // get:
+    Lie::SE3 getCamEE();
+    Lie::SE3 getCamBase();
 
 private:
     typedef struct{
-        Lie::SE3 sG0_[ARM_NUM_LINKS]; // zero config
+        // cam config:
+        Lie::SE3 sG_cam_base;
+        Lie::SE3 tG_cam_EE;
+        // zero config:
+        Lie::SE3 sG0_[ARM_NUM_LINKS];
         // joint related:
         uint16_t jActive = 0;
         double jLimit_lb[ARM_NUM_LINKS];

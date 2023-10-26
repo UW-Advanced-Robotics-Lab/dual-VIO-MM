@@ -9,6 +9,7 @@
 
 #include "estimator.h"
 #include "../utility/visualization.h"
+#include "../robot/Lie.h"
 
 Estimator::Estimator(std::shared_ptr<DeviceConfig_t> _pCfg): pCfg{_pCfg}, f_manager{Rs,_pCfg}, featureTracker{_pCfg}
 {
@@ -103,7 +104,8 @@ void Estimator::setParameter()
     {
         tic[i] = pCfg->TIC[i];
         ric[i] = pCfg->RIC[i];
-        cout << " exitrinsic cam " << i << endl  << ric[i] << endl << tic[i].transpose() << endl;
+        PRINT_INFO("Extrinsic Camera [%d] \n R_ic=\n %s\n p_ic=\n %s\n", i, 
+            Lie::to_string(ric[i]).c_str(), Lie::to_string(tic[i].transpose()).c_str());
     }
     f_manager.setRic(ric);
     ProjectionTwoFrameOneCamFactor::sqrt_info = FOCAL_LENGTH / 1.5 * Matrix2d::Identity();
@@ -111,7 +113,7 @@ void Estimator::setParameter()
     ProjectionOneFrameTwoCamFactor::sqrt_info = FOCAL_LENGTH / 1.5 * Matrix2d::Identity();
     td = pCfg->TD;
     g = pCfg->G;
-    cout << "set g " << g.transpose() << endl;
+    PRINT_INFO("Gravity: g= %s\n", Lie::to_string(g.transpose()).c_str());
     featureTracker.readIntrinsicParameterArray(pCfg->CAM_MODEL_PATH, pCfg->NUM_OF_CAM);
     mProcess.unlock();
 }

@@ -36,7 +36,7 @@ class EstimatorManager
         void inputImage(double t, const cv::Mat &_img_b, const cv::Mat &_img_e);
 
 #if (FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT)
-        void inputArm(double t, const sensor_msgs::JointStateConstPtr &_jnt_msg);
+        void inputArm(double t, const sensor_msgs::JointStateConstPtr &_jnt_msg_b);
 #endif
         // callbacks:
         // thread:
@@ -51,7 +51,7 @@ class EstimatorManager
         } arm_buffer_t;
         arm_buffer_t                    arm_buf;
         std::shared_ptr<ArmModel>       pArm;
-        void processArm_AllAtOnce();
+        void processArm(const double t, const Vector7d_t& jnt_vec);
 #endif
 
         std::shared_ptr<DeviceConfig_t> pCfgs[MAX_NUM_DEVICES];

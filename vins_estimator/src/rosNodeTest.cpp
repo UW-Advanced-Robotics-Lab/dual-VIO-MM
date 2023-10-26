@@ -179,17 +179,17 @@ void sync_process_IMG()
                 while (!m_arm.jnt_buf.empty()) 
                 {
                     jnt_msg = m_arm.jnt_buf.front();
-                    da_time = jnt_msg->header.stamp.toSec() + IMAGE_ARM_SYNC_TIME_DELTA_MAX; // with offset
+                    da_time = jnt_msg->header.stamp.toSec(); // with offset
 
                     // acquire arms within the delta time window, set to allowance 1-3 ticks 0.002s/tick
-                    if (FLOAT_IN_BOUND((da_time - d0_time), 0, (IMAGE_ARM_SYNC_TIME_DELTA_MAX * 2)))
+                    if (FLOAT_IN_BOUND((da_time - d0_time), -IMAGE_ARM_SYNC_TIME_DELTA_MAX, IMAGE_ARM_SYNC_TIME_DELTA_MAX))
                     {
                         jnt_msg_b = jnt_msg;
                         // PRINT_DEBUG("> fetching joint buffer dt=%fs", d01_delta);
                         // PRINT_ARRAY(jnt_msg->position, 7);
                         // counter2 ++;
                     }
-                    if (FLOAT_IN_BOUND((da_time - d1_time), 0, (IMAGE_ARM_SYNC_TIME_DELTA_MAX * 2)))
+                    if (FLOAT_IN_BOUND((da_time - d1_time), -IMAGE_ARM_SYNC_TIME_DELTA_MAX, IMAGE_ARM_SYNC_TIME_DELTA_MAX))
                     {
                         // PRINT_DEBUG("> fetching joint buffer dt=%fs", d01_delta);
                         // PRINT_ARRAY(jnt_msg->position, 7);
@@ -233,10 +233,11 @@ void sync_process_IMG()
                     // [ decoupled estimators ]
                     // [Later] TODO: we should consider coupling the estimators (stereo for the same states)
                     // TODO: add joint state from the estimators
-                    m_est_manager.inputImage(d0_time, d0_img, d1_img); 
 #if (FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT)
-                    m_est_manager.inputArm(d0_time, jnt_msg_b); //jnt_msg_E
+                    m_est_manager.inputArm(d0_time, jnt_msg_b); // jnt_msg_E); //TODO: buf two set of joints?
+                    //must before input image
 #endif 
+                    m_est_manager.inputImage(d0_time, d0_img, d1_img); 
 
                     d0_time_last_submitted = d0_time; // to compute run-time processing rate
 

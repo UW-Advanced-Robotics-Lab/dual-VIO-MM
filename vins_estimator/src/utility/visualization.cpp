@@ -140,7 +140,7 @@ void visualization_guard_unlock(const Estimator &estimator)
 }
 
 #if (FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT)
-void queue_ArmOdometry_safe(const double t, const Lie::SE3& T, const int device_id)
+void queue_ArmOdometry_safe(const double t, const Lie::SE3& T, const Lie::SE3& Tb, const Lie::SE3& Te, const int device_id)
 {
     std_msgs::Header header;
     header.frame_id = "world";
@@ -163,14 +163,30 @@ void queue_ArmOdometry_safe(const double t, const Lie::SE3& T, const int device_
     }
     m_buf[device_id].arm_guard.unlock();
     
+    PRINT_DEBUG("q: %s", Lie::to_string(pose_v.q).c_str());
+
      // apply transformation on top of the base trajectory:
-    Lie::SO3 R_v = pose_v.q.toRotationMatrix();
-    Lie::SE3 T_v = Lie::SE3_from_SO3xR3(R_v, pose_v.p);
+    Lie::SO3 Rs_c = pose_v.q.toRotationMatrix();
+    Lie::R3 ps_c = pose_v.p;
     // - T * T_v:
-    T_v = T * T_v;
-    // transform to quaternions:
+    Lie::SE3 Tc_b = Lie::inverse_SE3(Tb);
+    // PRINT_DEBUG("Tb_inv = \n%s\n", Lie::to_string(Tb_inv).c_str());
+    
+    Lie::SO3 Rc_b; Lie::R3 pc_b;
+    Lie::SO3xR3_from_SE3(Rc_b, pc_b, Tc_b);
+
+    // R_v = R_b.transpose() * R_v;
     Lie::SO3 R; Lie::R3 p;
-    Lie::SO3xR3_from_SE3(R, p, T_v);
+    R = Rs_c * Rc_b;
+    p = ps_c + Rs_c * pc_b;
+    
+    // PRINT_DEBUG("> ArmOdometry [%f]: \n R=\n%s \n p=\n%s", t, Lie::to_string(R).c_str(), Lie::to_string(p).c_str());
+    
+    // PRINT_DEBUG("Te = \n%s\n", Lie::to_string(Te).c_str());
+    // T_v = Te * T_v;
+    // PRINT_DEBUG("T_v = \n%s\n", Lie::to_string(T_v).c_str());
+    
+    // transform to quaternions:
     // PRINT_DEBUG("> ArmOdometry [%f]: \n R=\n%s \n p=\n%s", t, Lie::to_string(R).c_str(), Lie::to_string(p).c_str());
 
     /* [ Decomposed T * T_v ]:
@@ -434,6 +450,9 @@ void queue_ViconOdometry_safe(const geometry_msgs::TransformStampedConstPtr &tra
         m_buf[BASE_DEV].vicon_p0 = -p;
         m_buf[EE_DEV].vicon_R0 = R.transpose();
         m_buf[EE_DEV].vicon_p0 = -p;
+
+        PRINT_DEBUG("vicon_R0 = \n%s", Lie::to_string(R.transpose()).c_str());
+        PRINT_DEBUG("vicon_p0 = %s", Lie::to_string(-p.transpose()).c_str());
 #   else
         // R^T , -p : for offset correction
         m_buf[device_id].vicon_R0 = R.transpose();
@@ -455,7 +474,6 @@ void queue_ViconOdometry_safe(const geometry_msgs::TransformStampedConstPtr &tra
     pose.orientation.z = q.z();
     pose.orientation.w = q.w();
 #endif
-    const pose_data_t odom_buf = pose_data_t{.t=header.stamp.toSec(), .p=p, .q=q};
     // push back
     geometry_msgs::PoseStamped pose_stamped;
     pose_stamped.header = header;
@@ -466,6 +484,7 @@ void queue_ViconOdometry_safe(const geometry_msgs::TransformStampedConstPtr &tra
     m_buf[device_id].vicon_path.poses.push_back(pose_stamped);
     m_buf[device_id].vicon_guard.unlock();
 #if (FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT)
+    const pose_data_t odom_buf = pose_data_t{.t=header.stamp.toSec(), .p=p, .q=q};
     m_buf[device_id].arm_guard.lock();
     m_buf[device_id].arm_vicon_odom_buf.push(odom_buf);
     m_buf[device_id].arm_guard.unlock();
