@@ -176,6 +176,7 @@ void EstimatorManager::processMeasurements_thread()
                     TIK(ellapsed_process_i);
                     for(size_t id = BASE_DEV; id < MAX_NUM_DEVICES; id++)
                     {
+                        // arm_buf.R_result, arm_buf.p_result
                         pEsts[id]->mProcess.lock();
                         pEsts[id]->processImage(feature[id].second, feature[id].first);
                         prevTime[id] = curTime[id];
@@ -214,7 +215,7 @@ void EstimatorManager::processMeasurements_thread()
                 }
                 else
                 {
-                    PRINT_WARN("wait for imu ... \n");
+                    PRINT_WARN("wait for both imu [%d|%d] ... \n", is_base_imu_avail, is_EE_imu_avail);
                 }
             }
 
@@ -284,10 +285,17 @@ void EstimatorManager::processArm_unsafe(const double t, const Vector7d_t& jnt_v
         v_c = pEsts[BASE_DEV]->Vs[WINDOW_SIZE];
         R_c = pEsts[BASE_DEV]->Rs[WINDOW_SIZE];
 
-        Lie::SO3 R_corr; // convert from camera axis back to world axis
-        R_corr <<   0, -1,  0,
-                    0,  0, -1,
-                    1,  0,  0;
+        const Lie::SO3 R_corr(
+            (Lie::SO3() <<  0, -1,  0,
+                            0,  0, -1,
+                            1,  0,  0).finished()
+        ); // convert from camera axis back to world axis
+        const Lie::SO3 R_corr_T(
+            (Lie::SO3() <<   0,  0,  1,
+                            -1,  0,  0,
+                             0, -1,  0).finished()
+        ); // convert from world axis back to camera axis
+        
         Lie::SE3 T_c = Lie::SE3_from_SO3xR3(R_c * R_corr, p_c);
         
         // PRINT_DEBUG("jnt: %s", Lie::to_string(jnt_vec.transpose()).c_str());
@@ -312,6 +320,7 @@ void EstimatorManager::processArm_unsafe(const double t, const Vector7d_t& jnt_v
 
         // PRINT_DEBUG("> ArmOdometry [%f]: \n R=\n%s \n p=\n%s", t, Lie::to_string(R).c_str(), Lie::to_string(p).c_str());
         Lie::SO3xR3_from_SE3(arm_buf.R_result, arm_buf.p_result, T_b);
+        arm_buf.R_result *= R_corr_T;
         
         // publish immediately:
         queue_ArmOdometry_safe(t, arm_buf.R_result, arm_buf.p_result, BASE_DEV);

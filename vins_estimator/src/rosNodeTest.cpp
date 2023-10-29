@@ -71,7 +71,7 @@ ArmBuffer_t    m_arm;
 #endif
 
 // Estimators:
-EstimatorManager m_est_manager(pCfgs);
+std::shared_ptr<EstimatorManager> pEstMnger = std::make_shared<EstimatorManager>(pCfgs);
 
 // Performance:
 #if (FEATURE_ENABLE_PERFORMANCE_EVAL)
@@ -234,10 +234,10 @@ void sync_process_IMG()
                     // [Later] TODO: we should consider coupling the estimators (stereo for the same states)
                     // TODO: add joint state from the estimators
 #if (FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT)
-                    m_est_manager.inputArm(d0_time, jnt_msg_b); // jnt_msg_E); //TODO: buf two set of joints?
+                    pEstMnger->inputArm(d0_time, jnt_msg_b); // jnt_msg_E); //TODO: buf two set of joints?
                     //must before input image
 #endif 
-                    m_est_manager.inputImage(d0_time, d0_img, d1_img); 
+                    pEstMnger->inputImage(d0_time, d0_img, d1_img); 
 
                     d0_time_last_submitted = d0_time; // to compute run-time processing rate
 
@@ -287,14 +287,14 @@ void d0_imu_callback(const sensor_msgs::ImuConstPtr &imu_msg)
     Vector3d acc, gyr;
     double t;
     t = process_IMU_from_msg(imu_msg, acc, gyr);
-    m_est_manager.inputIMU(BASE_DEV, t, acc, gyr);
+    pEstMnger->inputIMU(BASE_DEV, t, acc, gyr);
 }
 void d1_imu_callback(const sensor_msgs::ImuConstPtr &imu_msg)
 {
     Vector3d acc, gyr;
     double t;
     t = process_IMU_from_msg(imu_msg, acc, gyr);
-    m_est_manager.inputIMU(EE_DEV, t, acc, gyr);
+    pEstMnger->inputIMU(EE_DEV, t, acc, gyr);
 }
 
 #if (FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT)
@@ -318,7 +318,7 @@ void restart_callback(const std_msgs::BoolConstPtr &restart_msg)
     if (restart_msg->data == true)
     {
         ROS_WARN("restart the estimator!");
-        m_est_manager.restartManager();
+        pEstMnger->restartManager();
     }
     return;
 }
@@ -346,8 +346,8 @@ int main(int argc, char **argv)
     const int N_DEVICES = readParameters(config_file, pCfgs);
 #endif    
     // Register Visual Publisher:
-    m_est_manager.registerPublishers(n, N_DEVICES);
-    m_est_manager.restartManager();
+    pEstMnger->registerPublishers(n, N_DEVICES);
+    pEstMnger->restartManager();
 
 #if (FEATURE_ENABLE_PERFORMANCE_EVAL)
     m_perf.image_frame_dropped_tick = 0;

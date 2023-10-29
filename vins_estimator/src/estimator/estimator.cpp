@@ -11,7 +11,9 @@
 #include "../utility/visualization.h"
 #include "../robot/Lie.h"
 
-Estimator::Estimator(std::shared_ptr<DeviceConfig_t> _pCfg): pCfg{_pCfg}, f_manager{Rs,_pCfg}, featureTracker{_pCfg}
+Estimator::Estimator(
+        std::shared_ptr<DeviceConfig_t> _pCfg
+    ): pCfg{_pCfg}, f_manager{Rs,_pCfg}, featureTracker{_pCfg}
 {
     ROS_INFO("init begins");
     clearState();
@@ -502,15 +504,13 @@ void Estimator::processImage(const map<int, vector<pair<int, Eigen::Matrix<doubl
                     optimization();
                     updateLatestStates();
                     solver_flag = NON_LINEAR;
-                    slideWindow();
                     ROS_INFO("Initialization finish!");
                 }
-                else
-                    slideWindow();
+                slideWindow();
             }
         }
 
-#if (FEATURE_ENABLE_STEREO_SUPPORT)
+#if (FEATURE_ENABLE_STEREO_SUPPORT) // TODO: support for stereo (for overlap regions of two cameras)
         // stereo + IMU initilization
         if(pCfg->STEREO && pCfg->USE_IMU)
         {
@@ -560,7 +560,7 @@ void Estimator::processImage(const map<int, vector<pair<int, Eigen::Matrix<doubl
         if(frame_count < WINDOW_SIZE)
         {
             frame_count++;
-            int prev_frame = frame_count - 1;
+            const int prev_frame = frame_count - 1;
             Ps[frame_count] = Ps[prev_frame];
             Vs[frame_count] = Vs[prev_frame];
             Rs[frame_count] = Rs[prev_frame];
@@ -578,6 +578,7 @@ void Estimator::processImage(const map<int, vector<pair<int, Eigen::Matrix<doubl
         set<int> removeIndex;
         outliersRejection(removeIndex);
         f_manager.removeOutlier(removeIndex);
+        
         if (! pCfg->MULTIPLE_THREAD)
         {
             featureTracker.removeOutliers(removeIndex);
