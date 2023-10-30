@@ -142,10 +142,13 @@ using namespace std;
 
 // performance related feature support:
 #define FEATURE_ENABLE_PERFORMANCE_EVAL                 (( ENABLED) & (!FEATURE_MODE_RUNTIME)) // report performance
-#define FEATURE_PERFORMANCE_EVAL_THRESHOLD_MS           (50) // report to console when above X ms, else ros debug
+#    define FEATURE_PERFORMANCE_EVAL_THRESHOLD_MS           (50) // report to console when above X ms, else ros debug
+#    define FEATURE_ENABLE_PERFORMANCE_EVAL_ROSNODE         (( ENABLED) & (FEATURE_ENABLE_PERFORMANCE_EVAL)) // report performance
+#    define FEATURE_ENABLE_PERFORMANCE_EVAL_ESTIMATOR       ((DISABLED) & (FEATURE_ENABLE_PERFORMANCE_EVAL)) // report performance
+//TODO: we should have a performance logger to a text file
 
 // other feature support more than originally supported:
-#define FEATURE_ASSUME_INIT_IMU_TO_BE_ZEROED_ABSOLUTELY  (DISABLED)  // originally, it is zeroed against the initial value, true to set to zero at the init.
+#define FEATURE_ASSUME_INIT_IMU_TO_BE_ZEROED_ABSOLUTELY (DISABLED)  // originally, it is zeroed against the initial value, true to set to zero at the init.
 
 /* To enforce the real-time performance, we will drop frames if we are n seconds behind the schedule */
 /* FEATURE_ENABLE_FRAME_DROP_FOR_REAL_TIME
@@ -170,21 +173,24 @@ using namespace std;
 #define FEATURE_PERMIT_WITHOUT_IMU_SUPPORT              (FEATURE_ENABLE_STEREO_SUPPORT) // since there is no support from stereo, we will assume imu to be enabled all the time
 // vicon support:
 #define FEATURE_ENABLE_VICON_SUPPORT                    ( ENABLED) // to feed vicon data and output as nav_msg::path for visualization
-#define FEATURE_ENABLE_VICON_ZEROING_SUPPORT                ( ENABLED) // zeroing vicons independently
-#define FEATURE_ENABLE_VICON_ZEROING_WRT_BASE_SUPPORT       ( ENABLED) // zeroing vicons wrt base, TODO: need a better way 
-#define FEATURE_ENABLE_ALIGN_EST_BEG_SUPPORT                (DISABLED) // start alignment when estimator posting
+#   define FEATURE_ENABLE_VICON_ZEROING_SUPPORT             (( ENABLED) & (FEATURE_ENABLE_VICON_SUPPORT)) // zeroing vicons independently
+#   define FEATURE_ENABLE_VICON_ZEROING_WRT_BASE_SUPPORT    (( ENABLED) & (FEATURE_ENABLE_VICON_SUPPORT)) // zeroing vicons wrt base, TODO: need a better way 
+#   define FEATURE_ENABLE_ALIGN_EST_BEG_SUPPORT             ((DISABLED) & (FEATURE_ENABLE_VICON_SUPPORT)) // start alignment when estimator posting
 // arm odometry support:
 #define FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT             ( ENABLED) // [WIP]
+#define     FEATURE_ENABLED_ARM_ODOMETRY_VIZ                (( ENABLED) & (FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT))
 
 // debug only features:
-#define FEATURE_CONSOLE_PRINTF                         (( ENABLED) & (!FEATURE_MODE_RUNTIME))
-#define FEATURE_CONSOLE_DEBUG_PRINTF                   (( ENABLED) & (!FEATURE_MODE_RUNTIME))
-#define FEATURE_VIZ_ROSOUT_ODOMETRY_SUPPORT            ((DISABLED) & (!FEATURE_MODE_RUNTIME))
-#define FEATURE_TRACKING_IMAGE_SUPPORT                 (( ENABLED) & (!FEATURE_MODE_RUNTIME)) 
-#define FEATURE_PERFORMANCE_DEBUG_PRINTF               (( ENABLED) & (!FEATURE_MODE_RUNTIME)) 
-#define FEATURE_VIZ_PUBLISH                            (( ENABLED) & (!FEATURE_MODE_RUNTIME)) 
+#define FEATURE_DEBUGGING                               (( ENABLED) & (!FEATURE_MODE_RUNTIME))
+#   define FEATURE_CONSOLE_PRINTF                           (( ENABLED) & (FEATURE_DEBUGGING))
+#   define FEATURE_CONSOLE_DEBUG_PRINTF                     (( ENABLED) & (FEATURE_DEBUGGING))
+#   define FEATURE_VIZ_ROSOUT_ODOMETRY_SUPPORT              ((DISABLED) & (FEATURE_DEBUGGING))
+#   define FEATURE_TRACKING_IMAGE_SUPPORT                   (( ENABLED) & (FEATURE_DEBUGGING)) 
+#   define FEATURE_PERFORMANCE_DEBUG_PRINTF                 (( ENABLED) & (FEATURE_DEBUGGING)) 
+#   define FEATURE_VIZ_PUBLISH                              (( ENABLED) & (FEATURE_DEBUGGING)) 
 // debug only features (additional images):
-#define FEATURE_DEBUG_IMAGE_AT_CONNECTIONS             ((DISABLED) & (!FEATURE_MODE_RUNTIME))
+#   define FEATURE_DEBUG_IMAGE_AT_CONNECTIONS               ((DISABLED) & (FEATURE_DEBUGGING))
+
 // ----------------------------------------------------------------
 // : Debug printfs :
 // ----------------------------------------------------------------

@@ -46,13 +46,13 @@ class EstimatorManager
     private:
 #if (FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT)
         typedef struct{
-            Lie::SO3    R_result;
-            Lie::R3     p_result;
             // protected:
             queue<pair<double, Vector7d_t>> data;
             std::mutex                      guard;
         } arm_buffer_t;
+
         arm_buffer_t                    arm_buf;
+        Lie::SE3                        arm_pose_st;
         std::shared_ptr<ArmModel>       pArm;
         void processArm_unsafe(const double t, const Vector7d_t& jnt_vec);
 #endif

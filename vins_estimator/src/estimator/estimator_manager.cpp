@@ -83,6 +83,9 @@ void EstimatorManager::processMeasurements_thread()
             const bool is_base_avail = (pEsts[BASE_DEV]->featureBuf.empty() == false);
             const bool is_EE_avail   = (pEsts[EE_DEV  ]->featureBuf.empty() == false);
 
+            // reset arm return:
+            Lie::SE3* pT_arm = nullptr;
+
             // Only process when both features are available:
             if (is_base_avail && is_EE_avail)
             {
@@ -98,7 +101,7 @@ void EstimatorManager::processMeasurements_thread()
                 }
                 TOK_TAG(ellapsed_process_i, "fetch_features");
 
-#           if (FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT)
+#if (FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT)
                 TIK(ellapsed_process_i);
                 bool is_arm_avail = (this->arm_buf.data.empty() == false);
                 if (is_arm_avail)
@@ -116,6 +119,7 @@ void EstimatorManager::processMeasurements_thread()
                         {
                             // process:
                             this->processArm_unsafe(armVector.first, armVector.second);
+                            pT_arm = &(this->arm_pose_st); // cache the pointer
                             break;
                         }
                     }
@@ -125,7 +129,7 @@ void EstimatorManager::processMeasurements_thread()
                     PRINT_DEBUG("Arm is NOT available");
                 }
                 TOK_TAG(ellapsed_process_i, "fetch_arm_odom");
-#           endif
+#endif //FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT
 
                 const bool is_base_imu_avail    = pEsts[BASE_DEV]->IMUAvailable(curTime[BASE_DEV]);
                 const bool is_EE_imu_avail      = pEsts[EE_DEV  ]->IMUAvailable(curTime[EE_DEV  ]);
@@ -178,7 +182,7 @@ void EstimatorManager::processMeasurements_thread()
                     {
                         // arm_buf.R_result, arm_buf.p_result
                         pEsts[id]->mProcess.lock();
-                        pEsts[id]->processImage(feature[id].second, feature[id].first);
+                        pEsts[id]->processImage(feature[id].second, feature[id].first, pT_arm);
                         prevTime[id] = curTime[id];
 
                         /*** Publish ***/
@@ -274,30 +278,11 @@ void EstimatorManager::inputArm(double t,
 }
 void EstimatorManager::processArm_unsafe(const double t, const Vector7d_t& jnt_vec)
 {
+    bool success = false;
     const Lie::SE3 Te = pArm->getCamEE();
     const Lie::SE3 Tb = pArm->getCamBase();
-    if (pEsts[BASE_DEV]->solver_flag == Estimator::SolverFlag::NON_LINEAR)
+    
     {
-
-        Lie::R3 p_c, v_c; Lie::SO3 R_c;
-        // fetch R,p previous
-        p_c = pEsts[BASE_DEV]->Ps[WINDOW_SIZE];
-        v_c = pEsts[BASE_DEV]->Vs[WINDOW_SIZE];
-        R_c = pEsts[BASE_DEV]->Rs[WINDOW_SIZE];
-
-        const Lie::SO3 R_corr(
-            (Lie::SO3() <<  0, -1,  0,
-                            0,  0, -1,
-                            1,  0,  0).finished()
-        ); // convert from camera axis back to world axis
-        const Lie::SO3 R_corr_T(
-            (Lie::SO3() <<   0,  0,  1,
-                            -1,  0,  0,
-                             0, -1,  0).finished()
-        ); // convert from world axis back to camera axis
-        
-        Lie::SE3 T_c = Lie::SE3_from_SO3xR3(R_c * R_corr, p_c);
-        
         // PRINT_DEBUG("jnt: %s", Lie::to_string(jnt_vec.transpose()).c_str());
         // compute theta --> SE3:
         Lie::SE3 g_st;
@@ -306,11 +291,9 @@ void EstimatorManager::processArm_unsafe(const double t, const Vector7d_t& jnt_v
         pArm->processJntAngles_unsafely();
         pArm->getEndEffectorPose_unsafely(g_st);
         
-        Lie::SE3 T_b = T_c;
-        
         // rebase base cam frame onto the summit base frame
         Lie::SE3 Tc_b = Lie::inverse_SE3(Tb);
-        T_b = T_b * Tc_b;
+        Lie::SE3 T_b = Tc_b;
 
         // rebase arm config onto the base frame
         T_b = T_b * g_st;
@@ -319,11 +302,37 @@ void EstimatorManager::processArm_unsafe(const double t, const Vector7d_t& jnt_v
         T_b = T_b * Te;
 
         // PRINT_DEBUG("> ArmOdometry [%f]: \n R=\n%s \n p=\n%s", t, Lie::to_string(R).c_str(), Lie::to_string(p).c_str());
-        Lie::SO3xR3_from_SE3(arm_buf.R_result, arm_buf.p_result, T_b);
-        arm_buf.R_result *= R_corr_T;
+        this->arm_pose_st = T_b;
         
-        // publish immediately:
-        queue_ArmOdometry_safe(t, arm_buf.R_result, arm_buf.p_result, BASE_DEV);
+#   if(FEATURE_ENABLED_ARM_ODOMETRY_VIZ)
+        if (pEsts[BASE_DEV]->solver_flag == Estimator::SolverFlag::NON_LINEAR)
+        {
+            Lie::R3 p_c, v_c; Lie::SO3 R_c;
+            // fetch R,p previous
+            p_c = pEsts[BASE_DEV]->Ps[WINDOW_SIZE];
+            v_c = pEsts[BASE_DEV]->Vs[WINDOW_SIZE];
+            R_c = pEsts[BASE_DEV]->Rs[WINDOW_SIZE];
+
+            const Lie::SO3 R_corr(
+                (Lie::SO3() <<  0, -1,  0,
+                                0,  0, -1,
+                                1,  0,  0).finished()
+            ); // convert from camera axis back to world axis
+            const Lie::SO3 R_corr_T(
+                (Lie::SO3() <<   0,  0,  1,
+                                -1,  0,  0,
+                                0, -1,  0).finished()
+            ); // convert from world axis back to camera axis
+            
+            Lie::SE3 T_c = Lie::SE3_from_SO3xR3(R_c * R_corr, p_c);
+            
+            T_c = T_c * T_b; // reuse placeholder T_c
+            Lie::SO3xR3_from_SE3(R_c, p_c, T_c); // reuse placeholder R_c, p_c
+            R_c *= R_corr_T;
+            // publish immediately:
+            queue_ArmOdometry_safe(t, R_c, p_c, BASE_DEV);
+        }
+#   endif //(FEATURE_ENABLED_ARM_ODOMETRY_VIZ)
     }
 }
 #endif 
@@ -359,6 +368,12 @@ void EstimatorManager::publishVisualization_thread()
 #if (FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT)
             pubArmOdometry_safe(dev_id);
 #endif
+#if (FEATURE_ENABLE_PERFORMANCE_EVAL_ESTIMATOR)
+            // print evaluation for optimization process for every estimator:
+            const double par_k = pEsts[dev_id]->perf.opt_margin_key * 100.0 / pEsts[dev_id]->perf.opt_total_count;
+            const double par_nk = pEsts[dev_id]->perf.opt_margin_not_key * 100.0 / pEsts[dev_id]->perf.opt_total_count;
+            PRINT_DEBUG("[%d] Est Optimization Perf: [Key: %.2f\%, NotKey: %.2f\%]", dev_id, par_k, par_nk);
+#endif // (FEATURE_ENABLE_PERFORMANCE_EVAL_ESTIMATOR)
         }
         TOK_IF(ellapsed_publisher,TOPIC_PUBLISH_INTERVAL_MS);
         

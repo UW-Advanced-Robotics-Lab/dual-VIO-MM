@@ -46,13 +46,13 @@ typedef struct{
 } ViconBuffer_t;
 #endif
 
-#if (FEATURE_ENABLE_PERFORMANCE_EVAL)
+#if (FEATURE_ENABLE_PERFORMANCE_EVAL_ROSNODE)
 typedef struct{
     int image_frame_dropped_tick = 0;
     int image_valid_counter = 0;
     double image_process_time = 0;
     double image_process_delta_time = 0;
-} RosNodeTestManager_t;
+} RosNodeTestPerf_t;
 #endif
 // typedef Matrix<double, 7, 1> Vector7d_t; // for storing <time, acc, gyr>
 
@@ -74,8 +74,8 @@ ArmBuffer_t    m_arm;
 std::shared_ptr<EstimatorManager> pEstMnger = std::make_shared<EstimatorManager>(pCfgs);
 
 // Performance:
-#if (FEATURE_ENABLE_PERFORMANCE_EVAL)
-RosNodeTestManager_t m_perf;
+#if (FEATURE_ENABLE_PERFORMANCE_EVAL_ROSNODE)
+RosNodeTestPerf_t m_perf;
 #endif
 
 ////////////////////////////////////////
@@ -217,7 +217,7 @@ void sync_process_IMG()
                 const double delta_time = d0_time_latest - d0_time; 
                 const double delta_time_input = d0_time - d0_time_last_submitted;
 
-#if (FEATURE_ENABLE_PERFORMANCE_EVAL)
+#if (FEATURE_ENABLE_PERFORMANCE_EVAL_ROSNODE)
                 m_perf.image_valid_counter ++;
 #endif
 
@@ -241,12 +241,12 @@ void sync_process_IMG()
 
                     d0_time_last_submitted = d0_time; // to compute run-time processing rate
 
-#if (FEATURE_ENABLE_PERFORMANCE_EVAL)
+#if (FEATURE_ENABLE_PERFORMANCE_EVAL_ROSNODE)
                     m_perf.image_process_delta_time =ros::Time::now().toSec() - m_perf.image_process_time;
                     m_perf.image_process_time =ros::Time::now().toSec();
 #endif
                 } // else, drop the images if we are behind the schedule:
-#if (FEATURE_ENABLE_PERFORMANCE_EVAL && (FEATURE_ENABLE_PROCESS_FRAME_FPS_FOR_RT || FEATURE_ENABLE_DYNAMIC_FRAME_DROP_FOR_RT))
+#if (FEATURE_ENABLE_PERFORMANCE_EVAL_ROSNODE && (FEATURE_ENABLE_PROCESS_FRAME_FPS_FOR_RT || FEATURE_ENABLE_DYNAMIC_FRAME_DROP_FOR_RT))
                 else if (delta_time > IMAGE_BEHIND_SCHEDULE_TIME_TOLERANCE)
                 {
                     // Performance DEBUG: lets see the time difference between current and latest image.
@@ -349,7 +349,7 @@ int main(int argc, char **argv)
     pEstMnger->registerPublishers(n, N_DEVICES);
     pEstMnger->restartManager();
 
-#if (FEATURE_ENABLE_PERFORMANCE_EVAL)
+#if (FEATURE_ENABLE_PERFORMANCE_EVAL_ROSNODE)
     m_perf.image_frame_dropped_tick = 0;
     m_perf.image_valid_counter = 0;
 #endif

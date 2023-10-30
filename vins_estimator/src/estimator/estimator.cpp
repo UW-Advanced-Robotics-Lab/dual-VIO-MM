@@ -334,7 +334,7 @@ void Estimator::processMeasurements_once()
             mProcess.lock();
             
             // Process Image: 
-            processImage(feature.second, feature.first);
+            processImage(feature.second, feature.first, nullptr);
             prevTime = curTime;
 
 #if (FEATURE_ENABLE_STATISTICS_LOGGING)
@@ -441,7 +441,7 @@ void Estimator::processIMU(double t, double dt, const Vector3d &linear_accelerat
     gyr_0 = angular_velocity; 
 }
 
-void Estimator::processImage(const map<int, vector<pair<int, Eigen::Matrix<double, 7, 1>>>> &image, const double header)
+void Estimator::processImage(const map<int, vector<pair<int, Eigen::Matrix<double, 7, 1>>>> &image, const double header, const Lie::SE3* pT_arm)
 {
     ROS_DEBUG("new image coming ------------------------------------------");
     ROS_DEBUG("Adding feature points %lu", image.size());
@@ -1041,6 +1041,10 @@ bool Estimator::failureDetection()
 
 void Estimator::optimization()
 {
+#if (FEATURE_ENABLE_PERFORMANCE_EVAL_ESTIMATOR)
+    this->perf.opt_total_count ++;
+#endif // (FEATURE_ENABLE_PERFORMANCE_EVAL_ESTIMATOR)
+
     TicToc t_whole, t_prepare;
     vector2double();
 
@@ -1181,6 +1185,10 @@ void Estimator::optimization()
     TicToc t_whole_marginalization;
     if (marginalization_flag == MARGIN_OLD)
     {
+#if (FEATURE_ENABLE_PERFORMANCE_EVAL_ESTIMATOR)
+        this->perf.opt_margin_key ++;
+#endif // (FEATURE_ENABLE_PERFORMANCE_EVAL_ESTIMATOR)
+
         MarginalizationInfo *marginalization_info = new MarginalizationInfo();
         vector2double();
 
@@ -1191,7 +1199,10 @@ void Estimator::optimization()
             {
                 if (last_marginalization_parameter_blocks[i] == para_Pose[0] ||
                     last_marginalization_parameter_blocks[i] == para_SpeedBias[0])
+                {
                     drop_set.push_back(i);
+                    // PRINT_DEBUG("drop set add i@%d", i); 
+                }
             }
             // construct new marginlization_factor
             MarginalizationFactor *marginalization_factor = new MarginalizationFactor(last_marginalization_info);
@@ -1208,7 +1219,7 @@ void Estimator::optimization()
                 IMUFactor* imu_factor = new IMUFactor(pre_integrations[1], pCfg->G);
                 ResidualBlockInfo *residual_block_info = new ResidualBlockInfo(imu_factor, NULL,
                                                                            vector<double *>{para_Pose[0], para_SpeedBias[0], para_Pose[1], para_SpeedBias[1]},
-                                                                           vector<int>{0, 1});// TODO: figure drop Px,Py? how about Pz?
+                                                                           vector<int>{0, 1});// drop P0 SB0
                 marginalization_info->addResidualBlockInfo(residual_block_info);
             }
         }
@@ -1239,7 +1250,7 @@ void Estimator::optimization()
                                                                           it_per_id.feature_per_frame[0].cur_td, it_per_frame.cur_td);
                         ResidualBlockInfo *residual_block_info = new ResidualBlockInfo(f_td, loss_function,
                                                                                         vector<double *>{para_Pose[imu_i], para_Pose[imu_j], para_Ex_Pose[0], para_Feature[feature_index], para_Td[0]},
-                                                                                        vector<int>{0, 3});
+                                                                                        vector<int>{0, 3}); // drop Pi,  Feat_i
                         marginalization_info->addResidualBlockInfo(residual_block_info);
                     }
 // #if (FEATURE_ENABLE_STEREO_SUPPORT) // stereo only
@@ -1302,6 +1313,9 @@ void Estimator::optimization()
         if (last_marginalization_info &&
             std::count(std::begin(last_marginalization_parameter_blocks), std::end(last_marginalization_parameter_blocks), para_Pose[WINDOW_SIZE - 1]))
         {
+#if (FEATURE_ENABLE_PERFORMANCE_EVAL_ESTIMATOR)
+            this->perf.opt_margin_not_key ++;
+#endif // (FEATURE_ENABLE_PERFORMANCE_EVAL_ESTIMATOR)
 
             MarginalizationInfo *marginalization_info = new MarginalizationInfo();
             vector2double();
@@ -1312,7 +1326,10 @@ void Estimator::optimization()
                 {
                     ROS_ASSERT(last_marginalization_parameter_blocks[i] != para_SpeedBias[WINDOW_SIZE - 1]);
                     if (last_marginalization_parameter_blocks[i] == para_Pose[WINDOW_SIZE - 1])
+                    {
                         drop_set.push_back(i);
+                        // PRINT_DEBUG("drop set add i@%d", i); 
+                    }
                 }
                 // construct new marginlization_factor
                 MarginalizationFactor *marginalization_factor = new MarginalizationFactor(last_marginalization_info);

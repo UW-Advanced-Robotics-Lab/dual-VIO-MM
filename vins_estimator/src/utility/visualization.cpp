@@ -35,7 +35,7 @@ ros::Publisher pub_image_track[MAX_NUM_DEVICES];
 ros::Publisher pub_vicon[MAX_NUM_DEVICES];
 #endif
 
-#if (FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT)
+#if (FEATURE_ENABLED_ARM_ODOMETRY_VIZ)
 ros::Publisher pub_arm_odometry[MAX_NUM_DEVICES];
 #endif
 
@@ -60,7 +60,7 @@ typedef struct{
     sensor_msgs::ImagePtr   imgTrackMsg;
     std::mutex              track_guard;
 #endif
-#if (FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT)
+#if (FEATURE_ENABLED_ARM_ODOMETRY_VIZ)
     queue<pose_data_t>          arm_vicon_odom_buf;
     nav_msgs::Path              arm_path;
     std::mutex                  arm_guard;
@@ -118,7 +118,7 @@ void registerPub(ros::NodeHandle &n, const int N_DEVICES)
         pub_vicon[i]            = n.advertise<nav_msgs::Path>(((i)?(TOPIC_VICON_PATH_E):(TOPIC_VICON_PATH_B)), PUBLISHER_BUFFER_SIZE);
 #endif
 
-#if (FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT)
+#if (FEATURE_ENABLED_ARM_ODOMETRY_VIZ)
         pub_arm_odometry[i]     = n.advertise<nav_msgs::Path>(((i)?(TOPIC_ARM_PATH_E):(TOPIC_ARM_PATH_B)), PUBLISHER_BUFFER_SIZE);
 #endif
 
@@ -139,7 +139,7 @@ void visualization_guard_unlock(const Estimator &estimator)
     m_buf[estimator.pCfg->DEVICE_ID].guard.unlock();
 }
 
-#if (FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT)
+#if (FEATURE_ENABLED_ARM_ODOMETRY_VIZ)
 void queue_ArmOdometry_safe(const double t, const Lie::SO3& R, const Lie::R3& p, const int device_id)
 {
     std_msgs::Header header;

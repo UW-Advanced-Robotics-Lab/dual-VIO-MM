@@ -7,6 +7,7 @@
  * you may not use this file except in compliance with the License.
  *******************************************************/
 
+#include "../estimator/parameters.h"
 #include "marginalization_factor.h"
 
 void ResidualBlockInfo::Evaluate()
@@ -205,7 +206,7 @@ void MarginalizationInfo::marginalize()
     if(m == 0)
     {
         valid = false;
-        printf("unstable tracking...\n");
+        PRINT_ERROR("unstable tracking...\n");
         return;
     }
 
