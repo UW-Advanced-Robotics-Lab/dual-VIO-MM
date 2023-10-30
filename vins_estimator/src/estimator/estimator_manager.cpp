@@ -176,21 +176,24 @@ void EstimatorManager::processMeasurements_thread()
                     }
                     TOK_TAG(ellapsed_process_i, "imu_process");
 
-                    // process Image:
-                    TIK(ellapsed_process_i);
+                    //TODO: around 20ms x2 = 40ms, we should parallel these two processes? [@later, @run-time-concern]
                     for(size_t id = BASE_DEV; id < MAX_NUM_DEVICES; id++)
                     {
-                        // arm_buf.R_result, arm_buf.p_result
+                        // process Image:
+                        TIK(ellapsed_process_i);
+                        // NOTE: process and publish has to be under same lock!
+                        // TODO: [@urgent] please investigate the source of error that does not allow the process and publish to be separated
                         pEsts[id]->mProcess.lock();
                         pEsts[id]->processImage(feature[id].second, feature[id].first, pT_arm);
                         prevTime[id] = curTime[id];
+                        TOK_TAG(ellapsed_process_i, "image_process");
 
                         /*** Publish ***/
-#                   if (FEATURE_ENABLE_STATISTICS_LOGGING)
+                        TIK(ellapsed_process_i);
+#if (FEATURE_ENABLE_STATISTICS_LOGGING)
                         // Print Statistics:
                         printStatistics(*pEsts[id], 0);
-#                   endif
-
+#endif //(FEATURE_ENABLE_STATISTICS_LOGGING)
                         // Publish:
                         std_msgs::Header header;
                         header.frame_id = "world";
@@ -201,7 +204,7 @@ void EstimatorManager::processMeasurements_thread()
                             pubTF_immediately(*pEsts[id], header);
                             pubOdometry_Immediately(*pEsts[id], header);
                         }
-#                   if (FEATURE_VIZ_PUBLISH)
+#if (FEATURE_VIZ_PUBLISH)
                         // visualization updates:
                         visualization_guard_lock(*pEsts[id]);
                         {
@@ -210,12 +213,12 @@ void EstimatorManager::processMeasurements_thread()
                             queue_PointCloud_unsafe(*pEsts[id], header);
                         }
                         visualization_guard_unlock(*pEsts[id]);
-#                   endif
+#endif //(FEATURE_VIZ_PUBLISH)
                         
                         // End-of-publishing
                         pEsts[id]->mProcess.unlock();
+                        TOK_TAG(ellapsed_process_i, "image_publish");
                     }
-                    TOK_TAG(ellapsed_process_i, "image_process_and_publish");
                 }
                 else
                 {

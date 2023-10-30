@@ -8,7 +8,10 @@
  *******************************************************/
 
 #pragma once
- 
+
+#ifndef ESTIMATOR_H
+#define ESTIMATOR_H
+
 #include <thread>
 #include <mutex>
 #include <std_msgs/Header.h>
@@ -190,3 +193,5 @@ class Estimator
     EstimatorPerf_t perf;
 #endif
 };
+
+#endif // !ESTIMATOR_H

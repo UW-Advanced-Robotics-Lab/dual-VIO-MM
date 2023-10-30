@@ -1,5 +1,8 @@
 #pragma once 
 
+#ifndef ESTIMATOR_MANAGER_H
+#define ESTIMATOR_MANAGER_H
+
 #include <thread>
 #include <mutex>
 #include <ros/ros.h>
@@ -68,3 +71,5 @@ class EstimatorManager
 #if (FEATURE_ENABLE_VICON_SUPPORT)
 void callback_viconOdometry(const geometry_msgs::TransformStampedConstPtr &transform_msg, const int device_id);
 #endif
+
+#endif // !ESTIMATOR_MANAGER_H

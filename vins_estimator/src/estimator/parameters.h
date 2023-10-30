@@ -142,7 +142,7 @@ using namespace std;
 
 // performance related feature support:
 #define FEATURE_ENABLE_PERFORMANCE_EVAL                 (( ENABLED) & (!FEATURE_MODE_RUNTIME)) // report performance
-#    define FEATURE_PERFORMANCE_EVAL_THRESHOLD_MS           (50) // report to console when above X ms, else ros debug
+#    define FEATURE_PERFORMANCE_EVAL_THRESHOLD_MS           (40U) // [concise] report to console when above X ms, else ros debug
 #    define FEATURE_ENABLE_PERFORMANCE_EVAL_ROSNODE         (( ENABLED) & (FEATURE_ENABLE_PERFORMANCE_EVAL)) // report performance
 #    define FEATURE_ENABLE_PERFORMANCE_EVAL_ESTIMATOR       ((DISABLED) & (FEATURE_ENABLE_PERFORMANCE_EVAL)) // report performance
 //TODO: we should have a performance logger to a text file
@@ -166,7 +166,7 @@ using namespace std;
 #define FEATURE_ENABLE_PROCESS_FRAME_FPS_FOR_RT         ( ENABLED) // set via #define IMAGE_PROCESSING_FPS
 #define FEATURE_ENABLE_PROCESS_FRAME_FPS_FOR_RT_INSIDE_INPUT_IMG    (! FEATURE_ENABLE_PROCESS_FRAME_FPS_FOR_RT)
 
-#define FEATURE_ENABLE_STATISTICS_LOGGING               ( ENABLED) // `printStatistics`
+#define FEATURE_ENABLE_STATISTICS_LOGGING               (DISABLED) // `printStatistics`
 // other features:
 #define FEATURE_NON_THREADING_SUPPORT                   (DISABLED) // disable non-threading
 #define FEATURE_ESTIMATOR_THREADING_SUPPORT             (DISABLED) // backward-compatible with threading in estimator
@@ -221,10 +221,10 @@ using namespace std;
 
 #if (FEATURE_ENABLE_PERFORMANCE_EVAL & FEATURE_CONSOLE_DEBUG_PRINTF)
 #   define TIK(PM)          {PM.tic();}
-#   define TOK(PM)          {if (PM.toc() > FEATURE_PERFORMANCE_EVAL_THRESHOLD_MS) { PRINT_DEBUG("%s Performance: %.2f ms", #PM, PM.dt()); }; }
-#   define TOK_FORCE(PM)    { PRINT_DEBUG("%s Performance: %.2f ms", #PM, PM.dt()); }
-#   define TOK_TAG(PM, TAG) {if (PM.toc() > FEATURE_PERFORMANCE_EVAL_THRESHOLD_MS) { PRINT_DEBUG("%s Performance [%s]: %.2f ms", #PM, TAG, PM.dt()); }; }
-#   define TOK_IF(PM, MS)   {if (PM.toc() > MS) { PRINT_DEBUG("%s Performance: %.2f ms", #PM, PM.dt()); }; }
+#   define TOK(PM)          {if (PM.toc() > FEATURE_PERFORMANCE_EVAL_THRESHOLD_MS) { PRINT_DEBUG("%s Perf: %.2f ms", #PM, PM.dt()); }; }
+#   define TOK_FORCE(PM)    { PRINT_DEBUG("%s Perf: %.2f ms", #PM, PM.dt()); }
+#   define TOK_TAG(PM, TAG) {if (PM.toc() > FEATURE_PERFORMANCE_EVAL_THRESHOLD_MS) { PRINT_DEBUG("%s Perf [%s]: %.2f ms", #PM, TAG, PM.dt()); }; }
+#   define TOK_IF(PM, MS)   {if (PM.toc() > MS) { PRINT_DEBUG("%s Perf: %.2f ms > %d ms", #PM, PM.dt(), MS); }; }
 #else // precompile elimination for run-time performance
 #   define TIK(PM)          {} // do nothing
 #   define TOK(PM)          {} // do nothing

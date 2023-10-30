@@ -8,6 +8,7 @@
  *******************************************************/
 
 #include "estimator.h"
+#include "estimator_manager.h"
 #include "../utility/visualization.h"
 #include "../robot/Lie.h"
 
@@ -266,6 +267,7 @@ bool Estimator::IMUAvailable(double t)
         return false;
 }
 
+#ifndef ESTIMATOR_MANAGER_H // if manager does not exist, then this is the main estimator processing thread:
 void Estimator::processMeasurements_thread()
 {
     TicToc ellapsed_process;
@@ -283,6 +285,7 @@ void Estimator::processMeasurements_thread()
         std::this_thread::sleep_for(dura);
     }
 }
+
 void Estimator::processMeasurements_once()
 {
     //printf("process measurments\n");
@@ -366,7 +369,7 @@ void Estimator::processMeasurements_once()
         }
     }
 }
-
+#endif // !ESTIMATOR_MANAGER_H
 
 void Estimator::initFirstIMUPose(vector<pair<double, Eigen::Vector3d>> &accVector)
 {
@@ -919,9 +922,9 @@ void Estimator::double2vector()
                                                           para_Pose[0][3],
                                                           para_Pose[0][4],
                                                           para_Pose[0][5]).toRotationMatrix());
-        double y_diff = origin_R0.x() - origin_R00.x();
-        //TODO
-        Matrix3d rot_diff = Utility::ypr2R(Vector3d(y_diff, 0, 0)); //yaw is relative, not fully observable
+        double y_diff = origin_R0.x() - origin_R00.x(); // compensation --> convert yaw to relative pose
+        //TODO: check if this is correct? should be. as yaw is not fully observable, so it should be cumulating, other axis are world frame
+        Matrix3d rot_diff = Utility::ypr2R(Vector3d(y_diff, 0, 0)); // yaw is relative, not fully observable
         if (abs(abs(origin_R0.y()) - 90) < 1.0 || abs(abs(origin_R00.y()) - 90) < 1.0)
         {
             ROS_DEBUG("euler singular point!");
@@ -933,9 +936,10 @@ void Estimator::double2vector()
 
         for (int i = 0; i <= WINDOW_SIZE; i++)
         {
-
+            // yaw is relative:
             Rs[i] = rot_diff * Quaterniond(para_Pose[i][6], para_Pose[i][3], para_Pose[i][4], para_Pose[i][5]).normalized().toRotationMatrix();
             
+            // relative:
             Ps[i] = rot_diff * Vector3d(para_Pose[i][0] - para_Pose[0][0],
                                     para_Pose[i][1] - para_Pose[0][1],
                                     para_Pose[i][2] - para_Pose[0][2]) + origin_P0;
