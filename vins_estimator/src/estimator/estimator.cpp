@@ -578,12 +578,14 @@ void Estimator::processImage(const map<int, vector<pair<int, Eigen::Matrix<doubl
         set<int> removeIndex;
         outliersRejection(removeIndex);
         f_manager.removeOutlier(removeIndex);
-        
+
+#if (DISABLED)
         if (! pCfg->MULTIPLE_THREAD)
         {
             featureTracker.removeOutliers(removeIndex);
             predictPtsInNextFrame();
         }
+#endif //(DISABLED)
             
         TOK(t_solve);
 
@@ -919,7 +921,7 @@ void Estimator::double2vector()
                                                           para_Pose[0][5]).toRotationMatrix());
         double y_diff = origin_R0.x() - origin_R00.x();
         //TODO
-        Matrix3d rot_diff = Utility::ypr2R(Vector3d(y_diff, 0, 0));
+        Matrix3d rot_diff = Utility::ypr2R(Vector3d(y_diff, 0, 0)); //yaw is relative, not fully observable
         if (abs(abs(origin_R0.y()) - 90) < 1.0 || abs(abs(origin_R00.y()) - 90) < 1.0)
         {
             ROS_DEBUG("euler singular point!");
@@ -1073,9 +1075,10 @@ void Estimator::optimization()
     }
 
     problem.AddParameterBlock(para_Td[0], 1); // time delta estimation
-    if (!pCfg->ESTIMATE_TD || Vs[0].norm() < 0.2)
+    if (!pCfg->ESTIMATE_TD || Vs[0].norm() < 0.2) // 0.2: large excitation only
         problem.SetParameterBlockConstant(para_Td[0]);
 
+    // - Prior / Marginalization
     if (last_marginalization_info && last_marginalization_info->valid)
     {
         // construct new marginlization_factor
@@ -1102,7 +1105,7 @@ void Estimator::optimization()
     for (auto &it_per_id : f_manager.feature)
     {
         it_per_id.used_num = it_per_id.feature_per_frame.size();
-        if (it_per_id.used_num < 4)
+        if (it_per_id.used_num < 4) // TODO: make 4 as a param? also used in feature_manager.cpp
             continue;
  
         ++feature_index;
@@ -1122,7 +1125,7 @@ void Estimator::optimization()
                 problem.AddResidualBlock(f_td, loss_function, para_Pose[imu_i], para_Pose[imu_j], para_Ex_Pose[0], para_Feature[feature_index], para_Td[0]);
             }
 
-// #if (FEATURE_ENABLE_STEREO_SUPPORT) // stereo only
+// #if (FEATURE_ENABLE_STEREO_SUPPORT) // stereo only TODO: add stereo support
 //             if(pCfg->STEREO && it_per_frame.is_stereo)
 //             {                
 //                 Vector3d pts_j_right = it_per_frame.pointRight;
@@ -1159,7 +1162,7 @@ void Estimator::optimization()
     //options.minimizer_progress_to_stdout = true;
     //options.use_nonmonotonic_steps = true;
     if (marginalization_flag == MARGIN_OLD)
-        options.max_solver_time_in_seconds = pCfg->SOLVER_TIME * 4.0 / 5.0;
+        options.max_solver_time_in_seconds = pCfg->SOLVER_TIME * 0.80; // reduce 20% for old
     else
         options.max_solver_time_in_seconds = pCfg->SOLVER_TIME;
     TicToc t_solver;
@@ -1205,7 +1208,7 @@ void Estimator::optimization()
                 IMUFactor* imu_factor = new IMUFactor(pre_integrations[1], pCfg->G);
                 ResidualBlockInfo *residual_block_info = new ResidualBlockInfo(imu_factor, NULL,
                                                                            vector<double *>{para_Pose[0], para_SpeedBias[0], para_Pose[1], para_SpeedBias[1]},
-                                                                           vector<int>{0, 1});
+                                                                           vector<int>{0, 1});// TODO: figure drop Px,Py? how about Pz?
                 marginalization_info->addResidualBlockInfo(residual_block_info);
             }
         }

@@ -150,7 +150,9 @@ class Estimator
     vector<Vector3d> key_poses;
     double initial_timestamp;
 
-
+    /* ************************************ 
+     * ceres solver params placeholders:
+     */
     double para_Pose[WINDOW_SIZE + 1][SIZE_POSE];
     double para_SpeedBias[WINDOW_SIZE + 1][SIZE_SPEEDBIAS];
     double para_Feature[NUM_OF_F][SIZE_FEATURE];
@@ -163,6 +165,7 @@ class Estimator
 
     MarginalizationInfo *last_marginalization_info;
     vector<double *> last_marginalization_parameter_blocks;
+    /* ************************************ */
 
     map<double, ImageFrame> all_image_frame;
     IntegrationBase *tmp_pre_integration;
