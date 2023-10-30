@@ -64,7 +64,6 @@ void EstimatorManager::restartManager()
     arm_prev_data.t_header = -1;
     arm_prev_data.arm_pose_header = -1;
     arm_prev_data.arm_pose_ready = false;
-    arm_prev_data.arm_pose_inited = false;
 #endif
     PRINT_DEBUG("[EstimatorManager::restartManager] Manager Ready!");
 }
@@ -85,7 +84,7 @@ void EstimatorManager::processMeasurements_thread()
         {
             pair<double, map<int, vector<pair<int, Eigen::Matrix<double, 7, 1> > > > > feature[MAX_NUM_DEVICES];
             vector<pair<double, Eigen::Vector3d>> accVector[MAX_NUM_DEVICES], gyrVector[MAX_NUM_DEVICES];
-            pair<double, Vector7d_t> armVector;
+            pair<double, Vector7d_t> armVector[MAX_NUM_DEVICES];
             double curTime[MAX_NUM_DEVICES];
 
             const bool is_base_avail = (pEsts[BASE_DEV]->featureBuf.empty() == false);
@@ -93,7 +92,6 @@ void EstimatorManager::processMeasurements_thread()
 
             // reset arm return:
             Lie::SE3* pT_arm = nullptr;
-            Lie::SE3* pT_arm_0 = nullptr;
 
             // Only process when both features are available:
             if (is_base_avail && is_EE_avail)
@@ -115,41 +113,26 @@ void EstimatorManager::processMeasurements_thread()
                 bool is_arm_avail = (this->arm_buf.data.empty() == false);
                 if (is_arm_avail)
                 {
-                    while (this->arm_buf.data.empty() == false) // ideally one loop needed, but loop to drop excessive in case
+                    // iterate to find the closest arm joints vector:
+                    is_arm_avail &= this->_getJointVector_safe(armVector[BASE_DEV], feature[BASE_DEV].first, true);
+                    // is_arm_avail &= this->_getJointVector_safe(armVector[EE_DEV  ], feature[EE_DEV  ].first, true );
+                    if (is_arm_avail)
                     {
-                        // acquire:
-                        this->arm_buf.guard.lock();
-                        armVector = this->arm_buf.data.front();
-                        this->arm_buf.data.pop();
-                        this->arm_buf.guard.unlock();
-                        // queue:
-                        // PRINT_DEBUG("Delta Time dt=%f , dt=%f \n", (armVector.first - feature[0].first), (feature[1].first - feature[0].first));
-                        if ((armVector.first - feature[0].first) >= -0.00001)
+                        // TODO: armvector EE the other way around
+                        this->_postProcessArmJnts_unsafe(armVector[BASE_DEV].first, armVector[BASE_DEV].second);
+                        if (this->arm_prev_data.arm_pose_ready)
                         {
-                            // process:
-                            this->processArm_unsafe(armVector.first, armVector.second);
-                            if (this->arm_prev_data.arm_pose_ready)
-                            {
-                                pT_arm = &(this->arm_prev_data.arm_pose_st); // cache the pointer
-                            }
-                            break;
+                            pT_arm = &(this->arm_prev_data.arm_pose_st); // cache the pointer
                         }
                     }
-
-#if (FEATURE_ENABLE_ARM_ODOMETRY_LEVELING)
-                    // we never know when arm topic is available, so we can just wait
-                    if (arm_prev_data.arm_pose_ready && !arm_prev_data.arm_pose_inited) 
+                    else
                     {
-                        arm_prev_data.arm_pose_inited = true;
-                        PRINT_WARN("Set Arm pose !!!");
-                        pEsts[EE_DEV]->adjustAllPoses(this->arm_prev_data.arm_pose_st); // init pose0
-                        PRINT_DEBUG("Arm pose: \n%s", Lie::to_string(this->arm_prev_data.arm_pose_st).c_str());
+                        PRINT_ERROR("Arm Joint Vector is not found! %d", is_arm_avail);
                     }
-#endif // (FEATURE_ENABLE_ARM_ODOMETRY_LEVELING)
                 }
                 else
                 {
-                    PRINT_DEBUG("Arm is NOT available");
+                    PRINT_ERROR("Arm is NOT available");
                 }
                 TOK_TAG(ellapsed_process_i,"fetch_arm_odom");
 #endif //FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT
@@ -158,7 +141,7 @@ void EstimatorManager::processMeasurements_thread()
                 const bool is_EE_imu_avail      = pEsts[EE_DEV  ]->IMUAvailable(curTime[EE_DEV  ]);
                 
                 // fetch and process:
-                if (is_base_imu_avail && is_EE_imu_avail)
+                if (is_base_imu_avail && is_EE_imu_avail && is_arm_avail)
                 {
                     // fetch IMU:
                     TIK(ellapsed_process_i);
@@ -174,9 +157,16 @@ void EstimatorManager::processMeasurements_thread()
                         if (! pEsts[id]->initFirstPoseFlag)
                         {
                             pEsts[id]->initFirstIMUPose(accVector[id]);
+                            if ((id == EE_DEV) && (is_arm_avail))
+                            {
+                                pEsts[EE_DEV]->initFirstPose(this->arm_prev_data.arm_pose_st);
+                            }
+                            else
+                            {
+                                PRINT_ERROR("Error initializing");
+                            }
                         }
                     }
-
 
                     TOK_TAG(ellapsed_process_i,"fetch_imu");
 
@@ -249,7 +239,7 @@ void EstimatorManager::processMeasurements_thread()
                 }
                 else
                 {
-                    PRINT_WARN("wait for both imu [%d|%d] ... \n", is_base_imu_avail, is_EE_imu_avail);
+                    PRINT_WARN("wait for both imu and arm [%d|%d|%d] ... \n", is_base_imu_avail, is_EE_imu_avail, is_arm_avail);
                 }
             }
 
@@ -290,30 +280,58 @@ void EstimatorManager::inputIMU(const size_t DEV_ID, const double t, const Vecto
 }
 
 #if (FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT)
-void EstimatorManager::inputArm(double t, 
-    const sensor_msgs::JointStateConstPtr &_jnt_msg_b)
-    // const sensor_msgs::JointStateConstPtr &_jnt_msg_E)
+void EstimatorManager::inputArmJnts_safe(const double t, const Vector7d_t &_jnt_msg)
 {
-    // input joints:
-    Vector7d_t jnt_msg_b;
-    // Vector7d_t jnt_vel, jnt_tau;
-    if (_jnt_msg_b)
+    std::lock_guard<std::mutex> lock(this->arm_buf.guard);
+    this->arm_buf.data.push(make_pair(t, _jnt_msg));
+}
+void EstimatorManager::emptyArmJnts_safe(const double t)
+{
+    std::lock_guard<std::mutex> lock(this->arm_buf.guard);
+    while ((!this->arm_buf.data.empty()) && (t - this->arm_buf.data.front().first))
     {
-        for (int i = 0; i < ARM_NUM_DOF; ++i) {
-            jnt_msg_b(i) = _jnt_msg_b->position[i];
-            // jnt_msg_E(i) = _jnt_msg_E->position[i];
-        }
-        this->arm_buf.guard.lock();
-        this->arm_buf.data.push(make_pair(t, jnt_msg_b));
-        // this->arm_buf.data[EE_DEV  ].push(make_pair(t, jnt_msg_E));
-        this->arm_buf.guard.unlock();
-    }
-    else
-    {
-        PRINT_ERROR("Joint Messages are not Available!!!!");
+        this->arm_buf.data.pop();
     }
 }
-void EstimatorManager::processArm_unsafe(const double t, const Vector7d_t& jnt_vec)
+bool EstimatorManager::_getJointVector_safe(pair<double, Vector7d_t> &jnt_buf, const double t, const bool if_pop)
+{
+    double best_dt;
+    bool success = false;
+    std::lock_guard<std::mutex> lock(this->arm_buf.guard);
+    while (!this->arm_buf.data.empty())
+    {
+        pair<double, Vector7d_t> buf = this->arm_buf.data.front();
+        double dt = t - buf.first; // with offset
+
+        if (dt > 0)
+        {
+            if (dt < IMAGE_ARM_SYNC_TIME_DELTA_MAX)
+            {
+                jnt_buf.first = buf.first;
+                jnt_buf.second = buf.second;
+                best_dt = dt;
+                success = true;
+            }
+
+            // pop
+            if (if_pop)
+                this->arm_buf.data.pop();
+        }
+        else
+        {
+            // picking the closest one:
+            if (-dt < best_dt)
+            {
+                jnt_buf.first = buf.first;
+                jnt_buf.second = buf.second;
+                success = true;
+            }
+            break;
+        }
+    }
+    return success;
+}
+void EstimatorManager::_postProcessArmJnts_unsafe(const double t, const Vector7d_t& jnt_vec)
 {
     bool success = false;
     const Lie::SE3 Te = pArm->getCamEE();
@@ -334,16 +352,30 @@ void EstimatorManager::processArm_unsafe(const double t, const Vector7d_t& jnt_v
     // placeholders:
     Lie::SE3 T_c, g_st, T_b;
 
+    // init:
+    if (arm_prev_data.t_header < 0)
+    {
+        PRINT_WARN("ArmOdometry: no previous data available!");
+        this->arm_prev_data.arm_pose_ready = false;
+        arm_prev_data.t_header = t;
+        arm_prev_data.arm_vec = jnt_vec;
+    }
     // compute:
-    if ((arm_prev_data.t_header > 0) && (pEsts[BASE_DEV]->solver_flag != Estimator::SolverFlag::INITIAL))
     {
         // 1. fetch R,p previous:
         Lie::R3 p_c; Lie::SO3 R_c;
-        p_c = pEsts[BASE_DEV]->latest_P; // previous frame
-        R_c = pEsts[BASE_DEV]->latest_Q.toRotationMatrix(); // previous frame
-        // correction:
-        this->arm_prev_data.arm_pose_ready = true;
-        T_c = Lie::SE3_from_SO3xR3(R_c * R_corr, p_c);
+        if (pEsts[BASE_DEV]->solver_flag == Estimator::SolverFlag::NON_LINEAR)
+        {
+            p_c = pEsts[BASE_DEV]->latest_P; // previous frame
+            R_c = pEsts[BASE_DEV]->latest_Q.toRotationMatrix(); // previous frame
+            // correction:
+            this->arm_prev_data.arm_pose_ready = true;
+            T_c = Lie::SE3_from_SO3xR3(R_c * R_corr, p_c);
+        }
+        else
+        {
+            T_c = Lie::SE3::Identity();
+        }
 
         // 2. [Arm] compute theta --> SE3:
         // pArm->setAngles_unsafely(Vector7d_t::Zero());
@@ -372,11 +404,7 @@ void EstimatorManager::processArm_unsafe(const double t, const Vector7d_t& jnt_v
         queue_ArmOdometry_safe(arm_prev_data.t_header, R_c, p_c, EE_DEV);
 #   endif //(FEATURE_ENABLE_ARM_ODOMETRY_VIZ)
     }
-    else
-    {
-        PRINT_WARN("ArmOdometry: no previous data available, OR, base solver is not ready!");
-        this->arm_prev_data.arm_pose_ready = false;
-    }
+
 
     // cache, compute next time:
     arm_prev_data.t_header = t;
@@ -384,11 +412,11 @@ void EstimatorManager::processArm_unsafe(const double t, const Vector7d_t& jnt_v
 }
 #endif 
 
-void EstimatorManager::inputImage(double t, const cv::Mat &_img_b, const cv::Mat &_img_e)
+void EstimatorManager::inputImage(double t_b, const cv::Mat &_img_b, double t_e, const cv::Mat &_img_e)
 {
     // input images:
-    pEsts[BASE_DEV]->inputImage(t, _img_b);
-    pEsts[EE_DEV  ]->inputImage(t, _img_e);
+    pEsts[BASE_DEV]->inputImage(t_b, _img_b);
+    pEsts[EE_DEV  ]->inputImage(t_e, _img_e);
 }
 
 void EstimatorManager::publishVisualization_thread()
@@ -433,10 +461,3 @@ void EstimatorManager::publishVisualization_thread()
         }
     }
 }
-
-#if (FEATURE_ENABLE_VICON_SUPPORT)
-void callback_viconOdometry(const geometry_msgs::TransformStampedConstPtr &transform_msg, const int device_id)
-{
-    queue_ViconOdometry_safe(transform_msg, device_id); // NOTE: should be behind the estimator time (0.1s ish)
-}
-#endif

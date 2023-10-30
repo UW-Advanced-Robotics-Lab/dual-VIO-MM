@@ -80,7 +80,7 @@ using namespace std;
 //[Later] TODO: should we parameterize as config hyper parameter? depending on the hardware, the rate might be dfifferent.
 #define IMAGE_SYNCHRONIZATION_TIME_DELTA_MAX    (double)(0.03) 
 #define IMAGE_BEHIND_SCHEDULE_TIME_TOLERANCE    (double)(0.06) 
-#define IMAGE_ARM_SYNC_TIME_DELTA_MAX           (double)(0.004)  // 500 Hz --> 0.002 s --> tol: 0.002 s: allowance of 1-2 ticks
+#define IMAGE_ARM_SYNC_TIME_DELTA_MAX           (double)(0.01)
 
 // ----------------------------------------------------------------
 // : ROS TOPICS :
@@ -181,8 +181,8 @@ using namespace std;
 // arm odometry support:
 #define FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT             ( ENABLED) // [WIP]
 #define     FEATURE_ENABLE_ARM_ODOMETRY_VIZ                (( ENABLED) & (FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT))
-#define     FEATURE_ENABLE_ARM_ODOMETRY_LEVELING           ((DISABLED) & (FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT)) // init first pose with arm odometry
-#define     FEATURE_ENABLE_ARM_ODOMETRY_MARGINALIZATION    (( ENABLED) & (FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT)) // [Our-Solution] Arm Marginalization
+#define     FEATURE_ENABLE_ARM_ODOMETRY_LEVELING           (( ENABLED) & (FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT)) // init first pose with arm odometry
+#define     FEATURE_ENABLE_ARM_ODOMETRY_MARGINALIZATION    ((DISABLED) & (FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT)) // [Our-Solution] Arm Marginalization
 // debug only features:
 #define FEATURE_DEBUGGING                               (( ENABLED) & (!FEATURE_MODE_RUNTIME))
 #   define FEATURE_CONSOLE_PRINTF                           (( ENABLED) & (FEATURE_DEBUGGING))

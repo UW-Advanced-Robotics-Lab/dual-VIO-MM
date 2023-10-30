@@ -50,8 +50,7 @@ class Estimator
     void setParameter();
 
     // interface
-    void initFirstPose(Eigen::Vector3d p, Eigen::Matrix3d r);
-    void adjustAllPoses(Lie::SE3 &Rp);
+    void initFirstPose(Lie::SE3 &Rp);
     void inputIMU(double t, const Vector3d &linearAcceleration, const Vector3d &angularVelocity);
     // void inputFeature(double t, const map<int, vector<pair<int, Eigen::Matrix<double, 7, 1>>>> &featureFrame);
     void inputImage(double t, const cv::Mat &_img);

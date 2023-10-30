@@ -19,6 +19,7 @@
 #include <opencv2/opencv.hpp>
 #include "estimator/parameters.h"
 #include "estimator/estimator_manager.h"
+#include "utility/visualization.h"
 
 // ----------------------------------------------------------------
 // : Definitions:
@@ -29,15 +30,6 @@ typedef struct{
     std::mutex                              img0_mutex;
     double                                  time_last_update;
 } NodeBuffer_t;
-
-#if (FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT)
-typedef struct{
-    queue<sensor_msgs::JointStateConstPtr>      jnt_buf;
-    std::mutex                                  jnt_mutex;
-    queue<geometry_msgs::PoseStampedConstPtr>   pose_buf;
-    std::mutex                                  pose_mutex;
-} ArmBuffer_t;
-#endif
 
 #if (FEATURE_ENABLE_VICON_SUPPORT)
 typedef struct{
@@ -67,7 +59,6 @@ NodeBuffer_t   m_buffer[MAX_NUM_DEVICES];
 
 #if (FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT)
 std::shared_ptr<ArmConfig_t> pArmCfg = std::make_shared<ArmConfig_t>();
-ArmBuffer_t    m_arm;
 #endif
 
 // Estimators:
@@ -78,8 +69,8 @@ std::shared_ptr<EstimatorManager> pEstMnger = std::make_shared<EstimatorManager>
 RosNodeTestPerf_t m_perf;
 #endif
 
-////////////////////////////////////////
-///////   PRIVATE FUNCTION     /////////
+//////////////////////////////////////////
+///////   CALLBACK FUNCTION     /////////
 ////////////////////////////////////////
 
 void buf_img_safely(NodeBuffer_t * const pB, const sensor_msgs::ImageConstPtr &img_msg)
@@ -97,6 +88,14 @@ void d1_img0_callback(const sensor_msgs::ImageConstPtr &img_msg)
 {
     buf_img_safely(& m_buffer[EE_DEV], img_msg);
 }
+void callback_viconOdometry_EE_safe(const geometry_msgs::TransformStampedConstPtr &transform_msg)
+{
+    queue_ViconOdometry_safe(transform_msg, EE_DEV); // NOTE: should be behind the estimator time (0.1s ish)
+}
+void callback_viconOdometry_base_safe(const geometry_msgs::TransformStampedConstPtr &transform_msg)
+{
+    queue_ViconOdometry_safe(transform_msg, BASE_DEV); // NOTE: should be behind the estimator time (0.1s ish)
+}
 
 cv::Mat process_IMG_from_msg(const sensor_msgs::ImageConstPtr &img_msg)
 {
@@ -110,8 +109,61 @@ cv::Mat process_IMG_from_msg(const sensor_msgs::ImageConstPtr &img_msg)
     return img;
 }
 
+double process_IMU_from_msg(const sensor_msgs::ImuConstPtr &imu_msg, Vector3d &acc, Vector3d &gyr)
+{
+    double t, x, y, z;
+    t = imu_msg->header.stamp.toSec();
+    x = (double)(imu_msg->linear_acceleration.x);
+    y = (double)(imu_msg->linear_acceleration.y);
+    z = (double)(imu_msg->linear_acceleration.z);
+    acc = Vector3d(x, y, z);
+    x = (double)(imu_msg->angular_velocity.x);
+    y = (double)(imu_msg->angular_velocity.y);
+    z = (double)(imu_msg->angular_velocity.z);
+    gyr = Vector3d(x, y, z);
+    return t;
+}
+void d0_imu_callback(const sensor_msgs::ImuConstPtr &imu_msg)
+{
+    Vector3d acc, gyr;
+    double t;
+    t = process_IMU_from_msg(imu_msg, acc, gyr);
+    pEstMnger->inputIMU(BASE_DEV, t, acc, gyr);
+}
+void d1_imu_callback(const sensor_msgs::ImuConstPtr &imu_msg)
+{
+    Vector3d acc, gyr;
+    double t;
+    t = process_IMU_from_msg(imu_msg, acc, gyr);
+    pEstMnger->inputIMU(EE_DEV, t, acc, gyr);
+}
+
+void restart_callback(const std_msgs::BoolConstPtr &restart_msg)
+{
+    if (restart_msg->data == true)
+    {
+        ROS_WARN("restart the estimator!");
+        pEstMnger->restartManager();
+    }
+    return;
+}
+
+void armJoints_callback(const sensor_msgs::JointStateConstPtr &jnts_msg)
+{
+    Vector7d_t jnt_buf;
+    double t = jnts_msg->header.stamp.toSec();
+    for (int i = 0; i < ARM_NUM_DOF; i++) {
+        jnt_buf(i) = jnts_msg->position[i];
+    }
+    pEstMnger->inputArmJnts_safe(t, jnt_buf);
+}
+
+//////////////////////////////////////
+///////   MAIN FUNCTIONS     /////////
+//////////////////////////////////////
+
 // extract images with same timestamp from two topics
-void sync_process_IMG()
+void sync_process_IMG_thread()
 {
     NodeBuffer_t * const pB0 = & m_buffer[BASE_DEV];
     NodeBuffer_t * const pB1 = & m_buffer[EE_DEV  ];
@@ -166,51 +218,6 @@ void sync_process_IMG()
             sensor_msgs::JointStateConstPtr jnt_msg_E = NULL;
             sensor_msgs::JointStateConstPtr jnt_msg_b = NULL;
 
-#if (FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT)
-            // - batch processing the joint messages to match within the frame
-            sensor_msgs::JointStateConstPtr jnt_msg;
-            double da_time;
-
-            if (if_image_synced)
-            {
-                m_arm.jnt_mutex.lock();
-                // int counter = 0;
-                // int counter2 = 0;
-                while (!m_arm.jnt_buf.empty()) 
-                {
-                    jnt_msg = m_arm.jnt_buf.front();
-                    da_time = jnt_msg->header.stamp.toSec(); // with offset
-
-                    // acquire arms within the delta time window, set to allowance 1-3 ticks 0.002s/tick
-                    if (FLOAT_IN_BOUND((da_time - d0_time), -IMAGE_ARM_SYNC_TIME_DELTA_MAX, IMAGE_ARM_SYNC_TIME_DELTA_MAX))
-                    {
-                        jnt_msg_b = jnt_msg;
-                        // PRINT_DEBUG("> fetching joint buffer dt=%fs", d01_delta);
-                        // PRINT_ARRAY(jnt_msg->position, 7);
-                        // counter2 ++;
-                    }
-                    if (FLOAT_IN_BOUND((da_time - d1_time), -IMAGE_ARM_SYNC_TIME_DELTA_MAX, IMAGE_ARM_SYNC_TIME_DELTA_MAX))
-                    {
-                        // PRINT_DEBUG("> fetching joint buffer dt=%fs", d01_delta);
-                        // PRINT_ARRAY(jnt_msg->position, 7);
-                        jnt_msg_E = jnt_msg;
-                        // counter ++;
-                    }
-                    
-                    m_arm.jnt_buf.pop();
-                    if ((da_time >= d0_time) && (da_time >= d1_time)) // time passed out of range
-                    {
-                        // PRINT_DEBUG("> current joint buffer size: %d", m_arm.jnt_buf.size());
-                        // PRINT_DEBUG("EOW counter: %d, %d", counter, counter2);
-                        // if (jnt_msg_E && jnt_msg_b)
-                        //     PRINT_ARRAY_DIFF(jnt_msg_E->position, jnt_msg_b->position, 7); // diff is about 0.001
-                        break; // out of the delta time window
-                    }
-                }
-                m_arm.jnt_mutex.unlock();
-            }
-#endif
-
             if(if_image_synced)
             {
                 // measure time difference between the latest image and the current processed image:
@@ -230,15 +237,7 @@ void sync_process_IMG()
                 if (delta_time_input > IMAGE_PROCESSING_INTERVAL)
 #endif // otherwise:
                 {
-                    // [ decoupled estimators ]
-                    // [Later] TODO: we should consider coupling the estimators (stereo for the same states)
-                    // TODO: add joint state from the estimators
-#if (FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT)
-                    pEstMnger->inputArm(d0_time, jnt_msg_b); // jnt_msg_E); //TODO: buf two set of joints?
-                    //must before input image
-#endif 
-                    pEstMnger->inputImage(d0_time, d0_img, d1_img); 
-
+                    pEstMnger->inputImage(d0_time, d0_img, d1_time, d1_img); 
                     d0_time_last_submitted = d0_time; // to compute run-time processing rate
 
 #if (FEATURE_ENABLE_PERFORMANCE_EVAL_ROSNODE)
@@ -266,61 +265,6 @@ void sync_process_IMG()
         // std::chrono::milliseconds dura(2);
         // std::this_thread::sleep_for(dura);
     }
-}
-
-double process_IMU_from_msg(const sensor_msgs::ImuConstPtr &imu_msg, Vector3d &acc, Vector3d &gyr)
-{
-    double t, x, y, z;
-    t = imu_msg->header.stamp.toSec();
-    x = (double)(imu_msg->linear_acceleration.x);
-    y = (double)(imu_msg->linear_acceleration.y);
-    z = (double)(imu_msg->linear_acceleration.z);
-    acc = Vector3d(x, y, z);
-    x = (double)(imu_msg->angular_velocity.x);
-    y = (double)(imu_msg->angular_velocity.y);
-    z = (double)(imu_msg->angular_velocity.z);
-    gyr = Vector3d(x, y, z);
-    return t;
-}
-void d0_imu_callback(const sensor_msgs::ImuConstPtr &imu_msg)
-{
-    Vector3d acc, gyr;
-    double t;
-    t = process_IMU_from_msg(imu_msg, acc, gyr);
-    pEstMnger->inputIMU(BASE_DEV, t, acc, gyr);
-}
-void d1_imu_callback(const sensor_msgs::ImuConstPtr &imu_msg)
-{
-    Vector3d acc, gyr;
-    double t;
-    t = process_IMU_from_msg(imu_msg, acc, gyr);
-    pEstMnger->inputIMU(EE_DEV, t, acc, gyr);
-}
-
-#if (FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT)
-void arm_jnts_callback(const sensor_msgs::JointStateConstPtr &jnts_msg)
-{
-    m_arm.jnt_mutex.lock();
-    m_arm.jnt_buf.push(jnts_msg);
-    m_arm.jnt_mutex.unlock();
-}
-
-void arm_pose_callback(const geometry_msgs::PoseStampedConstPtr &pose_msg)
-{
-    m_arm.pose_mutex.lock();
-    m_arm.pose_buf.push(pose_msg);
-    m_arm.pose_mutex.unlock();
-}
-#endif
-
-void restart_callback(const std_msgs::BoolConstPtr &restart_msg)
-{
-    if (restart_msg->data == true)
-    {
-        ROS_WARN("restart the estimator!");
-        pEstMnger->restartManager();
-    }
-    return;
 }
 
 int main(int argc, char **argv)
@@ -368,16 +312,11 @@ int main(int argc, char **argv)
     ros::Subscriber sub_d0_img0 = n.subscribe(pCfgs[BASE_DEV]->IMAGE_TOPICS[0], SUB_IMG_BUFFER_SIZE, d0_img0_callback);
     ros::Subscriber sub_d1_img0 = n.subscribe(pCfgs[EE_DEV  ]->IMAGE_TOPICS[0], SUB_IMG_BUFFER_SIZE, d1_img0_callback);
 #if (FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT)
-    ros::Subscriber sub_arm_jnts = n.subscribe(pArmCfg->JOINTS_TOPIC, SUB_ARM_BUFFER_SIZE, arm_jnts_callback); //, ros::TransportHints().tcpNoDelay());
-    // ros::Subscriber sub_arm_pose = n.subscribe(pArmCfg->POSE_TOPIC, SUB_ARM_BUFFER_SIZE, arm_pose_callback); //, ros::TransportHints().tcpNoDelay());
+    ros::Subscriber sub_arm_jnts = n.subscribe(pArmCfg->JOINTS_TOPIC, SUB_ARM_BUFFER_SIZE, armJoints_callback); //, ros::TransportHints().tcpNoDelay());
 #endif
 #if (FEATURE_ENABLE_VICON_SUPPORT)
-    ros::Subscriber sub_d0_vicon = n.subscribe< geometry_msgs::TransformStamped>(
-        pCfgs[BASE_DEV]->VICON_TOPIC, SUB_ARM_BUFFER_SIZE, 
-        boost::bind(callback_viconOdometry, _1, BASE_DEV)); //, ros::TransportHints().tcpNoDelay());
-    ros::Subscriber sub_d1_vicon = n.subscribe< geometry_msgs::TransformStamped>(
-        pCfgs[EE_DEV  ]->VICON_TOPIC, SUB_ARM_BUFFER_SIZE, 
-        boost::bind(callback_viconOdometry, _1, EE_DEV)); //, ros::TransportHints().tcpNoDelay());
+    ros::Subscriber sub_d0_vicon = n.subscribe< geometry_msgs::TransformStamped>(pCfgs[BASE_DEV]->VICON_TOPIC, SUB_ARM_BUFFER_SIZE, callback_viconOdometry_base_safe);
+    ros::Subscriber sub_d1_vicon = n.subscribe< geometry_msgs::TransformStamped>(pCfgs[EE_DEV  ]->VICON_TOPIC, SUB_ARM_BUFFER_SIZE, callback_viconOdometry_EE_safe);
 #endif
     
     PRINT_INFO("==== [ Subscriptions Completed ] ==== ");
@@ -388,7 +327,7 @@ int main(int argc, char **argv)
     
     ros::Subscriber sub_restart = n.subscribe("/vins_restart", 100, restart_callback);
 
-    std::thread img_sync_thread{sync_process_IMG};
+    std::thread img_sync_thread{sync_process_IMG_thread};
     
     ////////// ENDS HERE //////////////////////////////////
     ros::spin();

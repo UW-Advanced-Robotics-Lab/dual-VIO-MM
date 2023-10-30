@@ -392,29 +392,13 @@ void Estimator::initFirstIMUPose(vector<pair<double, Eigen::Vector3d>> &accVecto
     //Vs[0] = Vector3d(5, 0, 0);
 }
 
-void Estimator::initFirstPose(Eigen::Vector3d p, Eigen::Matrix3d r)
+void Estimator::initFirstPose(Lie::SE3 &Rp)
 {
-    Ps[0] = p;
-    Rs[0] = r;
-    initP = p;
-    initR = r;
+    Lie::SO3xR3_from_SE3(initR, initP, Rp);
+    Ps[0] = initP;
+    Rs[0] = initR;
+    PRINT_INFO("init first pose:\nT=\n%s", Lie::to_string(Rp).c_str());
 }
-void Estimator::adjustAllPoses(Lie::SE3 &Rp)
-{
-    Lie::SO3 R, Rl_T; Lie::R3 P;
-    Lie::SO3xR3_from_SE3(R, P, Rp);
-    Rl_T = latest_Q.toRotationMatrix().transpose();
-    R *= Rl_T;
-    P -= Rl_T * latest_P;
-    for(size_t i=0; i<=WINDOW_SIZE; i++)
-    {
-        Rs[i] = R * Rs[i];
-        Ps[i] += P;
-    }
-    initR = Rs[0];
-    initP = Ps[0];
-}
-
 
 void Estimator::processIMU(double t, double dt, const Vector3d &linear_acceleration, const Vector3d &angular_velocity)
 {
@@ -480,9 +464,15 @@ void Estimator::processImage(const map<int, vector<pair<int, Eigen::Matrix<doubl
     Headers[frame_count] = header;
 
 #if (FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT)
-    if (pT_arm != nullptr)
+    if (pT_arm != nullptr) //FIXME: we should put these into the equation below
     {
         Lie::SO3xR3_from_SE3(arm_Rs[frame_count-1], arm_Ps[frame_count-1], *pT_arm);
+    }
+    else
+    {
+        PRINT_WARN("No valid ARM Odometry support");
+        arm_Rs[frame_count-1] = Rs[frame_count-1];
+        arm_Ps[frame_count-1] = Ps[frame_count-1];
     }
 #endif //(FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT)
 

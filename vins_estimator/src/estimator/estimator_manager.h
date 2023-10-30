@@ -36,12 +36,12 @@ class EstimatorManager
         void restartManager();
         // interface:
         void inputIMU(const size_t DEV_ID, const double t, const Vector3d &linearAcceleration, const Vector3d &angularVelocity);
-        void inputImage(double t, const cv::Mat &_img_b, const cv::Mat &_img_e);
-
+        void inputImage(double t_b, const cv::Mat &_img_b, double t_e, const cv::Mat &_img_e);
 #if (FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT)
-        void inputArm(double t, const sensor_msgs::JointStateConstPtr &_jnt_msg_b);
+        void inputArmJnts_safe(const double t, const Vector7d_t &_jnt_msg);
+        void emptyArmJnts_safe(const double t);
 #endif
-        // callbacks:
+
         // thread:
         void publishVisualization_thread();
         void processMeasurements_thread();
@@ -50,8 +50,8 @@ class EstimatorManager
 #if (FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT)
         typedef struct{
             // protected:
-            queue<pair<double, Vector7d_t>> data;
-            std::mutex                      guard;
+            queue<pair<double, Vector7d_t>>             data;
+            std::mutex                                  guard;
         } arm_buffer_t;
         typedef struct{
             // cache:
@@ -68,7 +68,9 @@ class EstimatorManager
         arm_data_t                      arm_prev_data;
 
         std::shared_ptr<ArmModel>       pArm;
-        void processArm_unsafe(const double t, const Vector7d_t& jnt_vec);
+        
+        bool _getJointVector_safe(pair<double, Vector7d_t> &jnt_buf, const double t, const bool if_pop);
+        void _postProcessArmJnts_unsafe(const double t, const Vector7d_t& jnt_vec);
 #endif
 
         std::shared_ptr<DeviceConfig_t> pCfgs[MAX_NUM_DEVICES];
@@ -78,9 +80,5 @@ class EstimatorManager
         std::shared_ptr<std::thread>    pPublishThread = nullptr;
 
 };
-
-#if (FEATURE_ENABLE_VICON_SUPPORT)
-void callback_viconOdometry(const geometry_msgs::TransformStampedConstPtr &transform_msg, const int device_id);
-#endif
 
 #endif // !ESTIMATOR_MANAGER_H

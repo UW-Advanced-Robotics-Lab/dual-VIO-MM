@@ -403,6 +403,7 @@ void queue_ViconOdometry_safe(const geometry_msgs::TransformStampedConstPtr &tra
         // R^T , -p : for offset correction
         m_buf[device_id].vicon_R0 = R.transpose();
         m_buf[device_id].vicon_p0 = -p;
+        m_buf[device_id].vicon_inited = true;
 #   endif // (FEATURE_ENABLE_VICON_ZEROING_WRT_BASE_SUPPORT)
     }
     // apply zeroing correction:
