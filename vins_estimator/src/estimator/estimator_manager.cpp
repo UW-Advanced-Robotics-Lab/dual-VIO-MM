@@ -67,12 +67,12 @@ void EstimatorManager::processMeasurements_thread()
     double prevTime[MAX_NUM_DEVICES] = {0.0, 0.0};
 
     TicToc ellapsed_process;
-    TicToc ellapsed_process_i;
     while (FOREVER)
     {
         auto start_time = std::chrono::high_resolution_clock::now();
 
         TIK(ellapsed_process);
+        TicToc ellapsed_process_i;
         // Processing Tasks:
         {
             pair<double, map<int, vector<pair<int, Eigen::Matrix<double, 7, 1> > > > > feature[MAX_NUM_DEVICES];
@@ -128,7 +128,7 @@ void EstimatorManager::processMeasurements_thread()
                 {
                     PRINT_DEBUG("Arm is NOT available");
                 }
-                TOK_TAG(ellapsed_process_i, "fetch_arm_odom");
+                TOK_TAG(ellapsed_process_i,"fetch_arm_odom");
 #endif //FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT
 
                 const bool is_base_imu_avail    = pEsts[BASE_DEV]->IMUAvailable(curTime[BASE_DEV]);
@@ -151,7 +151,7 @@ void EstimatorManager::processMeasurements_thread()
                         if (! pEsts[id]->initFirstPoseFlag)
                             pEsts[id]->initFirstIMUPose(accVector[id]);
                     }
-                    TOK_TAG(ellapsed_process_i, "fetch_imu");
+                    TOK_TAG(ellapsed_process_i,"fetch_imu");
 
                     // process imu iteratively:
                     TIK(ellapsed_process_i);
@@ -174,19 +174,19 @@ void EstimatorManager::processMeasurements_thread()
                             pEsts[id]->processIMU(accVector[id][i].first, dt, accVector[id][i].second, gyrVector[id][i].second);
                         }
                     }
-                    TOK_TAG(ellapsed_process_i, "imu_process");
+                    TOK_TAG(ellapsed_process_i,"imu_proc");
 
                     //TODO: around 20ms x2 = 40ms, we should parallel these two processes? [@later, @run-time-concern]
                     for(size_t id = BASE_DEV; id < MAX_NUM_DEVICES; id++)
                     {
                         // process Image:
-                        TIK(ellapsed_process_i);
                         // NOTE: process and publish has to be under same lock!
                         // TODO: [@urgent] please investigate the source of error that does not allow the process and publish to be separated
                         pEsts[id]->mProcess.lock();
+                        TIK(ellapsed_process_i);
                         pEsts[id]->processImage(feature[id].second, feature[id].first, pT_arm);
                         prevTime[id] = curTime[id];
-                        TOK_TAG(ellapsed_process_i, "image_process");
+                        TOK_TAG(ellapsed_process_i,"img_proc");
 
                         /*** Publish ***/
                         TIK(ellapsed_process_i);
@@ -214,10 +214,10 @@ void EstimatorManager::processMeasurements_thread()
                         }
                         visualization_guard_unlock(*pEsts[id]);
 #endif //(FEATURE_VIZ_PUBLISH)
+                        TOK_TAG(ellapsed_process_i,"img_pub");
                         
                         // End-of-publishing
                         pEsts[id]->mProcess.unlock();
-                        TOK_TAG(ellapsed_process_i, "image_publish");
                     }
                 }
                 else
@@ -229,6 +229,7 @@ void EstimatorManager::processMeasurements_thread()
         }
         TOK_IF(ellapsed_process,EST_MANAGER_PROCESSING_INTERVAL_MS);
 
+#if (RUN_EST_MANAGER_AT_FIXED_RATE)
         // dynamic sleeping:
         auto end_time = std::chrono::high_resolution_clock::now();
         auto elapsed_time = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
@@ -236,6 +237,12 @@ void EstimatorManager::processMeasurements_thread()
         if (elapsed_time < rate) {
             std::this_thread::sleep_for(rate - elapsed_time);
         }
+#else
+#   ifdef EST_MANAGER_PROCESSING_SLEEP_MS
+        std::chrono::milliseconds dura(EST_MANAGER_PROCESSING_SLEEP_MS);
+        std::this_thread::sleep_for(dura);
+#   endif
+#endif //(!RUN_EST_MANAGER_AT_FIXED_RATE)
     }
 }
 

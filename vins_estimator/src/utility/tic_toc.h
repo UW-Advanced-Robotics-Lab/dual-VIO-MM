@@ -20,6 +20,7 @@ class TicToc
     TicToc()
     {
         tic();
+        count = 0;
     }
 
     void tic()
@@ -36,6 +37,7 @@ class TicToc
         end = std::chrono::system_clock::now();
         std::chrono::duration<double> elapsed_seconds = end - start;
         dt_ms = elapsed_seconds.count() * 1000;
+        count ++;
         return dt_ms;
 #else
         return 0.0;
@@ -47,7 +49,12 @@ class TicToc
         return dt_ms;
     }
 
+    uint8_t n_tok()
+    {
+        return count;
+    }
   private:
     std::chrono::time_point<std::chrono::system_clock> start, end;
-    double dt_ms;
+    double dt_ms; 
+    uint8_t count;
 };
