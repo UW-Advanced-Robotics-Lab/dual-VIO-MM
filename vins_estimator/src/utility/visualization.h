@@ -81,7 +81,7 @@ void pubKeyframe_Odometry_and_Points_immediately(const Estimator &estimator);
 // void pubRelocalization(const Estimator &estimator);???
 // void pubCar(const Estimator & estimator, const std_msgs::Header &header);
 
-#if (FEATURE_ENABLED_ARM_ODOMETRY_VIZ)
+#if (FEATURE_ENABLE_ARM_ODOMETRY_VIZ)
 void queue_ArmOdometry_safe(const double t, const Lie::SO3& R, const Lie::R3& p, const int device_id);
 void pubArmOdometry_safe(const int device_id);
 #endif

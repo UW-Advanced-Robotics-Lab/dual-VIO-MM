@@ -23,7 +23,6 @@ class IMUFactor : public ceres::SizedCostFunction<15, 7, 9, 7, 9>
   public:
     IMUFactor() = delete;
     IMUFactor(IntegrationBase* _pre_integration, Eigen::Vector3d _gravity):pre_integration(_pre_integration), G(_gravity)
-    
     {
     }
     virtual bool Evaluate(double const *const *parameters, double *residuals, double **jacobians) const

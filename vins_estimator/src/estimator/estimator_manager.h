@@ -53,9 +53,20 @@ class EstimatorManager
             queue<pair<double, Vector7d_t>> data;
             std::mutex                      guard;
         } arm_buffer_t;
-
+        typedef struct{
+            // cache:
+            double      t_header = -1; 
+            Vector7d_t  arm_vec;
+            // output:
+            double      arm_pose_header = -1; // [UNUSED]
+            Lie::SE3    arm_pose_st;
+            Lie::SE3    arm_pose_st_0;
+            bool        arm_pose_ready = false;
+            bool        arm_pose_inited = false;
+        } arm_data_t;
         arm_buffer_t                    arm_buf;
-        Lie::SE3                        arm_pose_st;
+        arm_data_t                      arm_prev_data;
+
         std::shared_ptr<ArmModel>       pArm;
         void processArm_unsafe(const double t, const Vector7d_t& jnt_vec);
 #endif

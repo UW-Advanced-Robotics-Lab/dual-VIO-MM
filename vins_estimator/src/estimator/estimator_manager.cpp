@@ -58,6 +58,14 @@ void EstimatorManager::restartManager()
     {
         pPublishThread = std::make_shared<std::thread>(& EstimatorManager::publishVisualization_thread, this);
     }
+
+#if (FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT)
+    // arm:
+    arm_prev_data.t_header = -1;
+    arm_prev_data.arm_pose_header = -1;
+    arm_prev_data.arm_pose_ready = false;
+    arm_prev_data.arm_pose_inited = false;
+#endif
     PRINT_DEBUG("[EstimatorManager::restartManager] Manager Ready!");
 }
 
@@ -85,6 +93,7 @@ void EstimatorManager::processMeasurements_thread()
 
             // reset arm return:
             Lie::SE3* pT_arm = nullptr;
+            Lie::SE3* pT_arm_0 = nullptr;
 
             // Only process when both features are available:
             if (is_base_avail && is_EE_avail)
@@ -119,10 +128,24 @@ void EstimatorManager::processMeasurements_thread()
                         {
                             // process:
                             this->processArm_unsafe(armVector.first, armVector.second);
-                            pT_arm = &(this->arm_pose_st); // cache the pointer
+                            if (this->arm_prev_data.arm_pose_ready)
+                            {
+                                pT_arm = &(this->arm_prev_data.arm_pose_st); // cache the pointer
+                            }
                             break;
                         }
                     }
+
+#if (FEATURE_ENABLE_ARM_ODOMETRY_LEVELING)
+                    // we never know when arm topic is available, so we can just wait
+                    if (arm_prev_data.arm_pose_ready && !arm_prev_data.arm_pose_inited) 
+                    {
+                        arm_prev_data.arm_pose_inited = true;
+                        PRINT_WARN("Set Arm pose !!!");
+                        pEsts[EE_DEV]->adjustAllPoses(this->arm_prev_data.arm_pose_st); // init pose0
+                        PRINT_DEBUG("Arm pose: \n%s", Lie::to_string(this->arm_prev_data.arm_pose_st).c_str());
+                    }
+#endif // (FEATURE_ENABLE_ARM_ODOMETRY_LEVELING)
                 }
                 else
                 {
@@ -149,8 +172,12 @@ void EstimatorManager::processMeasurements_thread()
                         
                         // initialize:
                         if (! pEsts[id]->initFirstPoseFlag)
+                        {
                             pEsts[id]->initFirstIMUPose(accVector[id]);
+                        }
                     }
+
+
                     TOK_TAG(ellapsed_process_i,"fetch_imu");
 
                     // process imu iteratively:
@@ -291,59 +318,69 @@ void EstimatorManager::processArm_unsafe(const double t, const Vector7d_t& jnt_v
     bool success = false;
     const Lie::SE3 Te = pArm->getCamEE();
     const Lie::SE3 Tb = pArm->getCamBase();
-    
+    const Lie::SE3 Tc_b = Lie::inverse_SE3(Tb);
+    const Lie::SO3 R_corr(
+        (Lie::SO3() <<  0, -1,  0,
+                        0,  0, -1,
+                        1,  0,  0).finished()
+    ); // convert from camera axis back to world axis
+    const Lie::SE3 Rp_corr_T(
+        (Lie::SE3() <<   0,  0,  1,  0,
+                        -1,  0,  0,  0,
+                         0, -1,  0,  0,
+                         0,  0,  0,  1).finished()
+    ); // convert from world axis back to camera axis
+
+    // placeholders:
+    Lie::SE3 T_c, g_st, T_b;
+
+    // compute:
+    if ((arm_prev_data.t_header > 0) && (pEsts[BASE_DEV]->solver_flag != Estimator::SolverFlag::INITIAL))
     {
-        // PRINT_DEBUG("jnt: %s", Lie::to_string(jnt_vec.transpose()).c_str());
-        // compute theta --> SE3:
-        Lie::SE3 g_st;
+        // 1. fetch R,p previous:
+        Lie::R3 p_c; Lie::SO3 R_c;
+        p_c = pEsts[BASE_DEV]->latest_P; // previous frame
+        R_c = pEsts[BASE_DEV]->latest_Q.toRotationMatrix(); // previous frame
+        // correction:
+        this->arm_prev_data.arm_pose_ready = true;
+        T_c = Lie::SE3_from_SO3xR3(R_c * R_corr, p_c);
+
+        // 2. [Arm] compute theta --> SE3:
         // pArm->setAngles_unsafely(Vector7d_t::Zero());
-        pArm->setAngles_unsafely(jnt_vec);
+        pArm->setAngles_unsafely(arm_prev_data.arm_vec);
         pArm->processJntAngles_unsafely();
         pArm->getEndEffectorPose_unsafely(g_st);
         
-        // rebase base cam frame onto the summit base frame
-        Lie::SE3 Tc_b = Lie::inverse_SE3(Tb);
-        Lie::SE3 T_b = Tc_b;
-
-        // rebase arm config onto the base frame
+        // - rebase base cam frame onto the summit base frame
+        T_b = Tc_b;
+        // - rebase arm config onto the base frame
         T_b = T_b * g_st;
-
-        // apply tool tip frame
+        // - apply tool tip frame
         T_b = T_b * Te;
+        // 3. apply transformation:
+        T_c = T_c * T_b; // ^s_T_{cam_EE} = ^s_T_{cam_base} * {cam_base}_T_{cam_EE}
+        // 4. apply correction back to camera frame
+        T_c = T_c * Rp_corr_T;
 
+        this->arm_prev_data.arm_pose_st = T_c;
+        this->arm_prev_data.arm_pose_header = arm_prev_data.t_header;
         // PRINT_DEBUG("> ArmOdometry [%f]: \n R=\n%s \n p=\n%s", t, Lie::to_string(R).c_str(), Lie::to_string(p).c_str());
-        this->arm_pose_st = T_b;
-        
-#   if(FEATURE_ENABLED_ARM_ODOMETRY_VIZ)
-        if (pEsts[BASE_DEV]->solver_flag == Estimator::SolverFlag::NON_LINEAR)
-        {
-            Lie::R3 p_c, v_c; Lie::SO3 R_c;
-            // fetch R,p previous
-            p_c = pEsts[BASE_DEV]->Ps[WINDOW_SIZE];
-            v_c = pEsts[BASE_DEV]->Vs[WINDOW_SIZE];
-            R_c = pEsts[BASE_DEV]->Rs[WINDOW_SIZE];
 
-            const Lie::SO3 R_corr(
-                (Lie::SO3() <<  0, -1,  0,
-                                0,  0, -1,
-                                1,  0,  0).finished()
-            ); // convert from camera axis back to world axis
-            const Lie::SO3 R_corr_T(
-                (Lie::SO3() <<   0,  0,  1,
-                                -1,  0,  0,
-                                0, -1,  0).finished()
-            ); // convert from world axis back to camera axis
-            
-            Lie::SE3 T_c = Lie::SE3_from_SO3xR3(R_c * R_corr, p_c);
-            
-            T_c = T_c * T_b; // reuse placeholder T_c
-            Lie::SO3xR3_from_SE3(R_c, p_c, T_c); // reuse placeholder R_c, p_c
-            R_c *= R_corr_T;
-            // publish immediately:
-            queue_ArmOdometry_safe(t, R_c, p_c, BASE_DEV);
-        }
-#   endif //(FEATURE_ENABLED_ARM_ODOMETRY_VIZ)
+#   if(FEATURE_ENABLE_ARM_ODOMETRY_VIZ)
+        // publish immediately:
+        Lie::SO3xR3_from_SE3(R_c, p_c, T_c); // reuse placeholder R_c, p_c
+        queue_ArmOdometry_safe(arm_prev_data.t_header, R_c, p_c, EE_DEV);
+#   endif //(FEATURE_ENABLE_ARM_ODOMETRY_VIZ)
     }
+    else
+    {
+        PRINT_WARN("ArmOdometry: no previous data available, OR, base solver is not ready!");
+        this->arm_prev_data.arm_pose_ready = false;
+    }
+
+    // cache, compute next time:
+    arm_prev_data.t_header = t;
+    arm_prev_data.arm_vec = jnt_vec;
 }
 #endif 
 

@@ -180,8 +180,9 @@ using namespace std;
 #   define FEATURE_ENABLE_ALIGN_EST_BEG_SUPPORT             ((DISABLED) & (FEATURE_ENABLE_VICON_SUPPORT)) // start alignment when estimator posting
 // arm odometry support:
 #define FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT             ( ENABLED) // [WIP]
-#define     FEATURE_ENABLED_ARM_ODOMETRY_VIZ                (( ENABLED) & (FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT))
-
+#define     FEATURE_ENABLE_ARM_ODOMETRY_VIZ                (( ENABLED) & (FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT))
+#define     FEATURE_ENABLE_ARM_ODOMETRY_LEVELING           ((DISABLED) & (FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT)) // init first pose with arm odometry
+#define     FEATURE_ENABLE_ARM_ODOMETRY_MARGINALIZATION    (( ENABLED) & (FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT)) // [Our-Solution] Arm Marginalization
 // debug only features:
 #define FEATURE_DEBUGGING                               (( ENABLED) & (!FEATURE_MODE_RUNTIME))
 #   define FEATURE_CONSOLE_PRINTF                           (( ENABLED) & (FEATURE_DEBUGGING))

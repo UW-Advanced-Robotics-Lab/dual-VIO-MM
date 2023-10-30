@@ -399,6 +399,21 @@ void Estimator::initFirstPose(Eigen::Vector3d p, Eigen::Matrix3d r)
     initP = p;
     initR = r;
 }
+void Estimator::adjustAllPoses(Lie::SE3 &Rp)
+{
+    Lie::SO3 R, Rl_T; Lie::R3 P;
+    Lie::SO3xR3_from_SE3(R, P, Rp);
+    Rl_T = latest_Q.toRotationMatrix().transpose();
+    R *= Rl_T;
+    P -= Rl_T * latest_P;
+    for(size_t i=0; i<=WINDOW_SIZE; i++)
+    {
+        Rs[i] = R * Rs[i];
+        Ps[i] += P;
+    }
+    initR = Rs[0];
+    initP = Ps[0];
+}
 
 
 void Estimator::processIMU(double t, double dt, const Vector3d &linear_acceleration, const Vector3d &angular_velocity)
@@ -463,6 +478,13 @@ void Estimator::processImage(const map<int, vector<pair<int, Eigen::Matrix<doubl
     ROS_DEBUG("Solving %d", frame_count);
     ROS_DEBUG("number of feature: %d", f_manager.getFeatureCount());
     Headers[frame_count] = header;
+
+#if (FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT)
+    if (pT_arm != nullptr)
+    {
+        Lie::SO3xR3_from_SE3(arm_Rs[frame_count-1], arm_Ps[frame_count-1], *pT_arm);
+    }
+#endif //(FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT)
 
     ImageFrame imageframe(image, header);
     imageframe.pre_integration = tmp_pre_integration;
@@ -1043,7 +1065,7 @@ bool Estimator::failureDetection()
     return false;
 }
 
-void Estimator::optimization()
+void Estimator::optimization() // TODO: add arm odometry into optimization problem
 {
 #if (FEATURE_ENABLE_PERFORMANCE_EVAL_ESTIMATOR)
     this->perf.opt_total_count ++;
@@ -1106,6 +1128,19 @@ void Estimator::optimization()
             problem.AddResidualBlock(imu_factor, NULL, para_Pose[i], para_SpeedBias[i], para_Pose[j], para_SpeedBias[j]);
         }
     }
+
+#if (FEATURE_ENABLE_ARM_ODOMETRY_MARGINALIZATION)
+    // - TODO: Arm Odometry Residuals
+    if (pCfg->DEVICE_ID == EE_DEV) // EE only
+    {
+        for (int i = 0; i < frame_count-1; i++)
+        {
+            // TODO: do not use arm factor if base imu is not stable?
+            ARMFactor* arm_factor = new ARMFactor(arm_Rs[i], arm_Ps[i]);
+            problem.AddResidualBlock(arm_factor, NULL, para_Pose[i]);
+        }   
+    }
+#endif //(FEATURE_ENABLE_ARM_ODOMETRY_MARGINALIZATION)
 
     // - Camera Feature Residuals
     int f_m_cnt = 0;
@@ -1228,6 +1263,7 @@ void Estimator::optimization()
             }
         }
 
+        // vision marginalization:
         {
             int feature_index = -1;
             for (auto &it_per_id : f_manager.feature)
@@ -1402,6 +1438,10 @@ void Estimator::slideWindow()
                 Headers[i] = Headers[i + 1];
                 Rs[i].swap(Rs[i + 1]);
                 Ps[i].swap(Ps[i + 1]);
+#if (FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT)
+                arm_Rs[i].swap(arm_Rs[i + 1]);
+                arm_Ps[i].swap(arm_Ps[i + 1]);
+#endif //(FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT)
                 
                 // if(pCfg->USE_IMU) IMU Support
                 {
@@ -1417,9 +1457,12 @@ void Estimator::slideWindow()
                 }
             }
             Headers[WINDOW_SIZE] = Headers[WINDOW_SIZE - 1];
-            Ps[WINDOW_SIZE] = Ps[WINDOW_SIZE - 1];
             Rs[WINDOW_SIZE] = Rs[WINDOW_SIZE - 1];
-
+            Ps[WINDOW_SIZE] = Ps[WINDOW_SIZE - 1];
+#if (FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT)
+            arm_Rs[WINDOW_SIZE] = arm_Rs[WINDOW_SIZE - 1];
+            arm_Ps[WINDOW_SIZE] = arm_Ps[WINDOW_SIZE - 1];
+#endif //(FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT)
 
             // if(pCfg->USE_IMU) IMU Support
             {
@@ -1450,8 +1493,12 @@ void Estimator::slideWindow()
         if (frame_count == WINDOW_SIZE)
         {
             Headers[frame_count - 1] = Headers[frame_count];
-            Ps[frame_count - 1] = Ps[frame_count];
             Rs[frame_count - 1] = Rs[frame_count];
+            Ps[frame_count - 1] = Ps[frame_count];
+#if (FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT)
+            arm_Rs[frame_count - 1] = arm_Rs[frame_count];
+            arm_Ps[frame_count - 1] = arm_Ps[frame_count];
+#endif //(FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT)
 
 
             // if(pCfg->USE_IMU) IMU Support

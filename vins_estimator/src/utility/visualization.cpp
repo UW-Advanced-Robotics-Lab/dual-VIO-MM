@@ -35,7 +35,7 @@ ros::Publisher pub_image_track[MAX_NUM_DEVICES];
 ros::Publisher pub_vicon[MAX_NUM_DEVICES];
 #endif
 
-#if (FEATURE_ENABLED_ARM_ODOMETRY_VIZ)
+#if (FEATURE_ENABLE_ARM_ODOMETRY_VIZ)
 ros::Publisher pub_arm_odometry[MAX_NUM_DEVICES];
 #endif
 
@@ -53,6 +53,7 @@ typedef struct{
 #   if (FEATURE_ENABLE_VICON_ZEROING_SUPPORT)
     Eigen::Vector3d     vicon_p0;
     Eigen::Matrix3d     vicon_R0;
+    bool                vicon_inited;
 #   endif
 #endif
 #if (FEATURE_TRACKING_IMAGE_SUPPORT)
@@ -60,7 +61,7 @@ typedef struct{
     sensor_msgs::ImagePtr   imgTrackMsg;
     std::mutex              track_guard;
 #endif
-#if (FEATURE_ENABLED_ARM_ODOMETRY_VIZ)
+#if (FEATURE_ENABLE_ARM_ODOMETRY_VIZ)
     queue<pose_data_t>          arm_vicon_odom_buf;
     nav_msgs::Path              arm_path;
     std::mutex                  arm_guard;
@@ -118,7 +119,7 @@ void registerPub(ros::NodeHandle &n, const int N_DEVICES)
         pub_vicon[i]            = n.advertise<nav_msgs::Path>(((i)?(TOPIC_VICON_PATH_E):(TOPIC_VICON_PATH_B)), PUBLISHER_BUFFER_SIZE);
 #endif
 
-#if (FEATURE_ENABLED_ARM_ODOMETRY_VIZ)
+#if (FEATURE_ENABLE_ARM_ODOMETRY_VIZ)
         pub_arm_odometry[i]     = n.advertise<nav_msgs::Path>(((i)?(TOPIC_ARM_PATH_E):(TOPIC_ARM_PATH_B)), PUBLISHER_BUFFER_SIZE);
 #endif
 
@@ -139,7 +140,7 @@ void visualization_guard_unlock(const Estimator &estimator)
     m_buf[estimator.pCfg->DEVICE_ID].guard.unlock();
 }
 
-#if (FEATURE_ENABLED_ARM_ODOMETRY_VIZ)
+#if (FEATURE_ENABLE_ARM_ODOMETRY_VIZ)
 void queue_ArmOdometry_safe(const double t, const Lie::SO3& R, const Lie::R3& p, const int device_id)
 {
     std_msgs::Header header;
@@ -392,6 +393,9 @@ void queue_ViconOdometry_safe(const geometry_msgs::TransformStampedConstPtr &tra
         m_buf[BASE_DEV].vicon_p0 = -p;
         m_buf[EE_DEV].vicon_R0 = R.transpose();
         m_buf[EE_DEV].vicon_p0 = -p;
+        
+        m_buf[BASE_DEV].vicon_inited = true;
+        m_buf[EE_DEV].vicon_inited = true;
 
         PRINT_DEBUG("vicon_R0 = \n%s", Lie::to_string(R.transpose()).c_str());
         PRINT_DEBUG("vicon_p0 = %s", Lie::to_string(-p.transpose()).c_str());
@@ -423,7 +427,8 @@ void queue_ViconOdometry_safe(const geometry_msgs::TransformStampedConstPtr &tra
     m_buf[device_id].vicon_guard.lock();
     m_buf[device_id].vicon_path.header = header;
     m_buf[device_id].vicon_path.header.frame_id = "world";
-    m_buf[device_id].vicon_path.poses.push_back(pose_stamped);
+    if (m_buf[device_id].vicon_inited)
+        m_buf[device_id].vicon_path.poses.push_back(pose_stamped);
     m_buf[device_id].vicon_guard.unlock();
 }
 void pubViconOdometryPath_safe(const int device_id)

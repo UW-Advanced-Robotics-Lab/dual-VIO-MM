@@ -40,6 +40,7 @@
 #include "../featureTracker/feature_tracker.h"
 
 #include "../robot/Lie.h"
+#include "../factor/arm_factor.h"
 
 class Estimator
 {
@@ -50,6 +51,7 @@ class Estimator
 
     // interface
     void initFirstPose(Eigen::Vector3d p, Eigen::Matrix3d r);
+    void adjustAllPoses(Lie::SE3 &Rp);
     void inputIMU(double t, const Vector3d &linearAcceleration, const Vector3d &angularVelocity);
     // void inputFeature(double t, const map<int, vector<pair<int, Eigen::Matrix<double, 7, 1>>>> &featureFrame);
     void inputImage(double t, const cv::Mat &_img);
@@ -126,6 +128,13 @@ class Estimator
     Vector3d        Bgs[(WINDOW_SIZE + 1)];
     double td;
 
+#if (FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT)
+    // arm buffer:
+    Vector3d        arm_Ps[(WINDOW_SIZE + 1)];
+    Matrix3d        arm_Rs[(WINDOW_SIZE + 1)];
+#endif //(FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT)
+    
+    // moving window placeholders:
     Matrix3d back_R0, last_R, last_R0;
     Vector3d back_P0, last_P, last_P0;
     double Headers[(WINDOW_SIZE + 1)];
