@@ -37,6 +37,7 @@ ros::Publisher pub_vicon[MAX_NUM_DEVICES];
 
 #if (FEATURE_ENABLE_ARM_ODOMETRY_VIZ)
 ros::Publisher pub_arm_odometry[MAX_NUM_DEVICES];
+ros::Publisher pub_arm_visual;
 #endif
 
 typedef struct{
@@ -122,11 +123,14 @@ void registerPub(ros::NodeHandle &n, const int N_DEVICES)
 #if (FEATURE_ENABLE_ARM_ODOMETRY_VIZ)
         pub_arm_odometry[i]     = n.advertise<nav_msgs::Path>(((i)?(TOPIC_ARM_PATH_E):(TOPIC_ARM_PATH_B)), PUBLISHER_BUFFER_SIZE);
 #endif
-
         // placeholders
         m_buf[i].cameraposevisual.setScale(0.1);
         m_buf[i].cameraposevisual.setLineWidth(0.01);
     }
+
+#if (FEATURE_ENABLE_ARM_ODOMETRY_VIZ)
+        pub_arm_visual           = n.advertise<nav_msgs::Path>(TOPIC_ARM_PATH_VIZ, PUBLISHER_BUFFER_SIZE);
+#endif
 
 }
 
@@ -176,6 +180,18 @@ void pubArmOdometry_safe(const int device_id)
     m_buf[device_id].arm_guard.lock();
     pub_arm_odometry[device_id].publish(m_buf[device_id].arm_path);
     m_buf[device_id].arm_guard.unlock();
+}
+#endif
+
+#if (FEATURE_ENABLE_ARM_ODOMETRY_VIZ_ARM)
+void pubArmModel_safe(std::shared_ptr<ArmModel> model)
+{
+    // publish the path:
+    if (model)
+    {
+        // publish:
+        model->pub_Marker(pub_arm_visual);
+    }
 }
 #endif
 

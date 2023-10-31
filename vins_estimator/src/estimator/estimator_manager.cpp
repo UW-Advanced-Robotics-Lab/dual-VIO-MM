@@ -90,9 +90,6 @@ void EstimatorManager::processMeasurements_thread()
             const bool is_base_avail = (pEsts[BASE_DEV]->featureBuf.empty() == false);
             const bool is_EE_avail   = (pEsts[EE_DEV  ]->featureBuf.empty() == false);
 
-            // reset arm return:
-            Lie::SE3* pT_arm = nullptr;
-
             // Only process when both features are available:
             if (is_base_avail && is_EE_avail)
             {
@@ -119,21 +116,12 @@ void EstimatorManager::processMeasurements_thread()
                     if (is_arm_avail)
                     {
                         // TODO: armvector EE the other way around
+                        pArm->acquireLock();
                         this->_postProcessArmJnts_unsafe(armVector[BASE_DEV].first, armVector[BASE_DEV].second);
-                        if (this->arm_prev_data.arm_pose_ready)
-                        {
-                            pT_arm = &(this->arm_prev_data.arm_pose_st); // cache the pointer
-                        }
-                    }
-                    else
-                    {
-                        PRINT_ERROR("Arm Joint Vector is not found! %d", is_arm_avail);
+                        pArm->releaseLock();
                     }
                 }
-                else
-                {
-                    PRINT_ERROR("Arm is NOT available");
-                }
+
                 TOK_TAG(ellapsed_process_i,"fetch_arm_odom");
 #endif //FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT
 
@@ -201,7 +189,7 @@ void EstimatorManager::processMeasurements_thread()
                         // TODO: [@urgent] please investigate the source of error that does not allow the process and publish to be separated
                         pEsts[id]->mProcess.lock();
                         TIK(ellapsed_process_i);
-                        pEsts[id]->processImage(feature[id].second, feature[id].first, pT_arm);
+                        pEsts[id]->processImage(feature[id].second, feature[id].first, arm_prev_data.arm_pose_st);
                         prevTime[id] = curTime[id];
                         TOK_TAG(ellapsed_process_i,"img_proc");
 
@@ -352,50 +340,51 @@ void EstimatorManager::_postProcessArmJnts_unsafe(const double t, const Vector7d
     // placeholders:
     Lie::SE3 T_c, g_st, T_b;
 
-    // init:
-    if (arm_prev_data.t_header < 0)
-    {
-        PRINT_WARN("ArmOdometry: no previous data available!");
-        this->arm_prev_data.arm_pose_ready = false;
-        arm_prev_data.t_header = t;
-        arm_prev_data.arm_vec = jnt_vec;
-    }
     // compute:
+    if ((arm_prev_data.t_header > 0) 
+        && (pEsts[BASE_DEV]->solver_flag == Estimator::SolverFlag::NON_LINEAR))
     {
         // 1. fetch R,p previous:
         Lie::R3 p_c; Lie::SO3 R_c;
-        if (pEsts[BASE_DEV]->solver_flag == Estimator::SolverFlag::NON_LINEAR)
-        {
-            p_c = pEsts[BASE_DEV]->latest_P; // previous frame
-            R_c = pEsts[BASE_DEV]->latest_Q.toRotationMatrix(); // previous frame
-            // correction:
-            this->arm_prev_data.arm_pose_ready = true;
-            T_c = Lie::SE3_from_SO3xR3(R_c * R_corr, p_c);
-        }
-        else
-        {
-            T_c = Lie::SE3::Identity();
-        }
+        p_c = pEsts[BASE_DEV]->latest_P; // previous frame
+        R_c = pEsts[BASE_DEV]->latest_Q.toRotationMatrix(); // previous frame
+        // correction:
+        T_c = Lie::SE3_from_SO3xR3(R_c * R_corr, p_c);
+        this->arm_prev_data.arm_pose_ready = true;
 
         // 2. [Arm] compute theta --> SE3:
         // pArm->setAngles_unsafely(Vector7d_t::Zero());
-        pArm->setAngles_unsafely(arm_prev_data.arm_vec);
+        pArm->setAngles_unsafely(arm_prev_data.arm_vec, t);
         pArm->processJntAngles_unsafely();
         pArm->getEndEffectorPose_unsafely(g_st);
         
-        // - rebase base cam frame onto the summit base frame
-        T_b = Tc_b;
-        // - rebase arm config onto the base frame
-        T_b = T_b * g_st;
-        // - apply tool tip frame
-        T_b = T_b * Te;
-        // 3. apply transformation:
-        T_c = T_c * T_b; // ^s_T_{cam_EE} = ^s_T_{cam_base} * {cam_base}_T_{cam_EE}
-        // 4. apply correction back to camera frame
-        T_c = T_c * Rp_corr_T;
+        // // - rebase base cam frame onto the summit base frame
+        // T_b = Tc_b;
+        // // - rebase arm config onto the base frame
+        // T_b = T_b * g_st;
+        // // - apply tool tip frame
+        // T_b = T_b * Te;
+
+        Lie::SE3 T_out = T_c * Tc_b;
+        T_c = T_out * g_st * Te * Rp_corr_T; // ^s_T_{cam_EE} = ^s_T_{cam_base} * {cam_base}_T_{cam_EE} * coord-axis
+
+#   if (FEATURE_ENABLE_ARM_ODOMETRY_ZEROING) // FIXME this compensation is not right
+        if (this->arm_prev_data.arm_pose_ready && !this->arm_prev_data.arm_pose_inited)
+        {
+            this->arm_prev_data.arm_pose_inited = true;
+            this->arm_prev_data.arm_pose_st_0 = Lie::inverse_SE3(T_out);
+        }
+
+        // 3. apply compensation
+        T_out = this->arm_prev_data.arm_pose_st_0 * T_out;
+        T_c = T_out * g_st * Te * Rp_corr_T;
+#   endif
+
+        pArm->storeTransformations_unsafely(T_out);
 
         this->arm_prev_data.arm_pose_st = T_c;
         this->arm_prev_data.arm_pose_header = arm_prev_data.t_header;
+
         // PRINT_DEBUG("> ArmOdometry [%f]: \n R=\n%s \n p=\n%s", t, Lie::to_string(R).c_str(), Lie::to_string(p).c_str());
 
 #   if(FEATURE_ENABLE_ARM_ODOMETRY_VIZ)
@@ -404,8 +393,10 @@ void EstimatorManager::_postProcessArmJnts_unsafe(const double t, const Vector7d
         queue_ArmOdometry_safe(arm_prev_data.t_header, R_c, p_c, EE_DEV);
 #   endif //(FEATURE_ENABLE_ARM_ODOMETRY_VIZ)
     }
-
-
+    else
+    {
+        PRINT_WARN("ArmOdometry: no previous data available!");
+    }
     // cache, compute next time:
     arm_prev_data.t_header = t;
     arm_prev_data.arm_vec = jnt_vec;
@@ -450,6 +441,9 @@ void EstimatorManager::publishVisualization_thread()
             PRINT_DEBUG("[%d] Est Optimization Perf: [Key: %.2f\%, NotKey: %.2f\%]", dev_id, par_k, par_nk);
 #endif // (FEATURE_ENABLE_PERFORMANCE_EVAL_ESTIMATOR)
         }
+#if (FEATURE_ENABLE_ARM_ODOMETRY_VIZ_ARM)
+        pubArmModel_safe(pArm);
+#endif
         TOK_IF(ellapsed_publisher,TOPIC_PUBLISH_INTERVAL_MS);
         
         // dynamic sleeping:

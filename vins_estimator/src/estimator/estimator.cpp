@@ -443,7 +443,7 @@ void Estimator::processIMU(double t, double dt, const Vector3d &linear_accelerat
     gyr_0 = angular_velocity; 
 }
 
-void Estimator::processImage(const map<int, vector<pair<int, Eigen::Matrix<double, 7, 1>>>> &image, const double header, const Lie::SE3* pT_arm)
+void Estimator::processImage(const map<int, vector<pair<int, Eigen::Matrix<double, 7, 1>>>> &image, const double header, const Lie::SE3 pT_arm)
 {
     ROS_DEBUG("new image coming ------------------------------------------");
     ROS_DEBUG("Adding feature points %lu", image.size());
@@ -462,19 +462,6 @@ void Estimator::processImage(const map<int, vector<pair<int, Eigen::Matrix<doubl
     ROS_DEBUG("Solving %d", frame_count);
     ROS_DEBUG("number of feature: %d", f_manager.getFeatureCount());
     Headers[frame_count] = header;
-
-#if (FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT)
-    if (pT_arm != nullptr) //FIXME: we should put these into the equation below
-    {
-        Lie::SO3xR3_from_SE3(arm_Rs[frame_count-1], arm_Ps[frame_count-1], *pT_arm);
-    }
-    else
-    {
-        PRINT_WARN("No valid ARM Odometry support");
-        arm_Rs[frame_count-1] = Rs[frame_count-1];
-        arm_Ps[frame_count-1] = Ps[frame_count-1];
-    }
-#endif //(FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT)
 
     ImageFrame imageframe(image, header);
     imageframe.pre_integration = tmp_pre_integration;
@@ -586,6 +573,11 @@ void Estimator::processImage(const map<int, vector<pair<int, Eigen::Matrix<doubl
     }
     else
     {
+
+#if (FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT)
+        Lie::SO3xR3_from_SE3(arm_Rs[frame_count-1], arm_Ps[frame_count-1], pT_arm);
+#endif //(FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT)
+
         TicToc t_solve;
         f_manager.initFramePoseByPnP(frame_count, Ps, Rs, tic, ric); // IMU only supports
         f_manager.triangulate(frame_count, Ps, Rs, tic, ric);

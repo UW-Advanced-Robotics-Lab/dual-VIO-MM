@@ -121,6 +121,8 @@ using namespace std;
 #define TOPIC_ARM_PATH_B              (FUSE_TOPIC("base" , "arm/path"))
 #define TOPIC_ARM_PATH_E              (FUSE_TOPIC("EE"   , "arm/path"))
 
+#define TOPIC_ARM_PATH_VIZ            (FUSE_TOPIC("arm"   , "visual"))
+
 // buffer size: -----------------------------
 #define SUB_IMG_BUFFER_SIZE         (30U)
 #define SUB_IMU_BUFFER_SIZE         (100U)
@@ -181,8 +183,9 @@ using namespace std;
 // arm odometry support:
 #define FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT             ( ENABLED) // [WIP]
 #define     FEATURE_ENABLE_ARM_ODOMETRY_VIZ                (( ENABLED) & (FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT))
-#define     FEATURE_ENABLE_ARM_ODOMETRY_LEVELING           (( ENABLED) & (FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT)) // init first pose with arm odometry
-#define     FEATURE_ENABLE_ARM_ODOMETRY_MARGINALIZATION    ((DISABLED) & (FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT)) // [Our-Solution] Arm Marginalization
+#define     FEATURE_ENABLE_ARM_ODOMETRY_MARGINALIZATION    (( ENABLED) & (FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT)) // [Our-Solution] Arm Marginalization
+#define     FEATURE_ENABLE_ARM_ODOMETRY_ZEROING            ((DISABLED) & (FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT)) // init first pose with arm odometry
+#define     FEATURE_ENABLE_ARM_ODOMETRY_VIZ_ARM            (( ENABLED) & (FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT)) // init first pose with arm odometry
 // debug only features:
 #define FEATURE_DEBUGGING                               (( ENABLED) & (!FEATURE_MODE_RUNTIME))
 #   define FEATURE_CONSOLE_PRINTF                           (( ENABLED) & (FEATURE_DEBUGGING))

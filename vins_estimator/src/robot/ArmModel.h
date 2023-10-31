@@ -5,6 +5,8 @@
 #include "RBT.h"
 #include "OpenChain.h"
 
+#include <ros/ros.h>
+
 #include <mutex>
 
 #define ROTATION_AXIS_Z     (Lie::R3(0,0,1))
@@ -12,10 +14,10 @@
 #define ARM_NUM_LINKS       (ARM_NUM_DOF + 1U)
 
 // --- Configuration:
-#define ARM_MODEL_CONFIG_L_SHOULDER          ((double)(0.346))
-#define ARM_MODEL_CONFIG_L_ARM               ((double)(0.55))
+#define ARM_MODEL_CONFIG_L_SHOULDER          ((double)(0.352))
+#define ARM_MODEL_CONFIG_L_ARM               ((double)(0.551))
 #define ARM_MODEL_CONFIG_L_ELBOW             ((double)(0.3))
-#define ARM_MODEL_CONFIG_L_WRIST             ((double)(0.06))
+#define ARM_MODEL_CONFIG_L_WRIST             ((double)(0.072))
 #define ARM_MODEL_CONFIG_W_ELBOW_JNT         ((double)(0.045))
 
 class ArmModel { 
@@ -25,22 +27,31 @@ public:
     // lock:
     void acquireLock();
     // input:
-    void setAngles_unsafely(const double theta[], const size_t N);
-    void setAngles_unsafely(const Vector7d_t theta);
+    void setAngles_unsafely(const double theta[], const size_t N, const double t);
+    void setAngles_unsafely(const Vector7d_t theta, const double t);
     // compute:
     void processJntAngles_unsafely();
     // output cached results:
     bool getLinkPose_unsafely(Lie::SE3& T, const size_t index);
     bool getAllLinkPoses_unsafely(Lie::SE3 T[]);
     bool getEndEffectorPose_unsafely(Lie::SE3& T);
+    void storeTransformations_unsafely(Lie::SE3& T);
     // lock release:
     void releaseLock();
     // get:
     Lie::SE3 getCamEE();
     Lie::SE3 getCamBase();
+    // viz:
+#if (FEATURE_ENABLE_ARM_ODOMETRY_VIZ_ARM)
+    void pub_Marker(ros::Publisher &pub);
+#endif //(FEATURE_ENABLE_ARM_ODOMETRY_VIZ_ARM)
+
+
 
 private:
     typedef struct{
+        double      t;
+        Lie::SE3    sG_t = Lie::SE3::Identity();
         // cam config:
         Lie::SE3 sG_cam_base;
         Lie::SE3 tG_cam_EE;

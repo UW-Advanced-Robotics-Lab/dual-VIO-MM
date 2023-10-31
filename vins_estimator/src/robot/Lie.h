@@ -31,6 +31,7 @@ namespace Lie {
     typedef Eigen::Matrix<double, 6, 6> Mat6x6d;
     typedef Eigen::Matrix<double, 3, 3> Mat3x3d;
     typedef Eigen::Matrix<double, 3, 1> Vec3d;
+    typedef Eigen::Matrix<double, 4, 1> Vec4d;
     typedef Eigen::Matrix<double, 6, 1> Vec6d;
 
     // shortcuts:

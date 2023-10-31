@@ -30,6 +30,7 @@
 #include "../estimator/parameters.h"
 #include <fstream>
 #include "../robot/Lie.h"
+#include "../robot/ArmModel.h"
 
 // extern ros::Publisher pub_odometry;
 // extern ros::Publisher pub_path, pub_pose;
@@ -84,4 +85,7 @@ void pubKeyframe_Odometry_and_Points_immediately(const Estimator &estimator);
 #if (FEATURE_ENABLE_ARM_ODOMETRY_VIZ)
 void queue_ArmOdometry_safe(const double t, const Lie::SO3& R, const Lie::R3& p, const int device_id);
 void pubArmOdometry_safe(const int device_id);
+#endif
+#if (FEATURE_ENABLE_ARM_ODOMETRY_VIZ_ARM)
+void pubArmModel_safe(std::shared_ptr<ArmModel> model);
 #endif

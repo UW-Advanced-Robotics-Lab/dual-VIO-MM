@@ -1,6 +1,10 @@
 #include "../estimator/parameters.h"
 #include "ArmModel.h"
 
+#include <nav_msgs/Odometry.h>
+#include <nav_msgs/Path.h>
+#include <Eigen/Dense>
+#include <Eigen/Geometry>
 
 typedef struct{
     std::string     name;
@@ -49,7 +53,7 @@ const link_t ARM_LINKS[ARM_NUM_LINKS] = {
     },
     { // F4-->F5
         .name = "elbow_+_wrist_base_B3355",
-        .tip_frame_Tq = Lie::R3(-ARM_MODEL_CONFIG_W_ELBOW_JNT,-ARM_MODEL_CONFIG_L_ARM,0),
+        .tip_frame_Tq = Lie::R3(-ARM_MODEL_CONFIG_W_ELBOW_JNT,-ARM_MODEL_CONFIG_L_ELBOW,0),
         .tip_frame_Tw = Lie::R3(1,0,0),
         .tip_frame_Tt = M_PI_2, // pi/2
         .tip_frame_lb = -4.8,
@@ -73,7 +77,7 @@ const link_t ARM_LINKS[ARM_NUM_LINKS] = {
     },
     { // F7-->F8
         .name = "wrist_palm",
-        .tip_frame_Tq = Lie::R3(0,0,0.06),
+        .tip_frame_Tq = Lie::R3(0,0,ARM_MODEL_CONFIG_L_WRIST),
         .tip_frame_Tw = Lie::R3(0,0,1),
         .tip_frame_Tt = 0, //
         .tip_frame_lb = 0,
@@ -97,8 +101,8 @@ ArmModel::~ArmModel()
 
 const Lie::SE3 T0_summit = Lie::SE3::Identity();
 const Lie::R3 summit_dP_wam = Lie::R3(0.14,0,0.405);
-const Lie::R3 summit_dP_cam_base = Lie::R3(0.346,0,0.397);
-const Lie::R3 wam_dP_cam_ee = Lie::R3(0,-0.11,0.018);
+const Lie::R3 summit_dP_cam_base = Lie::R3(0.362,0,0.367);  // TODO: MEASUREMENT NEEDED
+const Lie::R3 wam_dP_cam_ee = Lie::R3(0,-0.11,0.002);       // TODO: MEASUREMENT NEEDED
 
 void ArmModel::_model_initialization_unsafe()
 {
@@ -150,8 +154,9 @@ void ArmModel::_model_initialization_unsafe()
 void ArmModel::acquireLock() {m_arm.guard.lock();}
 void ArmModel::releaseLock() {m_arm.guard.unlock();}
 
-void ArmModel::setAngles_unsafely(const double theta[], const size_t N)
+void ArmModel::setAngles_unsafely(const double theta[], const size_t N, const double t)
 {
+    m_arm.t = t;
     // m_arm.guard.lock();
     for (size_t i = 0; (i < N) && (i < ARM_NUM_DOF); i++)
     {
@@ -160,8 +165,9 @@ void ArmModel::setAngles_unsafely(const double theta[], const size_t N)
     }
     // m_arm.guard.unlock();
 }
-void ArmModel::setAngles_unsafely(const Vector7d_t theta)
+void ArmModel::setAngles_unsafely(const Vector7d_t theta, const double t)
 {
+    m_arm.t = t;
     // m_arm.guard.lock();
     for (size_t i = 0; (i < 7) && (i < ARM_NUM_DOF); i++)
     {
@@ -208,7 +214,10 @@ bool ArmModel::getAllLinkPoses_unsafely(Lie::SE3 T[]){
     bool success = (m_arm.jUnProcessed == 0x0000);
     if (success)
     {
-        std::memcpy(&T, &m_arm.sG_, sizeof(Lie::SE3)*ARM_NUM_LINKS);
+        for (size_t i = 0; i < ARM_NUM_LINKS; i++)
+        {
+            T[i] = m_arm.sG_[i];
+        }
     }
     return success;
 }
@@ -228,3 +237,53 @@ Lie::SE3 ArmModel::getCamEE(){
 Lie::SE3 ArmModel::getCamBase(){
     return m_arm.sG_cam_base;
 }
+
+void ArmModel::storeTransformations_unsafely(Lie::SE3& T){
+    m_arm.sG_t = T;
+}
+
+#if (FEATURE_ENABLE_ARM_ODOMETRY_VIZ_ARM)
+void ArmModel::pub_Marker(ros::Publisher &pub) {
+    nav_msgs::Path   arm_path;
+    if (m_arm.t > 0)
+    {
+        Lie::SE3 Links[ARM_NUM_LINKS];
+        this->acquireLock();
+        bool success = this->getAllLinkPoses_unsafely(Links);
+        this->releaseLock();
+        if (success)
+        {
+            Lie::SE3 sGt = m_arm.sG_t;
+            Lie::SO3 R; Lie::R3 p;
+
+            geometry_msgs::PoseStamped pose_stamped;
+
+            std_msgs::Header header;
+            header.frame_id = "world";
+            header.stamp = ros::Time(m_arm.t);
+
+            for (int i = 0; i < ARM_NUM_LINKS; i++) {
+                Lie::SO3xR3_from_SE3(R, p, sGt * Links[i]);
+                Eigen::Quaterniond q = Eigen::Quaterniond(R);
+                // apply transformation to pose:
+                geometry_msgs::Pose pose;
+                pose.position.x = p(0);
+                pose.position.y = p(1);
+                pose.position.z = p(2);
+                pose.orientation.x = q.x();
+                pose.orientation.y = q.y();
+                pose.orientation.z = q.z();
+                pose.orientation.w = q.w();
+                
+                pose_stamped.header = header;
+                pose_stamped.pose = pose;
+                arm_path.header = header;
+                arm_path.header.frame_id = "world";
+                arm_path.poses.push_back(pose_stamped);
+            }
+
+            pub.publish(arm_path);
+        }
+    }
+}
+#endif
