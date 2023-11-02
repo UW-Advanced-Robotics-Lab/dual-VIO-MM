@@ -178,12 +178,12 @@ using namespace std;
 // vicon support:
 #define FEATURE_ENABLE_VICON_SUPPORT                    ( ENABLED) // to feed vicon data and output as nav_msg::path for visualization
 #   define FEATURE_ENABLE_VICON_ZEROING_SUPPORT             (( ENABLED) & (FEATURE_ENABLE_VICON_SUPPORT)) // zeroing vicons independently
-#   define FEATURE_ENABLE_VICON_ZEROING_WRT_BASE_SUPPORT    (( ENABLED) & (FEATURE_ENABLE_VICON_SUPPORT)) // zeroing vicons wrt base, TODO: need a better way 
-#   define FEATURE_ENABLE_ALIGN_EST_BEG_SUPPORT             ((DISABLED) & (FEATURE_ENABLE_VICON_SUPPORT)) // start alignment when estimator posting
+#       define FEATURE_ENABLE_VICON_ZEROING_WRT_BASE_SUPPORT    (( ENABLED) & (FEATURE_ENABLE_VICON_ZEROING_SUPPORT)) // zeroing vicons wrt base, TODO: need a better way 
+#       define FEATURE_ENABLE_ALIGN_EST_BEG_SUPPORT             ((DISABLED) & (FEATURE_ENABLE_VICON_ZEROING_SUPPORT)) // start alignment when estimator posting
 // arm odometry support:
 #define FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT             ( ENABLED) // [WIP]
 #define     FEATURE_ENABLE_ARM_ODOMETRY_VIZ                (( ENABLED) & (FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT))
-#define     FEATURE_ENABLE_ARM_ODOMETRY_MARGINALIZATION    (( ENABLED) & (FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT)) // [Our-Solution] Arm Marginalization
+#define     FEATURE_ENABLE_ARM_ODOMETRY_MARGINALIZATION    ((DISABLED) & (FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT)) // [Our-Solution] Arm Marginalization
 #define     FEATURE_ENABLE_ARM_ODOMETRY_ZEROING            ((DISABLED) & (FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT)) // init first pose with arm odometry
 #define     FEATURE_ENABLE_ARM_ODOMETRY_VIZ_ARM            (( ENABLED) & (FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT)) // init first pose with arm odometry
 // debug only features:

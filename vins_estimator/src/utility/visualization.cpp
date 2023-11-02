@@ -381,10 +381,10 @@ void queue_ViconOdometry_safe(const geometry_msgs::TransformStampedConstPtr &tra
     p = Eigen::Vector3d(transform_msg->transform.translation.x,
                         transform_msg->transform.translation.y,
                         transform_msg->transform.translation.z);
-    q = Eigen::Quaterniond( transform_msg->transform.rotation.x,
+    q = Eigen::Quaterniond( transform_msg->transform.rotation.w,
+                            transform_msg->transform.rotation.x,
                             transform_msg->transform.rotation.y,
-                            transform_msg->transform.rotation.y,
-                            transform_msg->transform.rotation.w);
+                            transform_msg->transform.rotation.z); // w,x,y,z
 
     R = q.toRotationMatrix();
 
@@ -398,36 +398,40 @@ void queue_ViconOdometry_safe(const geometry_msgs::TransformStampedConstPtr &tra
 #   endif
 #   if (FEATURE_ENABLE_VICON_ZEROING_WRT_BASE_SUPPORT)
     init_vicon &= (device_id == BASE_DEV); // only init on base device;
-    // FIXME: we should fix the initial ee device? if ee queued earlier than base, but no need, if we are processing base before ee
 #   endif
     // capture:
     if (init_vicon) 
     {
 #   if (FEATURE_ENABLE_VICON_ZEROING_WRT_BASE_SUPPORT)
-        // R^T , -p : for offset correction
-        m_buf[BASE_DEV].vicon_R0 = R.transpose();
-        m_buf[BASE_DEV].vicon_p0 = -p;
-        m_buf[EE_DEV].vicon_R0 = R.transpose();
-        m_buf[EE_DEV].vicon_p0 = -p;
-        
+        // T0_inv : for offset correction
+        Lie::SO3 RT = R.transpose();
+
+        m_buf[BASE_DEV].vicon_R0 = RT;
+        m_buf[BASE_DEV].vicon_p0 = - p;
+        m_buf[EE_DEV].vicon_R0 = RT;
+        m_buf[EE_DEV].vicon_p0 = - p;
+
         m_buf[BASE_DEV].vicon_inited = true;
         m_buf[EE_DEV].vicon_inited = true;
 
-        PRINT_DEBUG("vicon_R0 = \n%s", Lie::to_string(R.transpose()).c_str());
-        PRINT_DEBUG("vicon_p0 = %s", Lie::to_string(-p.transpose()).c_str());
+        PRINT_DEBUG("vicon_R0 = \n%s", Lie::to_string(m_buf[BASE_DEV].vicon_R0).c_str());
+        PRINT_DEBUG("vicon_p0 = %s", Lie::to_string(m_buf[BASE_DEV].vicon_p0).c_str());
 #   else
-        // R^T , -p : for offset correction
+        // T0_inv : for offset correction
         m_buf[device_id].vicon_R0 = R.transpose();
-        m_buf[device_id].vicon_p0 = -p;
+        m_buf[device_id].vicon_p0 = - p;
         m_buf[device_id].vicon_inited = true;
 #   endif // (FEATURE_ENABLE_VICON_ZEROING_WRT_BASE_SUPPORT)
     }
     // apply zeroing correction:
     {
-        p = p + m_buf[device_id].vicon_p0;
-        R = m_buf[device_id].vicon_R0 * R;
-        q = Eigen::Quaterniond(R);
+        // offset position wrt initial position:
+        p = m_buf[device_id].vicon_p0 + p;
+        // correction on orientation:
+        p = m_buf[BASE_DEV].vicon_R0 * p;
+        q = m_buf[BASE_DEV].vicon_R0 * Eigen::Quaterniond(R);
     }
+
     // apply transformation to pose:
     pose.position.x = p(0);
     pose.position.y = p(1);
@@ -444,8 +448,12 @@ void queue_ViconOdometry_safe(const geometry_msgs::TransformStampedConstPtr &tra
     m_buf[device_id].vicon_guard.lock();
     m_buf[device_id].vicon_path.header = header;
     m_buf[device_id].vicon_path.header.frame_id = "world";
-    if (m_buf[device_id].vicon_inited)
+#if (FEATURE_ENABLE_VICON_ZEROING_SUPPORT)
+    if (m_buf[device_id].vicon_inited) // publish only once it is initialized
         m_buf[device_id].vicon_path.poses.push_back(pose_stamped);
+#else
+    m_buf[device_id].vicon_path.poses.push_back(pose_stamped);
+#endif //(!FEATURE_ENABLE_VICON_ZEROING_SUPPORT)
     m_buf[device_id].vicon_guard.unlock();
 }
 void pubViconOdometryPath_safe(const int device_id)
