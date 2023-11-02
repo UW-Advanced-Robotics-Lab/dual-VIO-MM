@@ -402,34 +402,36 @@ void queue_ViconOdometry_safe(const geometry_msgs::TransformStampedConstPtr &tra
     // capture:
     if (init_vicon) 
     {
-#   if (FEATURE_ENABLE_VICON_ZEROING_WRT_BASE_SUPPORT)
-        // T0_inv : for offset correction
-        Lie::SO3 RT = R.transpose();
-
-        m_buf[BASE_DEV].vicon_R0 = RT;
-        m_buf[BASE_DEV].vicon_p0 = - p;
-        m_buf[EE_DEV].vicon_R0 = RT;
-        m_buf[EE_DEV].vicon_p0 = - p;
-
-        m_buf[BASE_DEV].vicon_inited = true;
-        m_buf[EE_DEV].vicon_inited = true;
-
-        PRINT_DEBUG("vicon_R0 = \n%s", Lie::to_string(m_buf[BASE_DEV].vicon_R0).c_str());
-        PRINT_DEBUG("vicon_p0 = %s", Lie::to_string(m_buf[BASE_DEV].vicon_p0).c_str());
-#   else
+        // SO3 --proj--> SO2:
+        // Extract the angle about the z-axis (ensure SO2 with z axis aligned up)
+        double theta = atan2(R(1, 0), R(0, 0));
+        R << cos(theta), -sin(theta), 0,
+             sin(theta),  cos(theta), 0,
+                      0,           0, 1;
         // T0_inv : for offset correction
         m_buf[device_id].vicon_R0 = R.transpose();
         m_buf[device_id].vicon_p0 = - p;
         m_buf[device_id].vicon_inited = true;
+
+#   if (FEATURE_ENABLE_VICON_ZEROING_WRT_BASE_SUPPORT)
+        // init EE from Base config:
+        m_buf[EE_DEV].vicon_inited = true;
+        m_buf[EE_DEV].vicon_R0 = m_buf[BASE_DEV].vicon_R0;
+        m_buf[EE_DEV].vicon_p0 = m_buf[BASE_DEV].vicon_p0;
+        // PRINT_DEBUG("vicon_R0 = \n%s", Lie::to_string(m_buf[BASE_DEV].vicon_R0).c_str());
+        // PRINT_DEBUG("vicon_p0 = %s", Lie::to_string(m_buf[BASE_DEV].vicon_p0).c_str());
 #   endif // (FEATURE_ENABLE_VICON_ZEROING_WRT_BASE_SUPPORT)
     }
+
     // apply zeroing correction:
     {
         // offset position wrt initial position:
         p = m_buf[device_id].vicon_p0 + p;
         // correction on orientation:
-        p = m_buf[BASE_DEV].vicon_R0 * p;
-        q = m_buf[BASE_DEV].vicon_R0 * Eigen::Quaterniond(R);
+        p = m_buf[device_id].vicon_R0 * p;
+        R = m_buf[device_id].vicon_R0 * R;
+        // to quaternion:
+        q = Eigen::Quaterniond(R);
     }
 
     // apply transformation to pose:
