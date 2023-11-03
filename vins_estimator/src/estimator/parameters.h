@@ -188,7 +188,9 @@ using namespace std;
 #define FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT             ( ENABLED) // [WIP]
 #define     FEATURE_ENABLE_ARM_VICON_SUPPORT               ((DISABLED) & (FEATURE_ENABLE_VICON_SUPPORT)) // stubing vicon base data for arm odometry (to see arm kinematics accuracy)
 #define     FEATURE_ENABLE_ARM_ODOMETRY_VIZ                (( ENABLED) & (FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT))
-#define     FEATURE_ENABLE_ARM_ODOMETRY_MARGINALIZATION    (( ENABLED) & (FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT)) // [Our-Solution] Arm Marginalization
+#define     FEATURE_ENABLE_ARM_ODOMETRY_MARGINALIZATION    ((DISABLED) & (FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT)) // [Our-Solution] Arm Marginalization
+//              - disabled: baseline without arm odometry marginalization
+//              - enabled: with arm odometry marginalization
 #define     FEATURE_ENABLE_ARM_ODOMETRY_ZEROING            (( ENABLED) & (FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT)) // init first pose with arm odometry
 #define     FEATURE_ENABLE_ARM_ODOMETRY_VIZ_ARM            (( ENABLED) & (FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT)) // init first pose with arm odometry
 // debug only features:
