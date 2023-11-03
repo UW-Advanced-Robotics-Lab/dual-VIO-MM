@@ -1113,14 +1113,19 @@ void Estimator::optimization() // TODO: add arm odometry into optimization probl
 
 #if (FEATURE_ENABLE_ARM_ODOMETRY_MARGINALIZATION)
     // - TODO: Arm Odometry Residuals
-    if (pCfg->DEVICE_ID == EE_DEV) // EE only
+    if (pCfg->DEVICE_ID == EE_DEV && this->arm_inited) // EE only when initialized
     {
         for (int i = 0; i < frame_count-1; i++)
         {
+            // rebase the location wrt to the initial position
+            Lie::SO3 R; Lie::R3 p;
+            p = (arm_Ps[i] - this->arm_P0);
+            R = arm_Rs[i];
             // TODO: do not use arm factor if base imu is not stable?
-            ARMFactor* arm_factor = new ARMFactor(arm_Rs[i], arm_Ps[i]);
+            ARMFactor* arm_factor = new ARMFactor(R,p);
+            // ARMFactor* arm_factor = new ARMFactor(arm_Rs[i], arm_Ps[i]);
             problem.AddResidualBlock(arm_factor, NULL, para_Pose[i]);
-        }   
+        }
     }
 #endif //(FEATURE_ENABLE_ARM_ODOMETRY_MARGINALIZATION)
 

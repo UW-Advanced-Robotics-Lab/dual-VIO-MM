@@ -408,7 +408,7 @@ void queue_ViconOdometry_safe(const Vector7d_t &vicon_msg, const double t, const
         double theta = atan2(R(1, 0), R(0, 0));
         R << cos(theta), -sin(theta), 0,
              sin(theta),  cos(theta), 0,
-                      0,           0, 1;
+                      0,           0, 1; //TODO: should we enforce it to base estimator in general?
         // T0_inv : for offset correction
         m_buf[device_id].vicon_R0 = R.transpose();
         m_buf[device_id].vicon_p0 = - p;

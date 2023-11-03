@@ -365,10 +365,10 @@ void EstimatorManager::_postProcessArmJnts_unsafe(const double t, const Vector7d
                         -1,  0,  0,  0,
                          0, -1,  0,  0,
                          0,  0,  0,  1).finished()
-    ); // convert from world axis back to camera axis
+    ); // convert from world axis back to camera axis [UNUSED]
 
     // placeholders:
-    Lie::SE3 T_c, g_st, T_b;
+    Lie::SE3 T_c, g_st, T_b, T_e;
 
     // compute:
     if ((arm_prev_data.t_header > 0) 
@@ -417,33 +417,34 @@ void EstimatorManager::_postProcessArmJnts_unsafe(const double t, const Vector7d
 
         // Lie::SE3 T_out = T_c; // summit base if summit_base
         Lie::SE3 T_out = T_c * Tc_b; // cam_base
-        T_c = T_out * g_st * Te; // ^s_T_{cam_EE} = ^s_T_{cam_base} * {cam_base}_T_{cam_EE} 
-#   if (!FEATURE_ENABLE_ARM_VICON_SUPPORT) // stub Ground Truth Vicon data:
-        T_c = T_c * Rp_corr_T; //* coord-axis
-#   endif //(!FEATURE_ENABLE_ARM_VICON_SUPPORT) // stub Ground Truth Vicon data:
+        T_e = T_out * g_st * Te; // ^s_T_{cam_EE} = ^s_T_{cam_base} * {cam_base}_T_{cam_EE} 
+        
+        // NOTE: as the z-axis in tool frame is aligned with camera z-axis, no need to invert the coordinate axis
+// #   if (!FEATURE_ENABLE_ARM_VICON_SUPPORT) // stub Ground Truth Vicon data:
+//         // T_c = T_c * Rp_corr_T; //* coord-axis 
+// #   endif //(!FEATURE_ENABLE_ARM_VICON_SUPPORT) // stub Ground Truth Vicon data:
         
 #   if (FEATURE_ENABLE_ARM_ODOMETRY_ZEROING) // FIXME this compensation is not right
         if (this->arm_prev_data.arm_pose_ready && !this->arm_prev_data.arm_pose_inited)
         {
             this->arm_prev_data.arm_pose_inited = true;
-            this->arm_prev_data.arm_pose_st_0 = Lie::inverse_SE3(T_out);
+            this->arm_prev_data.arm_pose_st_0 = Lie::inverse_SE3(T_c) * T_e; // [UNUSED]
+            // set initial pose for the estimator
+            Lie::SO3xR3_from_SE3(pEsts[EE_DEV]->arm_R0, pEsts[EE_DEV]->arm_P0, this->arm_prev_data.arm_pose_st_0);
+            pEsts[EE_DEV]->arm_inited = true;
         }
-
-        // 3. apply compensation
-        T_out = this->arm_prev_data.arm_pose_st_0 * T_out;
-        T_c = T_out * g_st * Te * Rp_corr_T;
 #   endif
 
         pArm->storeTransformations_unsafely(T_out);
 
-        this->arm_prev_data.arm_pose_st = T_c;
+        this->arm_prev_data.arm_pose_st = T_e;
         this->arm_prev_data.arm_pose_header = arm_prev_data.t_header;
 
         // PRINT_DEBUG("> ArmOdometry [%f]: \n R=\n%s \n p=\n%s", t, Lie::to_string(R).c_str(), Lie::to_string(p).c_str());
 
 #   if(FEATURE_ENABLE_ARM_ODOMETRY_VIZ)
         // publish immediately:
-        Lie::SO3xR3_from_SE3(R_c, p_c, T_c); // reuse placeholder R_c, p_c
+        Lie::SO3xR3_from_SE3(R_c, p_c, T_e); // reuse placeholder R_c, p_c
         queue_ArmOdometry_safe(arm_prev_data.t_header, R_c, p_c, EE_DEV);
 #   endif //(FEATURE_ENABLE_ARM_ODOMETRY_VIZ)
     }

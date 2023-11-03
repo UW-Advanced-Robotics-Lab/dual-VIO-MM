@@ -132,6 +132,11 @@ class Estimator
     Vector3d        arm_Ps[(WINDOW_SIZE + 1)];
     Matrix3d        arm_Rs[(WINDOW_SIZE + 1)];
 #endif //(FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT)
+#if (FEATURE_ENABLE_ARM_ODOMETRY_ZEROING)
+    bool        arm_inited;
+    Vector3d    arm_P0;
+    Matrix3d    arm_R0;
+#endif //(FEATURE_ENABLE_ARM_ODOMETRY_ZEROING)
     
     // moving window placeholders:
     Matrix3d back_R0, last_R, last_R0;
