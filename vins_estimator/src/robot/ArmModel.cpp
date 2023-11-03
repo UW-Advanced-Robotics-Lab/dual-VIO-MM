@@ -99,6 +99,7 @@ ArmModel::~ArmModel()
     
 }
 
+// TODO: we may make the config file for the arm model
 const Lie::SE3 T0_summit = Lie::SE3::Identity();
 const Lie::R3 summit_dP_wam = Lie::R3(0.14,0,0.405);
 const Lie::R3 summit_dP_cam_base = Lie::R3(0.362,0,0.367);  // TODO: MEASUREMENT NEEDED
@@ -109,8 +110,9 @@ void ArmModel::_model_initialization_unsafe()
     // - summit pose:
     const Lie::SE3 spatial_G_summit = Lie::SE3::Identity() * T0_summit;
     // - summit ->> WAM base frame:
-    const Lie::Axis_Angle_t wt_summit = Lie::Axis_Angle_t{.w=Lie::R3(0,0,1),.theta=1};
-    const Lie::SO3 R_summit = Lie::Exp_SO3_from_AxisAngle(wt_summit);
+    // const Lie::Axis_Angle_t wt_summit = Lie::Axis_Angle_t{.w=Lie::R3(0,0,1),.theta=0};
+    // const Lie::SO3 R_summit = Lie::Exp_SO3_from_AxisAngle(wt_summit);
+    const Lie::SO3 R_summit = Lie::SO3::Identity();
     Lie::SE3 summit_G_wam = Lie::SE3_from_SO3xR3(R_summit, summit_dP_wam);
     // - define base spatial frame for WAM base frame:
     Lie::SE3 spatial_G_wam = spatial_G_summit * summit_G_wam;

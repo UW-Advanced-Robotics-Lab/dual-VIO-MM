@@ -230,7 +230,29 @@ void EstimatorManager::processMeasurements_thread()
                     PRINT_WARN("wait for both imu and arm [%d|%d|%d] ... \n", is_base_imu_avail, is_EE_imu_avail, is_arm_avail);
                 }
             }
+            else
+            {
+                // When no images available, do nothing
+            }
 
+#if (FEATURE_ENABLE_VICON_SUPPORT)
+            // TODO: should we sync against the image to have alignment evaluation? (or a separate topic)
+            // queue vicon to publisher later:
+            int i = 0;
+            for(size_t id = BASE_DEV; id < MAX_NUM_DEVICES; id++)
+            {
+                this->m_vicon[id].guard.lock();
+                while(! this->m_vicon[id].data.empty())
+                {
+                    if (i++ % FEATURE_VICON_DOWN_SAMPLE_RATE_PER == 0) // downsample 10%
+                    {
+                        queue_ViconOdometry_safe(this->m_vicon[id].data.front().second, this->m_vicon[id].data.front().first, id);
+                    }
+                    this->m_vicon[id].data.pop();
+                }
+                this->m_vicon[id].guard.unlock();
+            }
+#endif //(FEATURE_ENABLE_VICON_SUPPORT)
         }
         TOK_IF(ellapsed_process,EST_MANAGER_PROCESSING_INTERVAL_MS);
 
@@ -266,6 +288,14 @@ void EstimatorManager::inputIMU(const size_t DEV_ID, const double t, const Vecto
 {
     pEsts[DEV_ID]->inputIMU(t, acc, gyr);
 }
+
+#if (FEATURE_ENABLE_VICON_SUPPORT)
+void EstimatorManager::inputVicon_safe(const size_t DEV_ID, const pair<double, Vector7d_t> &_vicon_msg)
+{
+    std::lock_guard<std::mutex> lock(this->m_vicon[BASE_DEV].guard);
+    this->m_vicon[DEV_ID].data.push(_vicon_msg);
+}
+#endif // (FEATURE_ENABLE_VICON_SUPPORT)
 
 #if (FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT)
 void EstimatorManager::inputArmJnts_safe(const double t, const Vector7d_t &_jnt_msg)
@@ -423,7 +453,9 @@ void EstimatorManager::publishVisualization_thread()
         for(int dev_id=BASE_DEV; dev_id<MAX_NUM_DEVICES; dev_id++)
         {
             // publishing topics:
+#if (FEATURE_ENABLE_VICON_SUPPORT)
             pubViconOdometryPath_safe(dev_id);
+#endif // (FEATURE_ENABLE_VICON_SUPPORT)
             pubOdometryPath_safe(dev_id);
             pubKeyPoses_safe(dev_id);
             pubCameraPose_safe(dev_id);

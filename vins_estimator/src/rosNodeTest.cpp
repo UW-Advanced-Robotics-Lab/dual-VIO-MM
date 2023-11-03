@@ -19,25 +19,24 @@
 #include <opencv2/opencv.hpp>
 #include "estimator/parameters.h"
 #include "estimator/estimator_manager.h"
-#include "utility/visualization.h"
 
 // ----------------------------------------------------------------
-// : Definitions:
+// : Global Data Placeholder:
 // ----------------------------------------------------------------
 typedef struct{
     // buffer:
     queue<sensor_msgs::ImageConstPtr>       img0_buf;
     std::mutex                              img0_mutex;
     double                                  time_last_update;
-} NodeBuffer_t;
-
 #if (FEATURE_ENABLE_VICON_SUPPORT)
-typedef struct{
-    queue<geometry_msgs::TransformStampedConstPtr>  vicon_buf;
-    std::mutex                                      vicon_mutex;
-} ViconBuffer_t;
+    queue<pair<double, Vector7d_t>>         vicon_buf;
+    std::mutex                              vicon_mutex;
 #endif
+} NodeBuffer_t;
+NodeBuffer_t   m_buffer[MAX_NUM_DEVICES];
 
+
+// Performance:
 #if (FEATURE_ENABLE_PERFORMANCE_EVAL_ROSNODE)
 typedef struct{
     int image_frame_dropped_tick = 0;
@@ -45,17 +44,14 @@ typedef struct{
     double image_process_time = 0;
     double image_process_delta_time = 0;
 } RosNodeTestPerf_t;
+RosNodeTestPerf_t m_perf;
 #endif
 // typedef Matrix<double, 7, 1> Vector7d_t; // for storing <time, acc, gyr>
 
-// ----------------------------------------------------------------
-// : Global Data Placeholder:
-// ----------------------------------------------------------------
 // configs:
 std::shared_ptr<DeviceConfig_t> pCfgs[MAX_NUM_DEVICES] = {
     std::make_shared<DeviceConfig_t>(), std::make_shared<DeviceConfig_t>()
 };
-NodeBuffer_t   m_buffer[MAX_NUM_DEVICES];
 
 #if (FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT)
 std::shared_ptr<ArmConfig_t> pArmCfg = std::make_shared<ArmConfig_t>();
@@ -64,10 +60,6 @@ std::shared_ptr<ArmConfig_t> pArmCfg = std::make_shared<ArmConfig_t>();
 // Estimators:
 std::shared_ptr<EstimatorManager> pEstMnger = std::make_shared<EstimatorManager>(pCfgs);
 
-// Performance:
-#if (FEATURE_ENABLE_PERFORMANCE_EVAL_ROSNODE)
-RosNodeTestPerf_t m_perf;
-#endif
 
 //////////////////////////////////////////
 ///////   CALLBACK FUNCTION     /////////
@@ -88,14 +80,31 @@ void d1_img0_callback(const sensor_msgs::ImageConstPtr &img_msg)
 {
     buf_img_safely(& m_buffer[EE_DEV], img_msg);
 }
+
+#if (FEATURE_ENABLE_VICON_SUPPORT)
+void buf_vicon_safely(NodeBuffer_t * const pB, const geometry_msgs::TransformStampedConstPtr &transform_msg)
+{
+    pB->vicon_mutex.lock();
+    Vector7d_t pose;
+    pose << transform_msg->transform.translation.x,
+            transform_msg->transform.translation.y,
+            transform_msg->transform.translation.z,
+            transform_msg->transform.rotation.w,
+            transform_msg->transform.rotation.x,
+            transform_msg->transform.rotation.y,
+            transform_msg->transform.rotation.z; // w,x,y,z
+    pB->vicon_buf.push(make_pair(transform_msg->header.stamp.toSec(), pose));
+    pB->vicon_mutex.unlock();
+}
 void callback_viconOdometry_EE_safe(const geometry_msgs::TransformStampedConstPtr &transform_msg)
 {
-    queue_ViconOdometry_safe(transform_msg, EE_DEV); // NOTE: should be behind the estimator time (0.1s ish)
+    buf_vicon_safely(& m_buffer[EE_DEV], transform_msg);
 }
 void callback_viconOdometry_base_safe(const geometry_msgs::TransformStampedConstPtr &transform_msg)
 {
-    queue_ViconOdometry_safe(transform_msg, BASE_DEV); // NOTE: should be behind the estimator time (0.1s ish)
+    buf_vicon_safely(& m_buffer[BASE_DEV], transform_msg);
 }
+#endif // (FEATURE_ENABLE_VICON_SUPPORT)
 
 cv::Mat process_IMG_from_msg(const sensor_msgs::ImageConstPtr &img_msg)
 {
@@ -213,6 +222,31 @@ void sync_process_IMG_thread()
             }
             pB0->img0_mutex.unlock();
             pB1->img0_mutex.unlock();
+
+#if (FEATURE_ENABLE_VICON_SUPPORT)
+            // Sampling Vicon Buffers:
+            {
+                // BASE:
+                pB0->vicon_mutex.lock();
+                while (!pB0->vicon_buf.empty())
+                {
+                    // NOTE: should be behind the estimator time (0.1s ish)
+                    pEstMnger->inputVicon_safe(BASE_DEV, pB0->vicon_buf.front());
+                    pB0->vicon_buf.pop();
+                }
+                pB0->vicon_mutex.unlock();
+                // EE:
+                pB1->vicon_mutex.lock();
+                while (!pB1->vicon_buf.empty())
+                {
+                    // NOTE: should be behind the estimator time (0.1s ish)
+                    pEstMnger->inputVicon_safe(EE_DEV, pB1->vicon_buf.front());
+                    pB1->vicon_buf.pop();
+                }
+                pB1->vicon_mutex.unlock();
+                
+            }
+#endif // (FEATURE_ENABLE_VICON_SUPPORT)
             
             // Placeholder for joints:
             sensor_msgs::JointStateConstPtr jnt_msg_E = NULL;

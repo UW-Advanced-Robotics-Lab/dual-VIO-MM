@@ -62,7 +62,7 @@ void pubOdometryPath_safe(const int device_id);
 
 #if (FEATURE_ENABLE_VICON_SUPPORT)
 // vicon:
-void queue_ViconOdometry_safe(const geometry_msgs::TransformStampedConstPtr &transform_msg, const int device_id);
+void queue_ViconOdometry_safe(const Vector7d_t &vicon_msg, const double t, const int device_id);
 void pubViconOdometryPath_safe(const int device_id);
 #endif
 

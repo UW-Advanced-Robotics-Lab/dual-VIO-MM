@@ -177,6 +177,7 @@ using namespace std;
 #define FEATURE_PERMIT_WITHOUT_IMU_SUPPORT              (FEATURE_ENABLE_STEREO_SUPPORT) // since there is no support from stereo, we will assume imu to be enabled all the time
 // vicon support:
 #define FEATURE_ENABLE_VICON_SUPPORT                    ( ENABLED) // to feed vicon data and output as nav_msg::path for visualization
+#   define FEATURE_VICON_DOWN_SAMPLE_RATE_PER               ( 10)
 #   define FEATURE_ENABLE_VICON_ZEROING_SUPPORT             (( ENABLED) & (FEATURE_ENABLE_VICON_SUPPORT)) // zeroing vicons independently
 #       define FEATURE_ENABLE_VICON_ZEROING_WRT_BASE_SUPPORT    (( ENABLED) & (FEATURE_ENABLE_VICON_ZEROING_SUPPORT)) // zeroing vicons wrt base, TODO: need a better way 
 #       define FEATURE_ENABLE_ALIGN_EST_BEG_SUPPORT             ((DISABLED) & (FEATURE_ENABLE_VICON_ZEROING_SUPPORT)) // start alignment when estimator posting

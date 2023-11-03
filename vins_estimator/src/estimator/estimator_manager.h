@@ -37,6 +37,9 @@ class EstimatorManager
         // interface:
         void inputIMU(const size_t DEV_ID, const double t, const Vector3d &linearAcceleration, const Vector3d &angularVelocity);
         void inputImage(double t_b, const cv::Mat &_img_b, double t_e, const cv::Mat &_img_e);
+#if (FEATURE_ENABLE_VICON_SUPPORT)
+        void inputVicon_safe(const size_t DEV_ID, const pair<double, Vector7d_t> &_vicon_msg);
+#endif // (FEATURE_ENABLE_VICON_SUPPORT)
 #if (FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT)
         void inputArmJnts_safe(const double t, const Vector7d_t &_jnt_msg);
         void emptyArmJnts_safe(const double t);
@@ -47,6 +50,15 @@ class EstimatorManager
         void processMeasurements_thread();
 
     private:
+#if (FEATURE_ENABLE_VICON_SUPPORT)
+typedef struct{
+            // protected:
+            queue<pair<double, Vector7d_t>>             data; // R3 + Q4
+            std::mutex                                  guard;
+        } vicon_buffer_t;
+        vicon_buffer_t m_vicon[MAX_NUM_DEVICES];
+#endif //(FEATURE_ENABLE_VICON_SUPPORT)
+
 #if (FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT)
         typedef struct{
             // protected:

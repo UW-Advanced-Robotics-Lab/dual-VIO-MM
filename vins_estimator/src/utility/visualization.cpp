@@ -352,23 +352,26 @@ void pubOdometryPath_safe(const int device_id)
 }
 
 #if (FEATURE_ENABLE_VICON_SUPPORT)
-void queue_ViconOdometry_safe(const geometry_msgs::TransformStampedConstPtr &transform_msg, const int device_id)
+void queue_ViconOdometry_safe(const Vector7d_t &vicon_msg, const double t, const int device_id)
 {
     std_msgs::Header header;
     header.frame_id = "world";
-    header.stamp = transform_msg->header.stamp; // copy the timestamp, TODO: should we do a sync?
+    header.stamp = ros::Time(t); // copy the timestamp, TODO: should we do a sync?
     
     geometry_msgs::Pose pose;
 
 #if (!FEATURE_ENABLE_VICON_ZEROING_SUPPORT && !FEATURE_ENABLE_VICON_ZEROING_WRT_BASE_SUPPORT)    
-    pose.position.x = transform_msg->transform.translation.x;
-    pose.position.y = transform_msg->transform.translation.y;
-    pose.position.z = transform_msg->transform.translation.z;
-    pose.orientation = transform_msg->transform.rotation;
+    pose.position.x = vicon_msg(0);
+    pose.position.y = vicon_msg(1);
+    pose.position.z = vicon_msg(2);
+    pose.orientation.x = vicon_msg(4);
+    pose.orientation.y = vicon_msg(5);
+    pose.orientation.z = vicon_msg(6);
+    pose.orientation.w = vicon_msg(3);
 #else
 #   if (FEATURE_ENABLE_ALIGN_EST_BEG_SUPPORT)
         // Note: the vicon data is behind the schedule ~0.1s, so we need to recognize when path is generating
-        const double delta_time = (m_buf[device_id].latest_path_time - header.stamp.toSec());
+        const double delta_time = (m_buf[device_id].latest_path_time - t);
         // the vicon data should be behind but within 1s.
         const bool is_estimator_publishing = (delta_time > -1); 
         // PRINT_DEBUG("Delta Time: last estimator - vicon:%f", delta_time);
@@ -378,13 +381,8 @@ void queue_ViconOdometry_safe(const geometry_msgs::TransformStampedConstPtr &tra
     Eigen::Quaterniond  q;
     Eigen::Matrix3d     R;
     
-    p = Eigen::Vector3d(transform_msg->transform.translation.x,
-                        transform_msg->transform.translation.y,
-                        transform_msg->transform.translation.z);
-    q = Eigen::Quaterniond( transform_msg->transform.rotation.w,
-                            transform_msg->transform.rotation.x,
-                            transform_msg->transform.rotation.y,
-                            transform_msg->transform.rotation.z); // w,x,y,z
+    p = Eigen::Vector3d(vicon_msg.block<3,1>(0,0));
+    q = Eigen::Quaterniond(vicon_msg(3), vicon_msg(4), vicon_msg(5), vicon_msg(6)); // w,x,y,z
 
     R = q.toRotationMatrix();
 
@@ -465,7 +463,7 @@ void pubViconOdometryPath_safe(const int device_id)
     pub_vicon[device_id].publish(m_buf[device_id].vicon_path);
     m_buf[device_id].vicon_guard.unlock();
 }
-#endif
+#endif // (FEATURE_ENABLE_VICON_SUPPORT)
 
 void queue_KeyPoses_unsafe(const Estimator &estimator, const std_msgs::Header &header)
 {
