@@ -56,6 +56,9 @@ typedef struct{
     Eigen::Matrix3d     vicon_R0;
     bool                vicon_inited;
 #   endif
+#   if (FEATURE_ENABLE_ARM_VICON_SUPPORT)
+    geometry_msgs::Pose     latest_vicon_pose;
+#   endif // (FEATURE_ENABLE_ARM_VICON_SUPPORT)
 #endif
 #if (FEATURE_TRACKING_IMAGE_SUPPORT)
     // Track image:
@@ -448,6 +451,9 @@ void queue_ViconOdometry_safe(const Vector7d_t &vicon_msg, const double t, const
     m_buf[device_id].vicon_guard.lock();
     m_buf[device_id].vicon_path.header = header;
     m_buf[device_id].vicon_path.header.frame_id = "world";
+#if (FEATURE_ENABLE_ARM_VICON_SUPPORT)
+    m_buf[device_id].latest_vicon_pose = pose;
+#endif //(FEATURE_ENABLE_ARM_VICON_SUPPORT)
 #if (FEATURE_ENABLE_VICON_ZEROING_SUPPORT)
     if (m_buf[device_id].vicon_inited) // publish only once it is initialized
         m_buf[device_id].vicon_path.poses.push_back(pose_stamped);
@@ -456,6 +462,14 @@ void queue_ViconOdometry_safe(const Vector7d_t &vicon_msg, const double t, const
 #endif //(!FEATURE_ENABLE_VICON_ZEROING_SUPPORT)
     m_buf[device_id].vicon_guard.unlock();
 }
+#if (FEATURE_ENABLE_ARM_VICON_SUPPORT)
+void getLatestViconPose_safe(geometry_msgs::Pose& pose, const int device_id)
+{
+    m_buf[device_id].vicon_guard.lock();
+    pose = m_buf[device_id].latest_vicon_pose;
+    m_buf[device_id].vicon_guard.unlock();
+}
+#endif //(FEATURE_ENABLE_ARM_VICON_SUPPORT)
 void pubViconOdometryPath_safe(const int device_id)
 {
     // publish the path:

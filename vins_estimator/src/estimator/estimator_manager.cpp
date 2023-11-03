@@ -248,7 +248,7 @@ void EstimatorManager::processMeasurements_thread()
                     {
                         queue_ViconOdometry_safe(this->m_vicon[id].data.front().second, this->m_vicon[id].data.front().first, id);
                     }
-                    this->m_vicon[id].data.pop();
+                    this->m_vicon[id].data.pop(); // popping :)
                 }
                 this->m_vicon[id].guard.unlock();
             }
@@ -376,10 +376,28 @@ void EstimatorManager::_postProcessArmJnts_unsafe(const double t, const Vector7d
     {
         // 1. fetch R,p previous:
         Lie::R3 p_c; Lie::SO3 R_c;
+
+#   if (FEATURE_ENABLE_ARM_VICON_SUPPORT) // stub Ground Truth Vicon data:
+        const Lie::SO3 R_corr2(
+            (Lie::SO3() <<  0, -1,  0,
+                            1,  0,  0,
+                            0,  0,  1).finished()
+        ); // convert vicon x axis fwd to y axis fwd, as summit face y axis
+
+        geometry_msgs::Pose pose;
+        getLatestViconPose_safe(pose, BASE_DEV);
+        p_c = Eigen::Vector3d(pose.position.x, pose.position.y, pose.position.z);
+        // R_c = Eigen::Quaterniond(pose.orientation.w, pose.orientation.x, pose.orientation.y, pose.orientation.z).toRotationMatrix();
+        // T_c = Lie::SE3_from_SO3xR3(R_c * R_corr2, p_c); // vicon is aligned with world axis
+        R_c = pEsts[BASE_DEV]->latest_Q.toRotationMatrix(); // previous frame
+        T_c = Lie::SE3_from_SO3xR3(R_c * R_corr, p_c);
+#   else // feed in estimator latest state:
         p_c = pEsts[BASE_DEV]->latest_P; // previous frame
         R_c = pEsts[BASE_DEV]->latest_Q.toRotationMatrix(); // previous frame
         // correction:
         T_c = Lie::SE3_from_SO3xR3(R_c * R_corr, p_c);
+#   endif // (!FEATURE_ENABLE_ARM_VICON_SUPPORT)
+        
         this->arm_prev_data.arm_pose_ready = true;
 
         // 2. [Arm] compute theta --> SE3:

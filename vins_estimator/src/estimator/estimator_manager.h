@@ -57,6 +57,7 @@ typedef struct{
             std::mutex                                  guard;
         } vicon_buffer_t;
         vicon_buffer_t m_vicon[MAX_NUM_DEVICES];
+        void _process_and_queueVicon_safe(const size_t DEV_ID, const pair<double, Vector7d_t> &_vicon_msg);
 #endif //(FEATURE_ENABLE_VICON_SUPPORT)
 
 #if (FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT)
