@@ -387,10 +387,12 @@ void EstimatorManager::_postProcessArmJnts_unsafe(const double t, const Vector7d
         geometry_msgs::Pose pose;
         getLatestViconPose_safe(pose, BASE_DEV);
         p_c = Eigen::Vector3d(pose.position.x, pose.position.y, pose.position.z);
-        // R_c = Eigen::Quaterniond(pose.orientation.w, pose.orientation.x, pose.orientation.y, pose.orientation.z).toRotationMatrix();
-        // T_c = Lie::SE3_from_SO3xR3(R_c * R_corr2, p_c); // vicon is aligned with world axis
-        R_c = pEsts[BASE_DEV]->latest_Q.toRotationMatrix(); // previous frame
-        T_c = Lie::SE3_from_SO3xR3(R_c * R_corr, p_c);
+        // - vicon for orientation:
+        R_c = Eigen::Quaterniond(pose.orientation.w, pose.orientation.x, pose.orientation.y, pose.orientation.z).toRotationMatrix();
+        T_c = Lie::SE3_from_SO3xR3(R_c * R_corr2, p_c); // vicon is aligned with world axis
+        // - base estimator for orientation:
+        // R_c = pEsts[BASE_DEV]->latest_Q.toRotationMatrix(); // previous frame
+        // T_c = Lie::SE3_from_SO3xR3(R_c * R_corr, p_c);
 #   else // feed in estimator latest state:
         p_c = pEsts[BASE_DEV]->latest_P; // previous frame
         R_c = pEsts[BASE_DEV]->latest_Q.toRotationMatrix(); // previous frame
@@ -413,9 +415,13 @@ void EstimatorManager::_postProcessArmJnts_unsafe(const double t, const Vector7d
         // // - apply tool tip frame
         // T_b = T_b * Te;
 
-        Lie::SE3 T_out = T_c * Tc_b;
-        T_c = T_out * g_st * Te * Rp_corr_T; // ^s_T_{cam_EE} = ^s_T_{cam_base} * {cam_base}_T_{cam_EE} * coord-axis
-
+        // Lie::SE3 T_out = T_c; // summit base if summit_base
+        Lie::SE3 T_out = T_c * Tc_b; // cam_base
+        T_c = T_out * g_st * Te; // ^s_T_{cam_EE} = ^s_T_{cam_base} * {cam_base}_T_{cam_EE} 
+#   if (!FEATURE_ENABLE_ARM_VICON_SUPPORT) // stub Ground Truth Vicon data:
+        T_c = T_c * Rp_corr_T; //* coord-axis
+#   endif //(!FEATURE_ENABLE_ARM_VICON_SUPPORT) // stub Ground Truth Vicon data:
+        
 #   if (FEATURE_ENABLE_ARM_ODOMETRY_ZEROING) // FIXME this compensation is not right
         if (this->arm_prev_data.arm_pose_ready && !this->arm_prev_data.arm_pose_inited)
         {

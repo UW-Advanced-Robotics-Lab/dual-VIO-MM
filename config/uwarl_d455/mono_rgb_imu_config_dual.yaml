@@ -25,9 +25,9 @@ arm_pose_topic: "/wam/pose"
 arm_calib: "wam_arm.yaml"
 # - [vins]
 d0_vicon_topic: "/vicon/cam_base/cam_base"
+# d0_vicon_topic: "/vicon/summit_base/summit_base" # more stable
 d1_vicon_topic: "/vicon/cam_EE/cam_EE"
-# d0_vicon_topic: "/vicon/cam_EE/cam_EE"
-# d1_vicon_topic: "/vicon/wam_EE/wam_EE"
+# d1_vicon_topic: "/vicon/wam_base/wam_base"
 
 # [Output Path]
 output_path: "~/output"

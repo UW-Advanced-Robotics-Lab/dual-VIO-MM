@@ -183,7 +183,7 @@ using namespace std;
 // #       define FEATURE_ENABLE_ALIGN_EST_BEG_SUPPORT             ((DISABLED) & (FEATURE_ENABLE_VICON_ZEROING_SUPPORT)) // start alignment when estimator posting
 // arm odometry support:
 #define FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT             ( ENABLED) // [WIP]
-#define     FEATURE_ENABLE_ARM_VICON_SUPPORT               (( ENABLED) & (FEATURE_ENABLE_VICON_SUPPORT))
+#define     FEATURE_ENABLE_ARM_VICON_SUPPORT               ((DISABLED) & (FEATURE_ENABLE_VICON_SUPPORT)) // stubing vicon base data for arm odometry (to see arm kinematics accuracy)
 #define     FEATURE_ENABLE_ARM_ODOMETRY_VIZ                (( ENABLED) & (FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT))
 #define     FEATURE_ENABLE_ARM_ODOMETRY_MARGINALIZATION    ((DISABLED) & (FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT)) // [Our-Solution] Arm Marginalization
 #define     FEATURE_ENABLE_ARM_ODOMETRY_ZEROING            ((DISABLED) & (FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT)) // init first pose with arm odometry

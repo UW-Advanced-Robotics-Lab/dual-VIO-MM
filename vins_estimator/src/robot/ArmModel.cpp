@@ -70,8 +70,8 @@ const link_t ARM_LINKS[ARM_NUM_LINKS] = {
     { // F6-->F7
         .name = "wrist_pitch",
         .tip_frame_Tq = Lie::R3(0,0,0),
-        .tip_frame_Tw = Lie::R3(1,0,0),
-        .tip_frame_Tt = M_PI_2, // pi/2
+        .tip_frame_Tw = Lie::R3(0,0,1),
+        .tip_frame_Tt = 0, // should be 0
         .tip_frame_lb = -2.2,
         .tip_frame_ub = 2.2,
     },
@@ -102,8 +102,8 @@ ArmModel::~ArmModel()
 // TODO: we may make the config file for the arm model
 const Lie::SE3 T0_summit = Lie::SE3::Identity();
 const Lie::R3 summit_dP_wam = Lie::R3(0.14,0,0.405);
-const Lie::R3 summit_dP_cam_base = Lie::R3(0.362,0,0.367);  // TODO: MEASUREMENT NEEDED
-const Lie::R3 wam_dP_cam_ee = Lie::R3(0,-0.11,0.002);       // TODO: MEASUREMENT NEEDED
+const Lie::R3 summit_dP_cam_base = Lie::R3(0.362,0,0.387);  // TODO: MEASUREMENT NEEDED
+const Lie::R3 wam_dP_cam_ee = Lie::R3(0,-0.10,-0.06);       // TODO: Calibration Needed, here is manually approx/tuned with vicon visually
 
 void ArmModel::_model_initialization_unsafe()
 {
