@@ -147,7 +147,8 @@ void EstimatorManager::processMeasurements_thread()
                             pEsts[id]->initFirstIMUPose(accVector[id]);
                             if ((id == EE_DEV) && (is_arm_avail))
                             {
-                                pEsts[EE_DEV]->initFirstPose(this->arm_prev_data.arm_pose_st);
+                                // FIXME: we need to init first pose offset
+                                // pEsts[EE_DEV]->initFirstPose(this->arm_prev_data.arm_pose_st);
                             }
                             else
                             {
@@ -229,30 +230,35 @@ void EstimatorManager::processMeasurements_thread()
                 {
                     PRINT_WARN("wait for both imu and arm [%d|%d|%d] ... \n", is_base_imu_avail, is_EE_imu_avail, is_arm_avail);
                 }
+#if (FEATURE_ENABLE_VICON_SUPPORT)
+                // TODO: should we sync against the image to have alignment evaluation? (or a separate topic)
+                // queue vicon to publisher later:
+                int i = 0;
+                for(size_t id = BASE_DEV; id < MAX_NUM_DEVICES; id++)
+                {
+                    this->m_vicon[id].guard.lock();
+                    while(! this->m_vicon[id].data.empty())
+                    {
+                        // vicon time alignment (aligning with the imaging accusition time)
+                        if (this->m_vicon[id].data.front().first < feature[id].first)
+                        {
+                            this->m_vicon[id].data.pop(); // popping :)
+                        }
+                        else
+                        {
+                            queue_ViconOdometry_safe(this->m_vicon[id].data.front().second, this->m_vicon[id].data.front().first, id);
+                            break; // break the while loop
+                        }
+                    }
+                    this->m_vicon[id].guard.unlock();
+                }
+#endif //(FEATURE_ENABLE_VICON_SUPPORT)
             }
             else
             {
                 // When no images available, do nothing
             }
 
-#if (FEATURE_ENABLE_VICON_SUPPORT)
-            // TODO: should we sync against the image to have alignment evaluation? (or a separate topic)
-            // queue vicon to publisher later:
-            int i = 0;
-            for(size_t id = BASE_DEV; id < MAX_NUM_DEVICES; id++)
-            {
-                this->m_vicon[id].guard.lock();
-                while(! this->m_vicon[id].data.empty())
-                {
-                    if (i++ % FEATURE_VICON_DOWN_SAMPLE_RATE_PER == 0) // downsample 10%
-                    {
-                        queue_ViconOdometry_safe(this->m_vicon[id].data.front().second, this->m_vicon[id].data.front().first, id);
-                    }
-                    this->m_vicon[id].data.pop(); // popping :)
-                }
-                this->m_vicon[id].guard.unlock();
-            }
-#endif //(FEATURE_ENABLE_VICON_SUPPORT)
         }
         TOK_IF(ellapsed_process,EST_MANAGER_PROCESSING_INTERVAL_MS);
 
@@ -372,7 +378,8 @@ void EstimatorManager::_postProcessArmJnts_unsafe(const double t, const Vector7d
 
     // compute:
     if ((arm_prev_data.t_header > 0) 
-        && (pEsts[BASE_DEV]->solver_flag == Estimator::SolverFlag::NON_LINEAR))
+        && (pEsts[BASE_DEV]->solver_flag == Estimator::SolverFlag::NON_LINEAR)
+        && (pEsts[EE_DEV  ]->solver_flag == Estimator::SolverFlag::NON_LINEAR))
     {
         // 1. fetch R,p previous:
         Lie::R3 p_c; Lie::SO3 R_c;
@@ -424,29 +431,39 @@ void EstimatorManager::_postProcessArmJnts_unsafe(const double t, const Vector7d
 //         // T_c = T_c * Rp_corr_T; //* coord-axis 
 // #   endif //(!FEATURE_ENABLE_ARM_VICON_SUPPORT) // stub Ground Truth Vicon data:
         
-#   if (FEATURE_ENABLE_ARM_ODOMETRY_ZEROING) // FIXME this compensation is not right
+#   if (FEATURE_ENABLE_ARM_ODOMETRY_ZEROING) 
+        // FIXME this compensation is not right
         if (this->arm_prev_data.arm_pose_ready && !this->arm_prev_data.arm_pose_inited)
-        {
+        {   
             this->arm_prev_data.arm_pose_inited = true;
-            this->arm_prev_data.arm_pose_st_0 = Lie::inverse_SE3(T_c) * T_e; // [UNUSED]
-            // set initial pose for the estimator
-            Lie::SO3xR3_from_SE3(pEsts[EE_DEV]->arm_R0, pEsts[EE_DEV]->arm_P0, this->arm_prev_data.arm_pose_st_0);
+            p_c = pEsts[EE_DEV]->Ps[0]; // initial frame
+            R_c = pEsts[EE_DEV]->Rs[0]; // initial frame
+            Lie::SE3 T_est = Lie::inverse_SO3xR3(R_c, p_c);
+            this->arm_prev_data.arm_pose_st_0 = Lie::inverse_SE3(T_e * T_est);
+            // cache the base pose for compensation
+            // Lie::SO3xR3_from_SE3(
+            //     pEsts[EE_DEV]->arm_R0, 
+            //     pEsts[EE_DEV]->arm_P0, 
+            //     this->arm_prev_data.arm_pose_st_0);
             pEsts[EE_DEV]->arm_inited = true;
         }
 #   endif
-
-        pArm->storeTransformations_unsafely(T_out);
-
-        this->arm_prev_data.arm_pose_st = T_e;
-        this->arm_prev_data.arm_pose_header = arm_prev_data.t_header;
-
-        // PRINT_DEBUG("> ArmOdometry [%f]: \n R=\n%s \n p=\n%s", t, Lie::to_string(R).c_str(), Lie::to_string(p).c_str());
+        
+        // rebasing to the EE est frame:
+        T_e = this->arm_prev_data.arm_pose_st_0 * T_e; 
+        T_out = this->arm_prev_data.arm_pose_st_0 * T_out; 
 
 #   if(FEATURE_ENABLE_ARM_ODOMETRY_VIZ)
+        pArm->storeTransformations_unsafely(T_out); // for arm visualization
         // publish immediately:
         Lie::SO3xR3_from_SE3(R_c, p_c, T_e); // reuse placeholder R_c, p_c
         queue_ArmOdometry_safe(arm_prev_data.t_header, R_c, p_c, EE_DEV);
 #   endif //(FEATURE_ENABLE_ARM_ODOMETRY_VIZ)
+
+        // - update arm pose:
+        this->arm_prev_data.arm_pose_st = T_e;
+        this->arm_prev_data.arm_pose_header = arm_prev_data.t_header;
+        // PRINT_DEBUG("> ArmOdometry [%f]: \n R=\n%s \n p=\n%s", t, Lie::to_string(R).c_str(), Lie::to_string(p).c_str());
     }
     else
     {

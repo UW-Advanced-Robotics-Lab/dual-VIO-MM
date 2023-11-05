@@ -177,7 +177,6 @@ using namespace std;
 #define FEATURE_PERMIT_WITHOUT_IMU_SUPPORT              (FEATURE_ENABLE_STEREO_SUPPORT) // since there is no support from stereo, we will assume imu to be enabled all the time
 // vicon support:
 #define FEATURE_ENABLE_VICON_SUPPORT                    ( ENABLED) // to feed vicon data and output as nav_msg::path for visualization
-#   define FEATURE_VICON_DOWN_SAMPLE_RATE_PER               ( 10)
 #   define FEATURE_ENABLE_VICON_ZEROING_SUPPORT             (( ENABLED) & (FEATURE_ENABLE_VICON_SUPPORT)) // zeroing vicons independently
 #       define FEATURE_ENABLE_VICON_ZEROING_WRT_BASE_SUPPORT    ((DISABLED) & (FEATURE_ENABLE_VICON_ZEROING_SUPPORT)) // zeroing vicons wrt base
 //              - disable: to see direct comparison vs vicon
@@ -188,11 +187,11 @@ using namespace std;
 #define FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT             ( ENABLED) // [WIP]
 #define     FEATURE_ENABLE_ARM_VICON_SUPPORT               ((DISABLED) & (FEATURE_ENABLE_VICON_SUPPORT)) // stubing vicon base data for arm odometry (to see arm kinematics accuracy)
 #define     FEATURE_ENABLE_ARM_ODOMETRY_VIZ                (( ENABLED) & (FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT))
-#define     FEATURE_ENABLE_ARM_ODOMETRY_MARGINALIZATION    ((DISABLED) & (FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT)) // [Our-Solution] Arm Marginalization
+#define         FEATURE_ENABLE_ARM_ODOMETRY_VIZ_ARM            (( ENABLED) & (FEATURE_ENABLE_ARM_ODOMETRY_VIZ)) // init first pose with arm odometry
+#define     FEATURE_ENABLE_ARM_ODOMETRY_MARGINALIZATION    (( ENABLED) & (FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT)) // [Our-Solution] Arm Marginalization
 //              - disabled: baseline without arm odometry marginalization
 //              - enabled: with arm odometry marginalization
-#define     FEATURE_ENABLE_ARM_ODOMETRY_ZEROING            (( ENABLED) & (FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT)) // init first pose with arm odometry
-#define     FEATURE_ENABLE_ARM_ODOMETRY_VIZ_ARM            (( ENABLED) & (FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT)) // init first pose with arm odometry
+#define         FEATURE_ENABLE_ARM_ODOMETRY_ZEROING            (( ENABLED)) // init first pose with arm odometry
 // debug only features:
 #define FEATURE_DEBUGGING                               (( ENABLED) & (!FEATURE_MODE_RUNTIME))
 #   define FEATURE_CONSOLE_PRINTF                           (( ENABLED) & (FEATURE_DEBUGGING))

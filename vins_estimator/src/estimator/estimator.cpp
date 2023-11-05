@@ -575,7 +575,11 @@ void Estimator::processImage(const map<int, vector<pair<int, Eigen::Matrix<doubl
     {
 
 #if (FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT)
-        Lie::SO3xR3_from_SE3(arm_Rs[frame_count-1], arm_Ps[frame_count-1], pT_arm);
+        Lie::SO3xR3_from_SE3(
+            arm_Rs[frame_count-1], 
+            arm_Ps[frame_count-1], 
+            pT_arm
+        ); 
 #endif //(FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT)
 
         TicToc t_solve;
@@ -1117,12 +1121,8 @@ void Estimator::optimization() // TODO: add arm odometry into optimization probl
     {
         for (int i = 0; i < frame_count-1; i++)
         {
-            // rebase the location wrt to the initial position
-            Lie::SO3 R; Lie::R3 p;
-            p = (arm_Ps[i] - this->arm_P0);
-            R = arm_Rs[i];
             // TODO: do not use arm factor if base imu is not stable?
-            ARMFactor* arm_factor = new ARMFactor(R,p);
+            ARMFactor* arm_factor = new ARMFactor(arm_Rs[i],arm_Ps[i]);
             // ARMFactor* arm_factor = new ARMFactor(arm_Rs[i], arm_Ps[i]);
             problem.AddResidualBlock(arm_factor, NULL, para_Pose[i]);
         }

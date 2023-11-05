@@ -39,7 +39,7 @@ class ARMFactor : public ceres::SizedCostFunction<6, 7>
         arm_pose(6) = q.w();
     }
     virtual bool Evaluate(double const *const *parameters, double *residuals, double **jacobians) const
-    {
+    { // TODO: we should check if the formulation is right
         Eigen::Map<const Eigen::Matrix<double, 7, 1>> pose(parameters[0]);
         Eigen::Map<Eigen::Matrix<double, 6, 1>> res(residuals);
         res.head<3>() = pose.head<3>() - arm_pose.head<3>();
