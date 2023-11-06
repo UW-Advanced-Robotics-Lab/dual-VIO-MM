@@ -810,6 +810,7 @@ bool Estimator::initialStructure()
     else
     {
         ROS_INFO("misalign visual structure with IMU");
+        PRINT_ERROR("misalign visual structure with IMU");
         return false;
     }
 
@@ -819,15 +820,19 @@ bool Estimator::visualInitialAlign()
 {
     TicToc t_g;
     VectorXd x;
-    //solve scale
+    // -> solve Gyro Bias: Bgs
+    // -> solve state variable: x = [vel_img_k, g, s]
+    //      -> refine Gravity: g
+    //      -> solve scale: s
     bool result = VisualIMUAlignment(all_image_frame, Bgs, g, x, pCfg);
     if(!result)
     {
         ROS_DEBUG("solve g failed!");
+        PRINT_ERROR("solve g failed!");
         return false;
     }
 
-    // change state
+    // change all states up to frame count:
     for (int i = 0; i <= frame_count; i++)
     {
         Matrix3d Ri = all_image_frame[Headers[i]].R;
@@ -836,14 +841,20 @@ bool Estimator::visualInitialAlign()
         Rs[i] = Ri;
         all_image_frame[Headers[i]].is_key_frame = true;
     }
-
+    
+    // repropagate:
     double s = (x.tail<1>())(0);
     for (int i = 0; i <= WINDOW_SIZE; i++)
     {
         pre_integrations[i]->repropagate(Vector3d::Zero(), Bgs[i]);
     }
+
+    // relative correction:
     for (int i = frame_count; i >= 0; i--)
-        Ps[i] = s * Ps[i] - Rs[i] * pCfg->TIC[0] - (s * Ps[0] - Rs[0] * pCfg->TIC[0]);
+        Ps[i] = s * (Ps[i] - Ps[0]) - (Rs[i] - Rs[0]) * pCfg->TIC[0];
+        // Ps[i] = s * Ps[i] - Rs[i] * pCfg->TIC[0] - (s * Ps[0] - Rs[0] * pCfg->TIC[0]);
+
+    // update Vs values:
     int kv = -1;
     map<double, ImageFrame>::iterator frame_i;
     for (frame_i = all_image_frame.begin(); frame_i != all_image_frame.end(); frame_i++)
@@ -855,23 +866,34 @@ bool Estimator::visualInitialAlign()
         }
     }
 
-    Matrix3d R0 = Utility::g2R(g);
-    double yaw = Utility::R2ypr(R0 * Rs[0]).x();
-    R0 = Utility::ypr2R(Eigen::Vector3d{-yaw, 0, 0}) * R0;
-    g = R0 * g;
-    //Matrix3d rot_diff = R0 * Rs[0].transpose();
-    Matrix3d rot_diff = R0;
-    for (int i = 0; i <= frame_count; i++)
+    // from gravity to compute yaw on tangent space, and apply the correction to gravity:
     {
-        Ps[i] = rot_diff * Ps[i];
-        Rs[i] = rot_diff * Rs[i];
-        Vs[i] = rot_diff * Vs[i];
+        double yaw;
+        Eigen::Matrix3d R0;
+        // compute rotation between refined gravity and absolute z axis (world frame):
+        R0 = Utility::g2R(g);
+        yaw = Utility::R2y_rad(R0 * Rs[0]);
+        R0 = Utility::y2R_rad(-yaw) * R0;
+        // correction:
+        g = R0 * g;
+        //Matrix3d rot_diff = R0 * Rs[0].transpose();
+        Matrix3d rot_diff = R0;
+        for (int i = 0; i <= frame_count; i++)
+        {
+            Ps[i] = rot_diff * Ps[i];
+            Rs[i] = rot_diff * Rs[i];
+            Vs[i] = rot_diff * Vs[i];
+        }
+        // debug:
+        PRINT_DEBUG("g0     %s", Lie::to_string(g.transpose()).c_str());
+        PRINT_DEBUG("my R0  %s", Lie::to_string(Utility::R2ypr(Rs[0]).transpose()).c_str()); 
     }
-    ROS_DEBUG_STREAM("g0     " << g.transpose());
-    ROS_DEBUG_STREAM("my R0  " << Utility::R2ypr(Rs[0]).transpose()); 
 
-    f_manager.clearDepth();
-    f_manager.triangulate(frame_count, Ps, Rs, tic, ric);
+    // update fM and re-triangulate:
+    {
+        f_manager.clearDepth();
+        f_manager.triangulate(frame_count, Ps, Rs, tic, ric);
+    }
 
     return true;
 }

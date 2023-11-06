@@ -88,6 +88,24 @@ class Utility
 
         return ypr / M_PI * 180.0;
     }
+    
+    // Mostly used:
+    static double R2y_rad(const Eigen::Matrix3d &R)
+    {
+        Eigen::Vector3d n = R.col(0);
+        const double y = atan2(n(1), n(0));
+        return y;
+    }
+
+    // Mostly used:
+    static Eigen::Matrix3d y2R_rad(const double y)
+    {
+        Eigen::Matrix3d Rz;
+        Rz <<   cos(y), -sin(y), 0,
+                sin(y), cos(y), 0,
+                0, 0, 1;
+        return Rz;
+    }
 
     template <typename Derived>
     static Eigen::Matrix<typename Derived::Scalar, 3, 3> ypr2R(const Eigen::MatrixBase<Derived> &ypr)
