@@ -264,7 +264,7 @@ map<int, vector<pair<int, Eigen::Matrix<double, 7, 1>>>> FeatureTracker::trackIm
         double x, y ,z;
         x = cur_un_pts[i].x;
         y = cur_un_pts[i].y;
-        z = 1;
+        z = 1; // no depth
         double p_u, p_v;
         p_u = cur_pts[i].x;
         p_v = cur_pts[i].y;

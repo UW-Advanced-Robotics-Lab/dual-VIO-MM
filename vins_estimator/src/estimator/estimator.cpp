@@ -464,9 +464,9 @@ void Estimator::processImage(const map<int, vector<pair<int, Eigen::Matrix<doubl
     Headers[frame_count] = header;
 
     ImageFrame imageframe(image, header);
-    imageframe.pre_integration = tmp_pre_integration;
+    imageframe.pre_integration = tmp_pre_integration; // assign previous pre-integration
     all_image_frame.insert(make_pair(header, imageframe));
-    tmp_pre_integration = new IntegrationBase{acc_0, gyr_0, Bas[frame_count], Bgs[frame_count], pCfg};
+    tmp_pre_integration = new IntegrationBase{acc_0, gyr_0, Bas[frame_count], Bgs[frame_count], pCfg}; // prep for next image
 
     if(pCfg->ESTIMATE_EXTRINSIC == 2)
     {
@@ -628,7 +628,9 @@ void Estimator::processImage(const map<int, vector<pair<int, Eigen::Matrix<doubl
 bool Estimator::initialStructure()
 {
     TicToc t_sfm;
-    //check imu observibility
+    /**************************
+     * check imu observibility
+     * ************************/
     {
         map<double, ImageFrame>::iterator frame_it;
         Vector3d sum_g;
@@ -656,10 +658,13 @@ bool Estimator::initialStructure()
             //return false;
         }
     }
+    
+    /**************************
+     * check visual observibility
+     * ************************/
     // global sfm
     Quaterniond Q[frame_count + 1];
     Vector3d T[frame_count + 1];
-    map<int, Vector3d> sfm_tracked_points;
 
     // - collection of x,y feature points into feature vector for each frame:
     vector<SFMFeature> sfm_f;
@@ -685,86 +690,119 @@ bool Estimator::initialStructure()
     if (!relativePose(relative_R, relative_T, l))
     {
         ROS_INFO("Not enough features or parallax; Move device around");
+        PRINT_ERROR("Not enough features or parallax; Move device around");
         return false;
     }
-
+    
+    /**************************
+     * Construct SfM problem
+     * ************************/
     // - Construct SfM:
     GlobalSFM sfm;
+    map<int, Vector3d> sfm_tracked_points;
+
     if(!sfm.construct(frame_count + 1, Q, T, l,
               relative_R, relative_T,
               sfm_f, sfm_tracked_points))
     {
         ROS_DEBUG("global SFM failed!");
+        PRINT_ERROR("global SFM failed!");
         marginalization_flag = MARGIN_OLD;
         return false;
     }
-
+    
+    /**************************
+     * Solve SfM problem
+     * ************************/
     //solve pnp for all frame
     map<double, ImageFrame>::iterator frame_it;
     map<int, Vector3d>::iterator it;
     frame_it = all_image_frame.begin( );
+    // - iterate through all feature images:
     for (int i = 0; frame_it != all_image_frame.end( ); frame_it++)
     {
         // provide initial guess
-        cv::Mat r, rvec, t, D, tmp_r;
-        if((frame_it->first) == Headers[i])
+        if((frame_it->first) == Headers[i]) // if image frames == header@i frame
         {
             frame_it->second.is_key_frame = true;
+            // correct camera orientation --> align with imu body frame orientation:
             frame_it->second.R = Q[i].toRotationMatrix() * pCfg->RIC[0].transpose();
             frame_it->second.T = T[i];
             i++;
             continue;
         }
-        if((frame_it->first) > Headers[i])
+        if((frame_it->first) > Headers[i]) // if image frames appear later than header@i frame
         {
             i++;
         }
-        Matrix3d R_inital = (Q[i].inverse()).toRotationMatrix();
-        Vector3d P_inital = - R_inital * T[i];
-        cv::eigen2cv(R_inital, tmp_r);
-        cv::Rodrigues(tmp_r, rvec);
-        cv::eigen2cv(P_inital, t);
 
+        // init:
         frame_it->second.is_key_frame = false;
         vector<cv::Point3f> pts_3_vector;
         vector<cv::Point2f> pts_2_vector;
+        // - iterate through feature_points <feature_id, vector of mapped points>
         for (auto &id_pts : frame_it->second.points)
         {
             int feature_id = id_pts.first;
-            for (auto &i_p : id_pts.second)
+            it = sfm_tracked_points.find(feature_id); 
+            if(it != sfm_tracked_points.end())
             {
-                it = sfm_tracked_points.find(feature_id);
-                if(it != sfm_tracked_points.end())
+                Vector3d world_pts = it->second;
+                cv::Point3f pts_3(world_pts(0), world_pts(1), world_pts(2));
+                // iterate through corresponding image points (vector of mapped points)
+                for (auto &i_p : id_pts.second) // i_p : <camera_id, xyz_uv_velxy>
                 {
-                    Vector3d world_pts = it->second;
-                    cv::Point3f pts_3(world_pts(0), world_pts(1), world_pts(2));
-                    pts_3_vector.push_back(pts_3);
-                    Vector2d img_pts = i_p.second.head<2>();
+                    cv::Point3f pts_3_copy = pts_3; // (make a copy)
+                    pts_3_vector.push_back(pts_3_copy);
+                    Vector2d img_pts = i_p.second.head<2>(); // x,y (undistorted points)
                     cv::Point2f pts_2(img_pts(0), img_pts(1));
                     pts_2_vector.push_back(pts_2);
                 }
             }
         }
-        cv::Mat K = (cv::Mat_<double>(3, 3) << 1, 0, 0, 0, 1, 0, 0, 0, 1);     
+        // - minimum 6 pairs of 3d & 2d points to solve pnp:
         if(pts_3_vector.size() < 6)
         {
             cout << "pts_3_vector size " << pts_3_vector.size() << endl;
             ROS_DEBUG("Not enough points for solve pnp !");
+            PRINT_ERROR("Not enough points for solve pnp !");
             return false;
         }
-        if (! cv::solvePnP(pts_3_vector, pts_2_vector, K, D, rvec, t, 1))
+        // - solve:
+        // Placeholders:
+        cv::Mat rvec, tvec; // placeholder result
+        cv::Mat r, tmp_r; // buffer
+        // Constants:
+        cv::Mat K = (cv::Mat_<double>(3, 3) << 1, 0, 0, 0, 1, 0, 0, 0, 1);
+        cv::Mat D; // no distortion
+        // Initial Guess:
+        const bool ININITAL_GUESS = true;
+        // translate  imu body frame --> camera frame
+        Matrix3d R_inital = (Q[i].inverse()).toRotationMatrix();
+        Vector3d P_inital = - R_inital * T[i];
+        // translate init guess variables:
+        cv::eigen2cv(R_inital, tmp_r);
+        cv::Rodrigues(tmp_r, rvec);
+        cv::eigen2cv(P_inital, tvec);
+        // [solve PnP in camera space]
+        //cv::solvePnP (InputArray objectPoints, InputArray imagePoints, 
+        //      InputArray cameraMatrix, InputArray distCoeffs, 
+        //      OutputArray rvec, OutputArray tvec, bool useExtrinsicGuess=false, int flags=SOLVEPNP_ITERATIVE)
+        if (! cv::solvePnP(pts_3_vector, pts_2_vector, K, D, rvec, tvec, ININITAL_GUESS))
         {
             ROS_DEBUG("solve pnp fail!");
+            PRINT_ERROR("solve pnp fail!");
             return false;
         }
+        // translate  camera frame --> imu body frame
         cv::Rodrigues(rvec, r);
         MatrixXd R_pnp,tmp_R_pnp;
         cv::cv2eigen(r, tmp_R_pnp);
         R_pnp = tmp_R_pnp.transpose();
         MatrixXd T_pnp;
-        cv::cv2eigen(t, T_pnp);
+        cv::cv2eigen(tvec, T_pnp);
         T_pnp = R_pnp * (-T_pnp);
-        frame_it->second.R = R_pnp * pCfg->RIC[0].transpose();
+        frame_it->second.R = R_pnp * pCfg->RIC[0].transpose(); // apply extrinsic pose correction
         frame_it->second.T = T_pnp;
     }
     if (visualInitialAlign())

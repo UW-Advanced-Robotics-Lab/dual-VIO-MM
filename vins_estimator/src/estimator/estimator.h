@@ -182,7 +182,7 @@ class Estimator
     vector<double *> last_marginalization_parameter_blocks;
     /* ************************************ */
 
-    map<double, ImageFrame> all_image_frame;
+    map<double, ImageFrame> all_image_frame; // map sorted by time header
     IntegrationBase *tmp_pre_integration;
 
     Eigen::Vector3d initP;

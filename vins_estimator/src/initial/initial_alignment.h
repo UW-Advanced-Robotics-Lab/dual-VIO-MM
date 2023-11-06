@@ -29,6 +29,7 @@ class ImageFrame
         {
             points = _points;
         };
+        // map<feature_id, vector<pair<camera_id, xyz_uv_velxy>>
         map<int, vector<pair<int, Eigen::Matrix<double, 7, 1>> > > points;
         double t;
         Matrix3d R;
