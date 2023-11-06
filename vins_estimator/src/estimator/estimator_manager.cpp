@@ -237,9 +237,12 @@ void EstimatorManager::processMeasurements_thread()
 #if (FEATURE_ENABLE_VICON_SUPPORT)
                 // TODO: should we sync against the image to have alignment evaluation? (or a separate topic)
                 // queue vicon to publisher later:
-                int i = 0;
                 for(size_t id = BASE_DEV; id < MAX_NUM_DEVICES; id++)
                 {
+#   if (FEATURE_ENABLE_VICON_ONLY_AFTER_INIT_SFM)
+                    if (pEsts[id]->solver_flag == Estimator::INITIAL) // do not process till SFM initialized
+                        continue; //
+#   endif //(FEATURE_ENABLE_VICON_ONLY_AFTER_INIT_SFM)
                     this->m_vicon[id].guard.lock();
                     while(! this->m_vicon[id].data.empty())
                     {
