@@ -397,11 +397,9 @@ void queue_ViconOdometry_safe(const Vector7d_t &vicon_msg, const double t, const
     // Note: it seems that the estimator may already predicting during the initialization
     init_vicon |= (!is_estimator_publishing);    
 #   endif
-#   if (FEATURE_ENABLE_VICON_ZEROING_WRT_BASE_SUPPORT)
-    init_vicon &= (device_id == BASE_DEV); // only init on base device;
-#   endif
     // capture:
-    if (init_vicon) 
+#   if (FEATURE_ENABLE_VICON_ZEROING_WRT_BASE_SUPPORT)
+    if (init_vicon & (device_id == BASE_DEV)) // only init on base device;
     {
         // SO3 --proj--> SO2:
         // Extract the angle about the z-axis (ensure SO2 with z axis aligned up)
@@ -410,19 +408,44 @@ void queue_ViconOdometry_safe(const Vector7d_t &vicon_msg, const double t, const
              sin(theta),  cos(theta), 0,
                       0,           0, 1; //TODO: should we enforce it to base estimator in general?
         // T0_inv : for offset correction
+
         m_buf[device_id].vicon_R0 = R.transpose();
         m_buf[device_id].vicon_p0 = - p;
         m_buf[device_id].vicon_inited = true;
-
-#   if (FEATURE_ENABLE_VICON_ZEROING_WRT_BASE_SUPPORT)
         // init EE from Base config:
         m_buf[EE_DEV].vicon_inited = true;
         m_buf[EE_DEV].vicon_R0 = m_buf[BASE_DEV].vicon_R0;
         m_buf[EE_DEV].vicon_p0 = m_buf[BASE_DEV].vicon_p0;
         // PRINT_DEBUG("vicon_R0 = \n%s", Lie::to_string(m_buf[BASE_DEV].vicon_R0).c_str());
         // PRINT_DEBUG("vicon_p0 = %s", Lie::to_string(m_buf[BASE_DEV].vicon_p0).c_str());
-#   endif // (FEATURE_ENABLE_VICON_ZEROING_WRT_BASE_SUPPORT)
     }
+#   else
+    if (init_vicon)
+    {
+        const Lie::SO3 R_corr(
+        (Lie::SO3() <<  1,  0,  0,
+                        0,  0,  1,
+                        0, -1,  0).finished());
+        
+        if (device_id == EE_DEV)
+        {
+            R = R * R_corr;
+        }
+        // SO3 --proj--> SO2:
+        // Extract the angle about the z-axis (ensure SO2 with z axis aligned up)
+        //      otherwise, the intial pose may cause drift overtime:
+        double theta = atan2(R(1, 0), R(0, 0));
+        R << cos(theta), -sin(theta), 0,
+             sin(theta),  cos(theta), 0,
+                      0,           0, 1;
+        // T0_inv : for offset correction
+
+        m_buf[device_id].vicon_R0 = R.transpose();
+        m_buf[device_id].vicon_p0 = - p;
+        m_buf[device_id].vicon_inited = true;
+
+    }
+#   endif // (FEATURE_ENABLE_VICON_ZEROING_WRT_BASE_SUPPORT)
 
     // apply zeroing correction:
     {

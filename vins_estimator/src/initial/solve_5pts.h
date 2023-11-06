@@ -24,9 +24,9 @@ using namespace Eigen;
 class MotionEstimator
 {
   public:
-
-    bool solveRelativeRT(const vector<pair<Vector3d, Vector3d>> &corres, Matrix3d &R, Vector3d &T);
-
+    bool solveRelativeRT(const vector<pair<Vector3d, Vector3d>> &corres, Matrix3d &Rotation, Vector3d &Translation, const double ransac_threshold);
+    bool solveRelativeRT(const vector<cv::Point2f> &ll, const vector<cv::Point2f>& rr, Matrix3d &Rotation, Vector3d &Translation, const double ransac_threshold);
+    
   private:
     double testTriangulation(const vector<cv::Point2f> &l,
                              const vector<cv::Point2f> &r,

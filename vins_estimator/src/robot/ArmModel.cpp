@@ -18,6 +18,7 @@ typedef struct{
     double          tip_frame_ub;
 } link_t;
 
+// Arm Model Configuration:
 const link_t ARM_LINKS[ARM_NUM_LINKS] = {
     { // F0-->F1
         .name = "base_B3350",

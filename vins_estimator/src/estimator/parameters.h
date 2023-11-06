@@ -202,7 +202,10 @@ using namespace std;
 #   define FEATURE_VIZ_PUBLISH                              (( ENABLED) & (FEATURE_DEBUGGING)) 
 // debug only features (additional images):
 #   define FEATURE_DEBUG_IMAGE_AT_CONNECTIONS               ((DISABLED) & (FEATURE_DEBUGGING))
-
+// ----------------------------------------------------------------
+// : Hyperparams :
+// ----------------------------------------------------------------
+#define ESTIMATOR_CPP_IMU_EXCITATION_STRICT_MIN_VAR_THRESHOLD      (0.25f)
 // ----------------------------------------------------------------
 // : Debug printfs :
 // ----------------------------------------------------------------
@@ -325,6 +328,9 @@ typedef struct{
     double              BIAS_GYR_THRESHOLD; //TODO: should we apply these to individual device config?
     double              BIAS_ACC_THRESHOLD; //TODO: should we apply these to individual device config?
     double              SOLVER_TIME;        //
+    // - SfM:
+    double              MIN_PARALLAX_SFM;   //
+    double              RANSAC_THRESHOLD_SFM;
     // - Const Params:
     Eigen::Vector3d     G;                  // gravity constant
     // - Optionals: GT vicon

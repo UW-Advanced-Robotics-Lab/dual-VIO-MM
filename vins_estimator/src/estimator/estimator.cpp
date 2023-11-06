@@ -648,9 +648,9 @@ bool Estimator::initialStructure()
             var += (tmp_g - aver_g).transpose() * (tmp_g - aver_g);
             //cout << "frame g " << tmp_g.transpose() << endl;
         }
-        var = sqrt(var / ((int)all_image_frame.size() - 1));
+        var = sqrt(var / ((int)all_image_frame.size() - 1)); //TODO: [opt] run-time optimization: DO NOT USE sqrt();
         //ROS_WARN("IMU variation %f!", var);
-        if(var < 0.25)
+        if(var < ESTIMATOR_CPP_IMU_EXCITATION_STRICT_MIN_VAR_THRESHOLD) //if(var < 0.25)
         {
             ROS_INFO("IMU excitation not enouth!");
             //return false;
@@ -660,6 +660,8 @@ bool Estimator::initialStructure()
     Quaterniond Q[frame_count + 1];
     Vector3d T[frame_count + 1];
     map<int, Vector3d> sfm_tracked_points;
+
+    // - collection of x,y feature points into feature vector for each frame:
     vector<SFMFeature> sfm_f;
     for (auto &it_per_id : f_manager.feature)
     {
@@ -669,12 +671,14 @@ bool Estimator::initialStructure()
         tmp_feature.id = it_per_id.feature_id;
         for (auto &it_per_frame : it_per_id.feature_per_frame)
         {
-            imu_j++;
+            imu_j++;//TODO: [opt] move imu_j++ after loop, so minimize subtraction
             Vector3d pts_j = it_per_frame.point;
             tmp_feature.observation.push_back(make_pair(imu_j, Eigen::Vector2d{pts_j.x(), pts_j.y()}));
         }
         sfm_f.push_back(tmp_feature);
     } 
+
+    // - Check Feature Parallax:
     Matrix3d relative_R;
     Vector3d relative_T;
     int l;
@@ -683,6 +687,8 @@ bool Estimator::initialStructure()
         ROS_INFO("Not enough features or parallax; Move device around");
         return false;
     }
+
+    // - Construct SfM:
     GlobalSFM sfm;
     if(!sfm.construct(frame_count + 1, Q, T, l,
               relative_R, relative_T,
@@ -843,20 +849,29 @@ bool Estimator::relativePose(Matrix3d &relative_R, Vector3d &relative_T, int &l)
         {
             double sum_parallax = 0;
             double average_parallax;
+            vector<cv::Point2f> ll, rr;
             for (int j = 0; j < int(corres.size()); j++)
             {
-                Vector2d pts_0(corres[j].first(0), corres[j].first(1));
-                Vector2d pts_1(corres[j].second(0), corres[j].second(1));
-                double parallax = (pts_0 - pts_1).norm();
+                cv::Point2f pts_0(corres[j].first(0), corres[j].first(1));
+                cv::Point2f pts_1(corres[j].second(0), corres[j].second(1));
+                ll.push_back(pts_0);
+                rr.push_back(pts_1);
+                cv::Point2f delta = pts_1 - pts_0;
+                // [opt] cv norm does not exist for Point2f, manually implemented instead of eigen norm
+                double parallax = cv::sqrt(delta.x * delta.x + delta.y * delta.y); 
                 sum_parallax = sum_parallax + parallax;
-
             }
-            average_parallax = 1.0 * sum_parallax / int(corres.size());
-            if(average_parallax * 460 > 30 && m_estimator.solveRelativeRT(corres, relative_R, relative_T))
+            average_parallax = 1.0 * sum_parallax / int(corres.size()); // [NOTE]: originally, it was hard coded 460
+            if(average_parallax > pCfg->MIN_PARALLAX_SFM)
             {
-                l = i;
-                ROS_DEBUG("average_parallax %f choose l %d and newest frame to triangulate the whole structure", average_parallax * 460, l);
-                return true;
+                // [Ours]: [opt] reduce a redundant for loop to recollect points again
+                bool solve_5pts = m_estimator.solveRelativeRT(ll, rr, relative_R, relative_T, pCfg->RANSAC_THRESHOLD_SFM);
+                if (solve_5pts)
+                {
+                    l = i;
+                    ROS_DEBUG("average_parallax %f choose l %d and newest frame to triangulate the whole structure", average_parallax, l);
+                    return true;
+                }
             }
         }
     }
@@ -1053,6 +1068,9 @@ bool Estimator::failureDetection()
 
 void Estimator::optimization() // TODO: add arm odometry into optimization problem
 {
+    /*********************************
+     * P O S E - G R A P H - O P T.  *
+     * *******************************/
 #if (FEATURE_ENABLE_PERFORMANCE_EVAL_ESTIMATOR)
     this->perf.opt_total_count ++;
 #endif // (FEATURE_ENABLE_PERFORMANCE_EVAL_ESTIMATOR)
@@ -1115,20 +1133,6 @@ void Estimator::optimization() // TODO: add arm odometry into optimization probl
         }
     }
 
-#if (FEATURE_ENABLE_ARM_ODOMETRY_MARGINALIZATION)
-    // - TODO: Arm Odometry Residuals
-    if (pCfg->DEVICE_ID == EE_DEV && this->arm_inited) // EE only when initialized
-    {
-        for (int i = 0; i < frame_count-1; i++)
-        {
-            // TODO: do not use arm factor if base imu is not stable?
-            ARMFactor* arm_factor = new ARMFactor(arm_Rs[i],arm_Ps[i]);
-            // ARMFactor* arm_factor = new ARMFactor(arm_Rs[i], arm_Ps[i]);
-            problem.AddResidualBlock(arm_factor, NULL, para_Pose[i]);
-        }
-    }
-#endif //(FEATURE_ENABLE_ARM_ODOMETRY_MARGINALIZATION)
-
     // - Camera Feature Residuals
     int f_m_cnt = 0;
     int feature_index = -1;
@@ -1178,10 +1182,31 @@ void Estimator::optimization() // TODO: add arm odometry into optimization probl
             f_m_cnt++;
         }
     }
-
     ROS_DEBUG("visual measurement count: %d", f_m_cnt);
+
+#if (FEATURE_ENABLE_ARM_ODOMETRY_MARGINALIZATION)
+    // - TODO: Arm Odometry Residuals
+# if (FEATURE_ENABLE_ARM_ODOMETRY_ZEROING) 
+    if (pCfg->DEVICE_ID == EE_DEV && this->arm_inited) // EE only when initialized
+# else
+    if (pCfg->DEVICE_ID == EE_DEV) // EE only when initialized
+# endif
+    {
+        for (int i = 0; i < frame_count-1; i++)
+        {
+            // TODO: do not use arm factor if base imu is not stable?
+            ARMFactor* arm_factor = new ARMFactor(arm_Rs[i],arm_Ps[i]);
+            // ARMFactor* arm_factor = new ARMFactor(arm_Rs[i], arm_Ps[i]);
+            problem.AddResidualBlock(arm_factor, NULL, para_Pose[i]);
+        }
+    }
+#endif //(FEATURE_ENABLE_ARM_ODOMETRY_MARGINALIZATION)
+
     TOK(t_prepare);
 
+    /*********************************
+     * M A R G I N A L I Z A T I O N *
+     * *******************************/
     ceres::Solver::Options options;
 
     options.linear_solver_type = ceres::DENSE_SCHUR;

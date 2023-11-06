@@ -80,6 +80,9 @@
         cfg->SOLVER_TIME    = fsSettings["max_solver_time"];
         cfg->NUM_ITERATIONS = fsSettings["max_num_iterations"];
         cfg->MIN_PARALLAX   = static_cast<float>(fsSettings["keyframe_parallax"]) / cfg->FOCAL_LENGTH;
+        // # SfM
+        cfg->MIN_PARALLAX_SFM       = static_cast<float>(fsSettings["initStruct_parallax"]) / cfg->FOCAL_LENGTH;
+        cfg->RANSAC_THRESHOLD_SFM   = static_cast<float>(fsSettings["SfM_ransac_threshold"]) / cfg->FOCAL_LENGTH;
 
         // # other parameters
         cfg->INIT_DEPTH = 5.0;

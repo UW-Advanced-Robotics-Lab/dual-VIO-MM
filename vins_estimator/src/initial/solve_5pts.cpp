@@ -201,7 +201,7 @@ namespace cv {
 }
 
 
-bool MotionEstimator::solveRelativeRT(const vector<pair<Vector3d, Vector3d>> &corres, Matrix3d &Rotation, Vector3d &Translation)
+bool MotionEstimator::solveRelativeRT(const vector<pair<Vector3d, Vector3d>> &corres, Matrix3d &Rotation, Vector3d &Translation, const double ransac_threshold)
 {
     if (corres.size() >= 15)
     {
@@ -212,7 +212,7 @@ bool MotionEstimator::solveRelativeRT(const vector<pair<Vector3d, Vector3d>> &co
             rr.push_back(cv::Point2f(corres[i].second(0), corres[i].second(1)));
         }
         cv::Mat mask;
-        cv::Mat E = cv::findFundamentalMat(ll, rr, cv::FM_RANSAC, 0.3 / 460, 0.99, mask);
+        cv::Mat E = cv::findFundamentalMat(ll, rr, cv::FM_RANSAC, ransac_threshold, 0.99, mask); // [NOTE] originally hardcoded: 0.3 / 460
         cv::Mat cameraMatrix = (cv::Mat_<double>(3, 3) << 1, 0, 0, 0, 1, 0, 0, 0, 1);
         cv::Mat rot, trans;
         int inlier_cnt = cv::recoverPose(E, ll, rr, cameraMatrix, rot, trans, mask);
@@ -235,6 +235,31 @@ bool MotionEstimator::solveRelativeRT(const vector<pair<Vector3d, Vector3d>> &co
             return false;
     }
     return false;
+}
+
+bool MotionEstimator::solveRelativeRT(const vector<cv::Point2f> &ll, const vector<cv::Point2f>& rr, Matrix3d &Rotation, Vector3d &Translation, const double ransac_threshold)
+{
+    // [Pre-req]: assuming corres.size() > 15
+    cv::Mat mask;
+    cv::Mat E = cv::findFundamentalMat(ll, rr, cv::FM_RANSAC, ransac_threshold, 0.99, mask); // [NOTE] originally hardcoded: 0.3 / 460
+    cv::Mat cameraMatrix = (cv::Mat_<double>(3, 3) << 1, 0, 0, 0, 1, 0, 0, 0, 1);
+    cv::Mat rot, trans;
+    int inlier_cnt = cv::recoverPose(E, ll, rr, cameraMatrix, rot, trans, mask);
+    //cout << "inlier_cnt " << inlier_cnt << endl;
+
+    Eigen::Matrix3d R;
+    Eigen::Vector3d T;
+    for (int i = 0; i < 3; i++)
+    {   
+        T(i) = trans.at<double>(i, 0);
+        for (int j = 0; j < 3; j++)
+            R(i, j) = rot.at<double>(i, j);
+    }
+
+    Rotation = R.transpose();
+    Translation = -R.transpose() * T;
+    
+    return (bool)(inlier_cnt > 12); // [TODO: inline threshold]
 }
 
 

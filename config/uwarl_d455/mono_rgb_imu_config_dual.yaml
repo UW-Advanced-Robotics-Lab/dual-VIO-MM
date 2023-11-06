@@ -121,6 +121,10 @@ max_solver_time: 0.04  # max solver itration time (ms), to guarantee real time
 max_num_iterations: 8   # max solver itrations, to guarantee real time
 keyframe_parallax: 10.0 # keyframe selection threshold (pixel)
 
+# SfM:
+initStruct_parallax: 30.0 # initial structure selection threshold (pixel) SfM: 30.0/460
+SfM_ransac_threshold: 0.3 # ransac threshold (pixel): 0.3/460
+
 # [IMU Configuration]
 #imu parameters       The more accurate parameters you provide, the better performance
 # - [cam0]

@@ -81,6 +81,13 @@ typedef struct{
         arm_buffer_t                    arm_buf;
         arm_data_t                      arm_prev_data;
 
+        typedef struct{
+            Lie::SO3 latest_R[MAX_NUM_DEVICES];
+            Lie::R3  latest_P[MAX_NUM_DEVICES];
+            bool     latest_RP_ready[MAX_NUM_DEVICES];
+        } manager_data_t;
+        manager_data_t                  m_data;
+
         std::shared_ptr<ArmModel>       pArm;
         
         bool _getJointVector_safe(pair<double, Vector7d_t> &jnt_buf, const double t, const bool if_pop);
