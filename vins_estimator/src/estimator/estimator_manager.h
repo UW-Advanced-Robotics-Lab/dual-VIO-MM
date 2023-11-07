@@ -73,8 +73,12 @@ typedef struct{
             // output:
             double      arm_pose_header = -1; // [UNUSED]
             Lie::SE3    arm_pose_st;
-            Lie::SE3    arm_pose_ts; // TODO: lets implement the odometry backwards
             Lie::SE3    arm_pose_st_0;
+#   if (FEATURE_ENABLE_ARM_ODOMETRY_EE_TO_BASE)
+            Lie::SE3    arm_pose_ts; // TODO: lets implement the odometry backwards
+            Lie::SE3    arm_pose_ts_0;
+#   endif //(FEATURE_ENABLE_ARM_ODOMETRY_EE_TO_BASE)
+
             bool        arm_pose_ready = false;
             bool        arm_pose_inited = false;
         } arm_data_t;

@@ -512,6 +512,7 @@ void Estimator::processImage(const map<int, vector<pair<int, Eigen::Matrix<doubl
             }
         }
 
+    // TODO: add support for overlapped region
 #if (FEATURE_ENABLE_STEREO_SUPPORT) // TODO: support for stereo (for overlap regions of two cameras)
         // stereo + IMU initilization
         if(pCfg->STEREO && pCfg->USE_IMU)
@@ -1244,13 +1245,17 @@ void Estimator::optimization() // TODO: add arm odometry into optimization probl
     }
     ROS_DEBUG("visual measurement count: %d", f_m_cnt);
 
-#if (FEATURE_ENABLE_ARM_ODOMETRY_MARGINALIZATION)
+#if (FEATURE_ENABLE_ARM_ODOMETRY_FACTOR)
     // - TODO: Arm Odometry Residuals
 # if (FEATURE_ENABLE_ARM_ODOMETRY_ZEROING) 
+#   if (FEATURE_ENABLE_ARM_ODOMETRY_FACTOR_TO_BASE)
+    if (this->arm_inited)
+#   else //(!FEATURE_ENABLE_ARM_ODOMETRY_FACTOR_TO_BASE)
     if (pCfg->DEVICE_ID == EE_DEV && this->arm_inited) // EE only when initialized
-# else
+#   endif 
+# else // (!FEATURE_ENABLE_ARM_ODOMETRY_ZEROING) 
     if (pCfg->DEVICE_ID == EE_DEV) // EE only when initialized
-# endif
+#  endif
     {
         for (int i = 0; i < frame_count-1; i++)
         {
@@ -1260,7 +1265,7 @@ void Estimator::optimization() // TODO: add arm odometry into optimization probl
             problem.AddResidualBlock(arm_factor, NULL, para_Pose[i]);
         }
     }
-#endif //(FEATURE_ENABLE_ARM_ODOMETRY_MARGINALIZATION)
+#endif //(FEATURE_ENABLE_ARM_ODOMETRY_FACTOR)
 
     TOK(t_prepare);
 

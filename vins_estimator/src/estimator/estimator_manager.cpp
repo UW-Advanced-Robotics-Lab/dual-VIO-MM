@@ -190,7 +190,12 @@ void EstimatorManager::processMeasurements_thread()
                         // TODO: [@urgent] please investigate the source of error that does not allow the process and publish to be separated
                         pEsts[id]->mProcess.lock();
                         TIK(ellapsed_process_i);
-                        pEsts[id]->processImage(feature[id].second, feature[id].first, arm_prev_data.arm_pose_st);
+#if (FEATURE_ENABLE_ARM_ODOMETRY_EE_TO_BASE)
+                        Lie::SE3 pose = (id == EE_DEV)?arm_prev_data.arm_pose_st:arm_prev_data.arm_pose_ts;
+#else
+                        Lie::SE3 pose = arm_prev_data.arm_pose_st;
+#endif //(!FEATURE_ENABLE_ARM_ODOMETRY_EE_TO_BASE)
+                        pEsts[id]->processImage(feature[id].second, feature[id].first, pose);
                         prevTime[id] = curTime[id];
                         TOK_TAG(ellapsed_process_i,"img_proc");
 
@@ -370,17 +375,28 @@ void EstimatorManager::_postProcessArmJnts_unsafe(const double t, const Vector7d
     const Lie::SE3 Tc_b = Lie::inverse_SE3(Tb);
 
     // Constant rotation correction, [you may use https://ninja-calc.mbedded.ninja/calculators/mathematics/geometry/3d-rotations]
-    const Lie::SO3 R_corr(
+    const Lie::SO3 R_corr_c2w(
         (Lie::SO3() <<  1,  0,  0,
                         0,  0, -1,
                         0,  1,  0).finished()
     ); // convert from camera axis back to world axis
-    const Lie::SO3 R_corr_robot(
+    const Lie::SO3 R_corr_w2r(
         (Lie::SO3() <<  0, -1,  0,
                         1,  0,  0,
                         0,  0,  1).finished()
     ); // convert from world axis back to robot axis
-
+    const Lie::SE3 T_corr_r2w(
+        (Lie::SE3() <<  0,  1,  0, 0, 
+                       -1,  0,  0, 0, 
+                        0,  0,  1, 0,
+                        0,  0,  0, 1 ).finished()
+    ); // convert from robot axis back to world axis 
+    const Lie::SE3 T_corr_r2c(
+        (Lie::SE3() <<  0,  0,  1,  0,
+                       -1,  0,  0,  0,
+                        0, -1,  0,  0, 
+                        0,  0,  0,  1 ).finished()
+    ); // convert from robot axis back to base cam axis
     // placeholders:
     Lie::SE3 T_c, g_st, T_b, T_e;
 
@@ -393,7 +409,8 @@ void EstimatorManager::_postProcessArmJnts_unsafe(const double t, const Vector7d
     {
         // 1. fetch R,p previous:
         Lie::R3 p_c; Lie::SO3 R_c;
-
+        Lie::R3 p_c2; Lie::SO3 R_c2;
+        
 #   if (FEATURE_ENABLE_ARM_VICON_SUPPORT) // stub Ground Truth Vicon data:
         const Lie::SO3 R_corr2(
             (Lie::SO3() <<  0, -1,  0,
@@ -409,18 +426,22 @@ void EstimatorManager::_postProcessArmJnts_unsafe(const double t, const Vector7d
         T_c = Lie::SE3_from_SO3xR3(R_c * R_corr2, p_c); // vicon is aligned with world axis
         // - base estimator for orientation:
         // R_c = pEsts[BASE_DEV]->latest_Q.toRotationMatrix(); // previous frame
-        // T_c = Lie::SE3_from_SO3xR3(R_c * R_corr, p_c);
+        // T_c = Lie::SE3_from_SO3xR3(R_c * R_corr_c2w, p_c);
 #   else // feed in estimator latest state:
         p_c = m_data.latest_P[BASE_DEV]; // previous frame
-        R_c = m_data.latest_R[BASE_DEV] * R_corr; // previous frame
+        R_c = m_data.latest_R[BASE_DEV]; // previous frame
+        p_c2 = m_data.latest_P[EE_DEV]; // previous frame
+        R_c2 = m_data.latest_R[EE_DEV]; // previous frame
 
-        // correction:
-        queue_ArmOdometry_safe(arm_prev_data.t_header, R_c, p_c, BASE_DEV);
-
-        // convert to robot frame:
-        T_c = Lie::SE3_from_SO3xR3(R_c * R_corr_robot, p_c);// a coordinate transformation is needed
+        // convert frame axis -(R_corr_c2w)-> world frame axis -(R_corr_w2r)-> robot frame axis:
+        T_c = Lie::SE3_from_SO3xR3(((R_c * R_corr_c2w) * R_corr_w2r), p_c);// a coordinate transformation is needed
 #   endif // (!FEATURE_ENABLE_ARM_VICON_SUPPORT)
-        
+
+#   if ((FEATURE_ENABLE_ARM_ODOMETRY_VIZ) && (!FEATURE_ENABLE_ARM_ODOMETRY_EE_TO_BASE) )
+        // publish to the base channel if not used by arm odometry
+        queue_ArmOdometry_safe(arm_prev_data.t_header, R_c, p_c, BASE_DEV);
+#   endif //(FEATURE_ENABLE_ARM_ODOMETRY_VIZ)
+
         this->arm_prev_data.arm_pose_ready = true;
 
         // 2. [Arm] compute theta --> SE3:
@@ -429,16 +450,18 @@ void EstimatorManager::_postProcessArmJnts_unsafe(const double t, const Vector7d
         pArm->processJntAngles_unsafely();
         pArm->getEndEffectorPose_unsafely(g_st);
         
-        // // - rebase base cam frame onto the summit base frame
-        // T_b = Tc_b;
-        // // - rebase arm config onto the base frame
-        // T_b = T_b * g_st;
-        // // - apply tool tip frame
-        // T_b = T_b * Te;
-
         // Lie::SE3 T_out = T_c; // summit base if summit_base
-        Lie::SE3 T_out = T_c * Tc_b; // cam_base
-        T_e = T_out * g_st * Te; // ^s_T_{cam_EE} = ^s_T_{cam_base} * {cam_base}_T_{cam_EE} 
+        T_b = T_c * Tc_b; // cam_base
+        // ^s_T_{cam_EE} = ^s_T_{cam_base} * {cam_base}_T_{cam_EE}  
+        T_e = T_b * g_st * Te * T_corr_r2w; // world axis (ee camera axis @ 0config) // TODO: precompute const SE3
+
+#   if (FEATURE_ENABLE_ARM_ODOMETRY_EE_TO_BASE)
+        Lie::SE3 T_c2, T_b2;
+        // camera @ EE calib @ zero config is aligned with world axis
+        T_c2 = Lie::SE3_from_SO3xR3(R_c2 * R_corr_w2r, p_c2); // robot axis
+        T_b2 = T_c2 * Lie::inverse_SE3(Tc_b * g_st * Te); // robot axis
+        T_b2 = T_b2 * T_corr_r2c; // robot axis (base camera axis @ 0config)
+#   endif //(FEATURE_ENABLE_ARM_ODOMETRY_EE_TO_BASE)
         
         // NOTE: as the z-axis in tool frame is aligned with camera z-axis, no need to invert the coordinate axis
 // #   if (!FEATURE_ENABLE_ARM_VICON_SUPPORT) // stub Ground Truth Vicon data:
@@ -450,28 +473,34 @@ void EstimatorManager::_postProcessArmJnts_unsafe(const double t, const Vector7d
         if (this->arm_prev_data.arm_pose_ready && !this->arm_prev_data.arm_pose_inited)
         {   
             this->arm_prev_data.arm_pose_inited = true;
-            // p_c = pEsts[EE_DEV]->Ps[0]; // initial frame
-            // R_c = pEsts[EE_DEV]->Rs[0]; // initial frame
-            p_c = m_data.latest_P[EE_DEV]; // previous frame
-            R_c = m_data.latest_R[EE_DEV]; // previous frame
+            // p_c = m_data.latest_P[EE_DEV]; // previous frame
+            // R_c = m_data.latest_R[EE_DEV]; // previous frame
+            // instead, lets reuse:
             // T0_inv : for offset correction
-            Lie::SE3 T_est = Lie::SE3_from_SO3xR3(R_c, p_c);
-
+            Lie::SE3 T_est = Lie::SE3_from_SO3xR3(R_c2, p_c2); // camera axis
             this->arm_prev_data.arm_pose_st_0 = T_est * Lie::inverse_SE3(T_e);
             // only applying translational correction:
             this->arm_prev_data.arm_pose_st_0.block<3,3>(0,0) = Lie::SO3::Identity(); 
             // signal for initialization [only used with Zeroing for residualblock]
             pEsts[EE_DEV]->arm_inited = true;
+
+#     if (FEATURE_ENABLE_ARM_ODOMETRY_EE_TO_BASE)
+            // do the same for base:
+            T_est = Lie::SE3_from_SO3xR3(R_c, p_c); // camera axis
+            this->arm_prev_data.arm_pose_ts_0 = T_est * Lie::inverse_SE3(T_b2); 
+            this->arm_prev_data.arm_pose_ts_0.block<3,3>(0,0) = Lie::SO3::Identity();
+#     endif //(FEATURE_ENABLE_ARM_ODOMETRY_EE_TO_BASE)
         }
         
         // rebasing to the EE est frame:
         T_e = this->arm_prev_data.arm_pose_st_0 * T_e; 
-        T_out = this->arm_prev_data.arm_pose_st_0 * T_out; 
+        T_b = this->arm_prev_data.arm_pose_st_0 * T_b; 
+
 #   endif // (FEATURE_ENABLE_ARM_ODOMETRY_ZEROING) 
         
 
 #   if(FEATURE_ENABLE_ARM_ODOMETRY_VIZ)
-        pArm->storeTransformations_unsafely(T_out); // for arm visualization
+        pArm->storeTransformations_unsafely(T_b); // for arm visualization
         // publish immediately:
         Lie::SO3xR3_from_SE3(R_c, p_c, T_e); // reuse placeholder R_c, p_c
         queue_ArmOdometry_safe(arm_prev_data.t_header, R_c, p_c, EE_DEV);
@@ -481,6 +510,18 @@ void EstimatorManager::_postProcessArmJnts_unsafe(const double t, const Vector7d
         this->arm_prev_data.arm_pose_st = T_e;
         this->arm_prev_data.arm_pose_header = arm_prev_data.t_header;
         // PRINT_DEBUG("> ArmOdometry [%f]: \n R=\n%s \n p=\n%s", t, Lie::to_string(R).c_str(), Lie::to_string(p).c_str());
+
+#     if (FEATURE_ENABLE_ARM_ODOMETRY_EE_TO_BASE)
+        T_b2 = this->arm_prev_data.arm_pose_ts_0 * T_b2; 
+        // for base, project to SO2:
+        double yaw = Utility::R2y_rad(T_b2.block<3,3>(0,0));
+        T_b2.block<3,3>(0,0) = Utility::y2R_rad(yaw) * R_corr_c2w.transpose(); // camera axis
+        T_b2(2,3) = 0;
+        // publish immediately:
+        Lie::SO3xR3_from_SE3(R_c2, p_c2, T_b2); // reuse placeholder R_c2, p_c2
+        queue_ArmOdometry_safe(arm_prev_data.t_header, R_c2, p_c2, BASE_DEV);
+        this->arm_prev_data.arm_pose_ts = T_b2;
+#     endif //(FEATURE_ENABLE_ARM_ODOMETRY_EE_TO_BASE)
     }
     else
     {

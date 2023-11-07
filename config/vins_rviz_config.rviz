@@ -5,7 +5,6 @@ Panels:
     Property Tree Widget:
       Expanded:
         - /GlobalGroup1/CarModel1
-        - /VIOGroup (EE)1/VIOPath1
         - /LoopGroup (Base)1/loopCamera1
         - /Vicon1
         - /Arm1
@@ -34,10 +33,8 @@ Panels:
     Name: Displays
     Property Tree Widget:
       Expanded:
-        - /GlobalGroup1
-        - /VIOGroup (EE)1/VIOPath1
-        - /VIOGroup (Base)1/VIOPath1
-        - /LoopGroup (Base)1/loopPath1
+        - /Loop1
+        - /VINS1
         - /Vicon1
         - /Arm1
       Splitter Ratio: 0.5
@@ -114,36 +111,12 @@ Visualization Manager:
       Name: GlobalGroup
     - Class: rviz/Group
       Displays:
-        - Alpha: 1
-          Buffer Length: 1
-          Class: rviz/Path
-          Color: 0; 255; 255
-          Enabled: true
-          Head Diameter: 0.30000001192092896
-          Head Length: 0.20000000298023224
-          Length: 0.05999999865889549
-          Line Style: Lines
-          Line Width: 0.029999999329447746
-          Name: VIOPath
-          Offset:
-            X: 0
-            Y: 0
-            Z: 0
-          Pose Color: 255; 85; 255
-          Pose Style: Axes
-          Queue Size: 10
-          Radius: 0.009999999776482582
-          Shaft Diameter: 0.10000000149011612
-          Shaft Length: 0.10000000149011612
-          Topic: /vins_estimator/EE/path
-          Unreliable: false
-          Value: true
         - Class: rviz/MarkerArray
           Enabled: true
           Marker Topic: /vins_estimator/EE/camera_pose_visual
           Name: CameraMarker
           Namespaces:
-            {}
+            CameraPoseVisualization: true
           Queue Size: 100
           Value: true
         - Alpha: 1
@@ -218,36 +191,12 @@ Visualization Manager:
       Name: VIOGroup (EE)
     - Class: rviz/Group
       Displays:
-        - Alpha: 1
-          Buffer Length: 1
-          Class: rviz/Path
-          Color: 25; 255; 0
-          Enabled: true
-          Head Diameter: 0.30000001192092896
-          Head Length: 0.20000000298023224
-          Length: 0.05999999865889549
-          Line Style: Lines
-          Line Width: 0.029999999329447746
-          Name: VIOPath
-          Offset:
-            X: 0
-            Y: 0
-            Z: 0
-          Pose Color: 255; 85; 255
-          Pose Style: Axes
-          Queue Size: 10
-          Radius: 0.009999999776482582
-          Shaft Diameter: 0.10000000149011612
-          Shaft Length: 0.10000000149011612
-          Topic: /vins_estimator/base/path
-          Unreliable: false
-          Value: true
         - Class: rviz/MarkerArray
           Enabled: true
           Marker Topic: /vins_estimator/base/camera_pose_visual
           Name: CameraMarker
           Namespaces:
-            {}
+            CameraPoseVisualization: true
           Queue Size: 100
           Value: true
         - Alpha: 1
@@ -339,30 +288,6 @@ Visualization Manager:
           Queue Size: 100
           Value: true
         - Alpha: 1
-          Buffer Length: 1
-          Class: rviz/Path
-          Color: 255; 170; 0
-          Enabled: true
-          Head Diameter: 0.30000001192092896
-          Head Length: 0.20000000298023224
-          Length: 0.30000001192092896
-          Line Style: Lines
-          Line Width: 0.03999999910593033
-          Name: loopPath
-          Offset:
-            X: 0
-            Y: 0
-            Z: 0
-          Pose Color: 255; 85; 255
-          Pose Style: None
-          Queue Size: 10
-          Radius: 0.029999999329447746
-          Shaft Diameter: 0.10000000149011612
-          Shaft Length: 0.10000000149011612
-          Topic: /loop_fusion/EE/pose_graph_path
-          Unreliable: false
-          Value: true
-        - Alpha: 1
           Autocompute Intensity Bounds: true
           Autocompute Value Bounds:
             Max Value: -0.00362956034950912
@@ -447,32 +372,8 @@ Visualization Manager:
           Marker Topic: /loop_fusion/base/camera_pose_visual
           Name: loopCamera
           Namespaces:
-            {}
+            CameraPoseVisualization: true
           Queue Size: 100
-          Value: true
-        - Alpha: 1
-          Buffer Length: 1
-          Class: rviz/Path
-          Color: 204; 0; 0
-          Enabled: true
-          Head Diameter: 0.30000001192092896
-          Head Length: 0.20000000298023224
-          Length: 0.30000001192092896
-          Line Style: Lines
-          Line Width: 0.03999999910593033
-          Name: loopPath
-          Offset:
-            X: 0
-            Y: 0
-            Z: 0
-          Pose Color: 255; 85; 255
-          Pose Style: None
-          Queue Size: 10
-          Radius: 0.029999999329447746
-          Shaft Diameter: 0.10000000149011612
-          Shaft Length: 0.10000000149011612
-          Topic: /loop_fusion/base/pose_graph_path
-          Unreliable: false
           Value: true
         - Alpha: 1
           Autocompute Intensity Bounds: true
@@ -596,6 +497,110 @@ Visualization Manager:
           Value: false
       Enabled: true
       Name: Devices
+    - Class: rviz/Group
+      Displays:
+        - Alpha: 1
+          Buffer Length: 1
+          Class: rviz/Path
+          Color: 204; 0; 0
+          Enabled: true
+          Head Diameter: 0.30000001192092896
+          Head Length: 0.20000000298023224
+          Length: 0.30000001192092896
+          Line Style: Lines
+          Line Width: 0.03999999910593033
+          Name: loopPath Base
+          Offset:
+            X: 0
+            Y: 0
+            Z: 0
+          Pose Color: 255; 85; 255
+          Pose Style: None
+          Queue Size: 10
+          Radius: 0.029999999329447746
+          Shaft Diameter: 0.10000000149011612
+          Shaft Length: 0.10000000149011612
+          Topic: /loop_fusion/base/pose_graph_path
+          Unreliable: false
+          Value: true
+        - Alpha: 1
+          Buffer Length: 1
+          Class: rviz/Path
+          Color: 255; 170; 0
+          Enabled: true
+          Head Diameter: 0.30000001192092896
+          Head Length: 0.20000000298023224
+          Length: 0.30000001192092896
+          Line Style: Lines
+          Line Width: 0.03999999910593033
+          Name: loopPath EE
+          Offset:
+            X: 0
+            Y: 0
+            Z: 0
+          Pose Color: 255; 85; 255
+          Pose Style: None
+          Queue Size: 10
+          Radius: 0.029999999329447746
+          Shaft Diameter: 0.10000000149011612
+          Shaft Length: 0.10000000149011612
+          Topic: /loop_fusion/EE/pose_graph_path
+          Unreliable: false
+          Value: true
+      Enabled: true
+      Name: Loop
+    - Class: rviz/Group
+      Displays:
+        - Alpha: 1
+          Buffer Length: 1
+          Class: rviz/Path
+          Color: 25; 255; 0
+          Enabled: true
+          Head Diameter: 0.30000001192092896
+          Head Length: 0.20000000298023224
+          Length: 0.05999999865889549
+          Line Style: Lines
+          Line Width: 0.029999999329447746
+          Name: VIOPath Base
+          Offset:
+            X: 0
+            Y: 0
+            Z: 0
+          Pose Color: 255; 85; 255
+          Pose Style: Axes
+          Queue Size: 10
+          Radius: 0.009999999776482582
+          Shaft Diameter: 0.10000000149011612
+          Shaft Length: 0.10000000149011612
+          Topic: /vins_estimator/base/path
+          Unreliable: false
+          Value: true
+        - Alpha: 1
+          Buffer Length: 1
+          Class: rviz/Path
+          Color: 0; 255; 255
+          Enabled: true
+          Head Diameter: 0.30000001192092896
+          Head Length: 0.20000000298023224
+          Length: 0.05999999865889549
+          Line Style: Lines
+          Line Width: 0.029999999329447746
+          Name: VIOPath EE
+          Offset:
+            X: 0
+            Y: 0
+            Z: 0
+          Pose Color: 255; 85; 255
+          Pose Style: Axes
+          Queue Size: 10
+          Radius: 0.009999999776482582
+          Shaft Diameter: 0.10000000149011612
+          Shaft Length: 0.10000000149011612
+          Topic: /vins_estimator/EE/path
+          Unreliable: false
+          Value: true
+      Enabled: true
+      Name: VINS
     - Class: rviz/Group
       Displays:
         - Alpha: 1
@@ -750,7 +755,7 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/ThirdPersonFollower
-      Distance: 6.354485988616943
+      Distance: 5.437282562255859
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
@@ -758,17 +763,17 @@ Visualization Manager:
         Value: false
       Field of View: 0.7853981852531433
       Focal Point:
-        X: 1.5252807140350342
-        Y: 1.289764165878296
-        Z: -3.8145903999975417e-06
+        X: 1.1425752639770508
+        Y: -0.8743057250976562
+        Z: -4.1722182686498854e-06
       Focal Shape Fixed Size: false
       Focal Shape Size: 0.05000000074505806
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 0.2397962212562561
+      Pitch: 1.3447966575622559
       Target Frame: world
-      Yaw: 0.4554220139980316
+      Yaw: 4.653598308563232
     Saved: ~
 Window Geometry:
   BASE/Inf1:
