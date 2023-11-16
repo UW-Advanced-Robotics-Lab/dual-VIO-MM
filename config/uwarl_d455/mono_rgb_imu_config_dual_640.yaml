@@ -1,0 +1,209 @@
+%YAML 1.0
+---
+# [Configuration Options]
+# [ORIGINAL] only 1 device support: 1 imu 1 cam; 1 imu 2 cam: 2 cam; 
+# [NEW] custom support: 2 devices
+num_of_devices: 2
+d0_imu: 1
+d1_imu: 1
+d0_num_of_cam: 1
+d1_num_of_cam: 1
+
+# [TODO] add support for [standalone, dual mode]
+operating_mode: "standalone"
+
+# [ROS Topic Assignments]
+# - [cam0]
+d0_imu_topic: "/cam_base/imu"
+d0_image0_topic: "/cam_base/color/image_raw"
+# - [cam1]
+d1_imu_topic: "/cam_EE/imu"
+d1_image0_topic: "/cam_EE/color/image_raw"
+# - [arm]
+arm_joint_topic: "/wam/joint_states"
+arm_pose_topic: "/wam/pose"
+arm_calib: "wam_arm.yaml"
+# - [vins]
+d0_vicon_topic: "/vicon/cam_base/cam_base"
+# d0_vicon_topic: "/vicon/summit_base/summit_base" # more stable
+d1_vicon_topic: "/vicon/cam_EE/cam_EE"
+# d1_vicon_topic: "/vicon/wam_base/wam_base"
+
+# [Output Path]
+output_path: "~/output"
+
+#### TODO: implement camera model for Inverse Brown Conrady Model, or utilize rs driver `rsutil.h` to use manufacture model
+# [Calib. File Dependencies]
+# d0_cam0_calib: "color_base_IBC.yaml"
+# d1_cam0_calib: "color_EE_IBC.yaml"
+# # [Focal Length: Fx, Fy]
+# d0_focal_length: 642 # should be imported from calib file
+# d1_focal_length: 642 # should be imported from calib file
+
+## [Calib. File Dependencies]
+d0_cam0_calib: "color_base_mei_640.yaml"
+d1_cam0_calib: "color_EE_mei_640.yaml"
+# [Focal Length: Fx, Fy]
+d0_focal_length: 414 # should be imported from calib file
+d1_focal_length: 414 # should be imported from calib file
+
+image_width: 640
+image_height: 480
+
+# Extrinsic parameter between IMU and Camera.
+estimate_extrinsic: 0   # 0  Have an accurate extrinsic parameters. We will trust the following imu^R_cam, imu^T_cam, don't change it.
+                        # 1  Have an initial guess about extrinsic parameters. We will optimize around your initial guess.
+                        # 2: unknown, auto-calib on-fly
+
+# [TODO: correction needed for calibration]
+d0_body_T_cam0: !!opencv-matrix
+    rows: 4
+    cols: 4
+    dt: d
+    data: [ # T_ic:
+            #### based on [2023-05-11-15-47-26_base_rgb_mei-imu]
+               # 0.9998882, -0.00193321, 0.01482754, 0.02478332,
+               # 0.00201731, 0.99998196, -0.00565838, -0.01078818,
+               # -0.01481633, 0.00568766, 0.99987406, 0.0356058,
+               # 0., 0., 0., 1. ]
+                0.99995788, -0.00166744,  0.00902576,  0.01383521,
+                0.00173777,  0.99996815, -0.0077903 , -0.00641467,
+               -0.00901248,  0.00780565,  0.99992892,  0.03030069,
+                0.        ,  0.        ,  0.        ,  1.        ]
+            # T_ic: Extrinsic from "Color" To "Gyro" [Manufacture]
+                # 0.999992   ,    -0.00371369   ,  -0.00152836    ,  0.0289912428706884  ,
+                # 0.00371287 ,     0.999993     ,  -0.000541772   ,  0.00741964485496283 ,
+                # 0.00153036 ,     0.000536093  ,   0.999999      ,  0.0156792011111975  , 
+                # 0, 0, 0, 1]
+d1_body_T_cam0: !!opencv-matrix
+    rows: 4
+    cols: 4
+    dt: d
+    data: [ # T_ic:
+            #### based on [2023-05-11-15-42-14_EE_rgb_mei-results-imucam]
+            #  0.99998975, 0.00059731,  0.0044877,   0.03276503,
+            # -0.00059713, 0.99999982, -0.00004132, -0.00029959,
+            # -0.00448772, 0.00003864,  0.99998993,  0.04621308,
+            #  0.,         0.,          0.,          1.]
+             0.99998948,  0.00055183,  0.00455268,  0.03373913,
+            -0.00055247,  0.99999984,  0.00014049,  0.00000485,
+            -0.0045526 , -0.000143  ,  0.99998963,  0.05212471,
+             0.        ,  0.        ,  0.        ,  1.        ] #v2
+            #### based on [2023-05-11-15-43-17_EE_rgb_mei-results-imucam]
+            #    0.99999713,  0.00184888, -0.00152691,  0.03679528,
+            #   -0.00184825,  0.99999821,  0.00041351,  0.0029463 ,
+            #    0.00152767, -0.00041069,  0.99999875,  0.03515003,
+            #    0.        ,  0.        ,  0.        ,  1.         ]
+            #  0.99999054,  0.00216234, -0.00377372,  0.05026032,
+            # -0.00215316,  0.99999472,  0.00243427, -0.00277024,
+            #  0.00377897, -0.00242612,  0.99998992,  0.03864878,
+            #  0.        ,  0.        ,  0.        ,  1.        ] #v2
+            # T_ic: Extrinsic from "Color" To "Gyro" [Manufacture]
+            #     0.999996    ,     0.00212487   ,   -0.00160311    , 0.0289688687771559 ,
+            #    -0.00212717  ,     0.999997     ,   -0.00143346    , 0.00740136113017797 ,
+            #     0.00160005  ,     0.00143687   ,    0.999998      , 0.0156113049015403 , 
+            #     0, 0, 0, 1]
+
+#Multiple thread support
+multiple_thread: 1
+
+# [Front-end Configuration] TODO: should we separate settings independently?
+# feature traker paprameters
+max_cnt: 150            # max feature number in feature tracking
+min_dist: 30            # min distance between two features 
+freq: 0                 # frequence (Hz) of publish tracking result. At least 10Hz for good estimation. If set 0, the frequence will be same as raw image 
+F_threshold: 1.0        # ransac threshold (pixel)
+show_track: 1           # publish tracking image as topic
+flow_back: 1            # perform forward and backward optical flow to improve feature tracking accuracy
+
+# optimization parameters
+max_solver_time: 0.04  # max solver itration time (ms), to guarantee real time
+max_num_iterations: 8   # max solver itrations, to guarantee real time
+keyframe_parallax: 10.0 # keyframe selection threshold (pixel)
+
+# SfM:
+initStruct_parallax: 30.0 # initial structure selection threshold (pixel) SfM: 30.0/460
+SfM_ransac_threshold: 0.3 # ransac threshold (pixel): 0.3/460
+
+# [IMU Configuration]
+#imu parameters       The more accurate parameters you provide, the better performance
+# - [cam0]
+d0_acc_n: 0.0558          # accelerometer measurement noise standard deviation. #0.2   0.04
+d0_acc_w: 0.0000524       # accelerometer bias random work noise standard deviation.  #0.002
+d0_gyr_n: 0.00229         # gyroscope measurement noise standard deviation.     #0.05  0.004
+d0_gyr_w: 0.00000196      # gyroscope bias random work noise standard deviation.     #4.0e-5
+d0_g_norm: 9.805         # gravity magnitude
+# NOTE: imu data is collected when the robot is powered on and idling,
+#       hence, it captures the noises with additional system noises,
+#       otherwise, the noise factor would nor perform well with real data.
+#### based on [2023-05-11-15-47-26_base_rgb_mei-imu]
+# Accelerometer 0511:
+# Noise density: 0.003946724900130952
+# Noise density (discrete): 0.055815118807207915
+# Random walk: 5.247260402566035e-05
+# Gyroscope:
+# Noise density: 0.00016158344803440678
+# Noise density (discrete): 0.002285135036652663
+# Random walk: 1.954810193183154e-06
+
+# - [cam1]
+# NOTE: imu data is collected when arm is holding up and facing forward with the camera,
+#       hence, it captures the noises in addition to the system noises,
+#       but, the noise may not be suitable for all joint configurations. 
+# $$ discrete = continuous * sqrt(imu_rate) $$
+#### based on [2023-05-11-15-43-17_EE_rgb_mei-results-imucam] // on arm with noise
+#   Model: calibrated
+#   Update rate: 200.0
+#   Accelerometer:
+#     Noise density: 0.009998222535561607 
+#     Noise density (discrete): 0.1413962190941554 
+#     Random walk: 0.0010572240682889056
+#   Gyroscope:
+#     Noise density: 0.00045700146412701916
+#     Noise density (discrete): 0.00646297668592792 
+#     Random walk: 2.672307981517485e-06
+d1_acc_n: 0.1414          # accelerometer measurement noise standard deviation. 
+d1_acc_w: 0.0010572       # accelerometer bias random work noise standard deviation 
+d1_gyr_n: 0.0064630       # gyroscope measurement noise standard deviation. 
+d1_gyr_w: 0.00000267      # gyroscope bias random work noise standard deviation. 
+d1_g_norm: 9.80655            # gravity magnitude #TODO: unified gravity magnitude? 
+#### based on [2023-05-11-15-42-14_EE_rgb_mei-results-imucam]
+# IMU0:
+#  ----------------------------
+#   Model: calibrated
+#   Update rate: 200.0
+#   Accelerometer:
+#     Noise density: 0.00103795711950302 
+#     Noise density (discrete): 0.014678930355628823 
+#     Random walk: 3.2656995585435125e-05
+#   Gyroscope:
+#     Noise density: 0.0001655154510187148
+#     Noise density (discrete): 0.002340741956129662 
+#     Random walk: 2.848286811512562e-06
+# d1_acc_n: 0.014678930355628823          # accelerometer measurement noise standard deviation. 
+# d1_acc_w: 0.000032656995585435125         # accelerometer bias random work noise standard deviation 
+# d1_gyr_n: 0.002340741956129662        # gyroscope measurement noise standard deviation. 
+# d1_gyr_w: 0.000002848286811512562      # gyroscope bias random work noise standard deviation. 
+# d1_g_norm: 9.80655            # gravity magnitude #TODO: unified gravity magnitude? 
+
+# TODO: we need to calibrated td, which is important for estimator accuracy
+#unsynchronization parameters [based on [2023-05-11-15-xx-xx] calibration mei]
+# - [cam0]
+d0_estimate_td: 0         # online estimate time offset between camera and imu
+# d0_td: 0.00022326806147822398 # initial value of time offset. unit: s. readed image clock + td = real image clock (IMU clock)
+d0_td: 0.00023573806770265347 # initial value of time offset. unit: s. readed image clock + td = real image clock (IMU clock)
+# - [cam1]
+d1_estimate_td: 0         # online estimate time offset between camera and imu
+# d1_td: 0.0003475970005734179 # initial value of time offset. unit: s. readed image clock + td = real image clock (IMU clock)
+d1_td: 0.0003422667651021994 # [14]
+# d1_td: 0.00011939373101626204 # [17]
+
+#loop closure parameters
+# - [cam0]
+d0_load_previous_pose_graph: 0        # load and reuse previous pose graph; load from 'pose_graph_save_path'
+d0_pose_graph_save_path: "~/output/pose_graph_c0/" # save and load path
+d0_save_image: 1                      # save image in pose graph for visualization prupose; you can close this function by setting 0 
+# - [cam1]
+d1_load_previous_pose_graph: 0        # load and reuse previous pose graph; load from 'pose_graph_save_path'
+d1_pose_graph_save_path: "~/output/pose_graph_c1/" # save and load path
+d1_save_image: 1                      # save image in pose graph for visualization prupose; you can close this function by setting 0 

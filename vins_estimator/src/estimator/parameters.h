@@ -190,14 +190,14 @@ using namespace std;
 #define     FEATURE_ENABLE_ARM_VICON_SUPPORT               ((DISABLED) & (FEATURE_ENABLE_VICON_SUPPORT)) // stubing vicon base data for arm odometry (to see arm kinematics accuracy)
 #define     FEATURE_ENABLE_ARM_ODOMETRY_VIZ                (( ENABLED) & (FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT))
 #define         FEATURE_ENABLE_ARM_ODOMETRY_VIZ_ARM             (( ENABLED) & (FEATURE_ENABLE_ARM_ODOMETRY_VIZ)) // init first pose with arm odometry
-#define     FEATURE_ENABLE_ARM_ODOMETRY_FACTOR             (( ENABLED) & (FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT)) // [Our-Solution] Arm Marginalization
+#define     FEATURE_ENABLE_ARM_ODOMETRY_FACTOR             ((DISABLED) & (FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT)) // [Our-Solution] Arm Marginalization
 //              - disabled [baseline]: baseline without arm odometry marginalization
 //              - enabled  [ours]: with arm odometry marginalization
 #define         FEATURE_ENABLE_ARM_ODOMETRY_ZEROING             (( ENABLED) & (FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT)) // init first pose with arm odometry
 //              - enabled [default]: consider relative poses with respect to the first frame
 // #define         FEATURE_ENABLE_ARM_ODOMETRY_BASE_TO_EE          (( ENABLED) & (FEATURE_ENABLE_ARM_ODOMETRY_FACTOR)) 
 #define         FEATURE_ENABLE_ARM_ODOMETRY_EE_TO_BASE          (( ENABLED) & (FEATURE_ENABLE_ARM_ODOMETRY_FACTOR))
-//                  - apply arm odometry to estimate base from ee
+//                  - apply arm odometry to estimate base from ee [UNUSED]
 #define         FEATURE_ENABLE_ARM_ODOMETRY_FACTOR_TO_BASE      (( ENABLED) & (FEATURE_ENABLE_ARM_ODOMETRY_EE_TO_BASE))
 //                  - apply arm odometry factor to base
 
