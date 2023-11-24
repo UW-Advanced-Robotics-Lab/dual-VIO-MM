@@ -44,8 +44,8 @@ output_path: "~/output"
 d0_cam0_calib: "color_base_mei_640.yaml"
 d1_cam0_calib: "color_EE_mei_640.yaml"
 # [Focal Length: Fx, Fy]
-d0_focal_length: 414 # should be imported from calib file
-d1_focal_length: 414 # should be imported from calib file
+d0_focal_length: 408 # should be imported from calib file
+d1_focal_length: 415 # should be imported from calib file
 
 image_width: 640
 image_height: 480

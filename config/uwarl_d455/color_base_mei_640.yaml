@@ -5,16 +5,16 @@ camera_name: camera
 image_width: 640
 image_height: 480
 # T_ic [kalibr 200Hz, 200Hz on 200Hz calibration data]:
-# based on [/home/jx/.ros/bagfiles/imu_cam_640x480/2023-11-15-13-08-29_base_rgb_mei-camchain.yaml]
+# based on [/home/jx/.ros/bagfiles/imu_bags_640x480_nov22/2023-11-22-10-51-58_base_rgb_mei-camchain.yaml]
 mirror_parameters:
-   xi: 0.03962857545198918
+   xi: 0.0680914817111368
 distortion_parameters:
-   k1: -0.025940808447561154
-   k2:  0.060795030764070626
-   p1:  0.0002596016444764607
-   p2: -0.00033967133421121333
+   k1: -0.022496772749107607
+   k2:  0.029452795446097076
+   p1: -0.0019144346115454363
+   p2:  0.007957743869840432
 projection_parameters:
-   gamma1: 414.3671287440441
-   gamma2: 413.01660926457157
-   u0: 318.76022416228034 
-   v0: 246.93976619441497
+   gamma1: 408.91778258288997
+   gamma2: 404.95060353924674
+   u0: 335.6993465434206
+   v0: 242.9027086420726
