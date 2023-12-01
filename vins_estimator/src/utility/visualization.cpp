@@ -417,7 +417,7 @@ void queue_ViconOdometry_safe(const Vector7d_t &vicon_msg, const double t, const
         m_buf[EE_DEV].vicon_p0 = m_buf[BASE_DEV].vicon_p0;
         // PRINT_DEBUG("vicon_R0 = \n%s", Lie::to_string(m_buf[BASE_DEV].vicon_R0).c_str());
         // PRINT_DEBUG("vicon_p0 = %s", Lie::to_string(m_buf[BASE_DEV].vicon_p0).c_str());
-    }
+    }    
 #   else
     if (init_vicon)
     {
@@ -431,18 +431,12 @@ void queue_ViconOdometry_safe(const Vector7d_t &vicon_msg, const double t, const
         {
             R = R * R_corr_c2w;
         }
-        // SO3 --proj--> SO2:
-        // Extract the angle about the z-axis (ensure SO2 with z axis aligned up)
-        //      otherwise, the intial pose may cause drift overtime:
-        // double theta = Utility::R2y_rad(R);
-        // R = Utility::y2R_rad(theta);
-        // T0_inv : for offset correction
-        // X---- NAh
 
         m_buf[device_id].vicon_R0 = R.transpose();
         m_buf[device_id].vicon_p0 = - p;
         m_buf[device_id].vicon_inited = true;
-
+        
+        m_buf[EE_DEV].vicon_R0 = m_buf[BASE_DEV].vicon_R0; // based on base pose
     }
 #   endif // (FEATURE_ENABLE_VICON_ZEROING_WRT_BASE_SUPPORT)
 

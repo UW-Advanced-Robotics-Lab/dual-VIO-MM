@@ -142,7 +142,7 @@ using namespace std;
 #define FEATURE_MODE_DEBUG_RUNTIME           ( ENABLED) // overrides below ...
 #define FEATURE_MODE_DEBUG_KINEMATICS        ( ENABLED) 
 
-#define FLAG_OURS                            (ENABLED) // enable: to enable our solution
+#define FLAG_OURS                            ( ENABLED) // enable: to enable our solution
 
 // ----------------------------------------------------------------
 // FUTURE SUPPORTS:
@@ -195,7 +195,9 @@ using namespace std;
     #define FEATURE_ENABLE_VICON_SUPPORT                    ( ENABLED) // to feed vicon data and output as nav_msg::path for visualization
     #   define FEATURE_ENABLE_VICON_ZEROING_SUPPORT              ( ENABLED) // zeroing vicons independently
     #       define FEATURE_ENABLE_VICON_ZEROING_WRT_BASE_SUPPORT (ZEROING_WRT_TO_BASE) // zeroing vicons wrt base
-    #   define FEATURE_ENABLE_VICON_ONLY_AFTER_INIT_SFM          (DISABLED) // initialize vicon after sfm
+    #   define FEATURE_ENABLE_VICON_ONLY_AFTER_INIT_SFM          ( ENABLED) // initialize vicon after sfm
+    #   define FEATURE_ENABLE_VICON_ONLY_AFTER_INIT_BOTH_SFM          ( ENABLED) // initialize vicon after sfm
+    // TODO: we should try to initialize when one is not inited/ stationary
 
     // arm odometry support:
     #define FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT             ( ENABLED) // [WIP]

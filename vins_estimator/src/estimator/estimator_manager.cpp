@@ -245,8 +245,16 @@ void EstimatorManager::processMeasurements_thread()
                 for(size_t id = BASE_DEV; id < MAX_NUM_DEVICES; id++)
                 {
 #   if (FEATURE_ENABLE_VICON_ONLY_AFTER_INIT_SFM)
-                    if (pEsts[id]->solver_flag == Estimator::INITIAL) // do not process till SFM initialized
+#       if (FEATURE_ENABLE_VICON_ONLY_AFTER_INIT_BOTH_SFM)
+                    if ((pEsts[BASE_DEV]->solver_flag == Estimator::INITIAL) || 
+                        (pEsts[  EE_DEV]->solver_flag == Estimator::INITIAL)) 
+#       else
+                    if (pEsts[id]->solver_flag == Estimator::INITIAL)
+#       endif //(FEATURE_ENABLE_VICON_ONLY_AFTER_INIT_BOTH_SFM)
+                    {
+                        // do not process till SFM initialized
                         continue; //
+                    }
 #   endif //(FEATURE_ENABLE_VICON_ONLY_AFTER_INIT_SFM)
                     this->m_vicon[id].guard.lock();
                     while(! this->m_vicon[id].data.empty())
