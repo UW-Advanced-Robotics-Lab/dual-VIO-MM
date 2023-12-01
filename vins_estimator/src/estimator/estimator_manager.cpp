@@ -372,7 +372,8 @@ void EstimatorManager::_postProcessArmJnts_unsafe(const double t, const Vector7d
     bool success = false;
     const Lie::SE3 Te = pArm->getCamEE();
     const Lie::SE3 Tb = pArm->getCamBase();
-    const Lie::SE3 Tc_b = Lie::inverse_SE3(Tb);
+    const Lie::SE3 Tc_b = Lie::inverse_SE3(Tb); // robot axis
+    const Lie::SE3 Tc_e = Lie::inverse_SE3(Te);
 
     // Constant rotation correction, [you may use https://ninja-calc.mbedded.ninja/calculators/mathematics/geometry/3d-rotations]
     const Lie::SO3 R_corr_c2w(
@@ -398,32 +399,38 @@ void EstimatorManager::_postProcessArmJnts_unsafe(const double t, const Vector7d
                         0,  0,  0,  1 ).finished()
     ); // convert from robot axis back to base cam axis
     // placeholders:
-    Lie::SE3 T_c, g_st, T_b, T_e;
+    Lie::SE3 T_c, g_st, T_b, T_e, b_st, T_c2, T_b2;
 
     // compute:
-    if ((arm_prev_data.t_header > 0) 
-        && (pEsts[BASE_DEV]->solver_flag == Estimator::SolverFlag::NON_LINEAR)
+#if (FEATURE_ENABLE_ARM_VICON_SUPPORT) 
+    // No need to wait for estimator if fed from vicon
+    const bool if_estimator_ready = true;
+#else
+    const bool if_estimator_ready = (  
+           (pEsts[BASE_DEV]->solver_flag == Estimator::SolverFlag::NON_LINEAR)
         && (pEsts[EE_DEV  ]->solver_flag == Estimator::SolverFlag::NON_LINEAR)
         && (m_data.latest_RP_ready[BASE_DEV] == true)
-        && (m_data.latest_RP_ready[EE_DEV  ] == true))
+        && (m_data.latest_RP_ready[EE_DEV  ] == true)
+    );
+#endif //(!FEATURE_ENABLE_ARM_VICON_SUPPORT)
+    if ((arm_prev_data.t_header > 0) && if_estimator_ready)
     {
         // 1. fetch R,p previous:
         Lie::R3 p_c; Lie::SO3 R_c;
         Lie::R3 p_c2; Lie::SO3 R_c2;
         
 #   if (FEATURE_ENABLE_ARM_VICON_SUPPORT) // stub Ground Truth Vicon data:
-        const Lie::SO3 R_corr2(
-            (Lie::SO3() <<  0, -1,  0,
-                            1,  0,  0,
-                            0,  0,  1).finished()
-        ); // convert vicon x axis fwd to y axis fwd, as summit face y axis
-
         geometry_msgs::Pose pose;
         getLatestViconPose_safe(pose, BASE_DEV);
         p_c = Eigen::Vector3d(pose.position.x, pose.position.y, pose.position.z);
-        // - vicon for orientation:
         R_c = Eigen::Quaterniond(pose.orientation.w, pose.orientation.x, pose.orientation.y, pose.orientation.z).toRotationMatrix();
-        T_c = Lie::SE3_from_SO3xR3(R_c * R_corr2, p_c); // vicon is aligned with world axis
+        T_c = Lie::SE3_from_SO3xR3((R_c * R_corr_w2r), p_c); // vicon is aligned with world axis -> robot axis
+        
+        getLatestViconPose_safe(pose, EE_DEV);
+        p_c2 = Eigen::Vector3d(pose.position.x, pose.position.y, pose.position.z);
+        R_c2 = Eigen::Quaterniond(pose.orientation.w, pose.orientation.x, pose.orientation.y, pose.orientation.z).toRotationMatrix();
+        T_c2 = Lie::SE3_from_SO3xR3((R_c2 * R_corr_w2r), p_c2); // robot axis
+
         // - base estimator for orientation:
         // R_c = pEsts[BASE_DEV]->latest_Q.toRotationMatrix(); // previous frame
         // T_c = Lie::SE3_from_SO3xR3(R_c * R_corr_c2w, p_c);
@@ -435,6 +442,7 @@ void EstimatorManager::_postProcessArmJnts_unsafe(const double t, const Vector7d
 
         // convert frame axis -(R_corr_c2w)-> world frame axis -(R_corr_w2r)-> robot frame axis:
         T_c = Lie::SE3_from_SO3xR3(((R_c * R_corr_c2w) * R_corr_w2r), p_c);// a coordinate transformation is needed
+        T_c2 = Lie::SE3_from_SO3xR3((R_c2 * R_corr_w2r), p_c2); // robot axis
 #   endif // (!FEATURE_ENABLE_ARM_VICON_SUPPORT)
 
 #   if ((FEATURE_ENABLE_ARM_ODOMETRY_VIZ) && (!FEATURE_ENABLE_ARM_ODOMETRY_EE_TO_BASE) )
@@ -453,20 +461,20 @@ void EstimatorManager::_postProcessArmJnts_unsafe(const double t, const Vector7d
         // Lie::SE3 T_out = T_c; // summit base if summit_base
         T_b = T_c * Tc_b; // cam_base
         // ^s_T_{cam_EE} = ^s_T_{cam_base} * {cam_base}_T_{cam_EE}  
-        T_e = T_b * g_st * Te * T_corr_r2w; // world axis (ee camera axis @ 0config) // TODO: precompute const SE3
+        T_e = T_b * g_st * Te * T_corr_r2w; // world axis = cam axis (ee camera axis @ 0config)
 
 #   if (FEATURE_ENABLE_ARM_ODOMETRY_EE_TO_BASE)
-        Lie::SE3 T_c2, T_b2;
         // camera @ EE calib @ zero config is aligned with world axis
-        T_c2 = Lie::SE3_from_SO3xR3(R_c2 * R_corr_w2r, p_c2); // robot axis
-        T_b2 = T_c2 * Lie::inverse_SE3(Tc_b * g_st * Te); // robot axis
-        T_b2 = T_b2 * T_corr_r2c; // robot axis (base camera axis @ 0config)
+        b_st = Lie::inverse_SE3(g_st);
+        T_b2 = T_c2; // to ee
+        T_b2 = T_b2 * b_st; // to base
+        T_b2 = T_b2 * Tb; // inv(Tc_b) to base camera
+    #if(FEATURE_ENABLE_ARM_VICON_SUPPORT)
+        T_b2 = T_b2 * T_corr_r2w; // world axis
+    #else
+        T_b2 = T_b2 * T_corr_r2c; // camera axis
+    #endif //(FEATURE_ENABLE_ARM_VICON_SUPPORT)
 #   endif //(FEATURE_ENABLE_ARM_ODOMETRY_EE_TO_BASE)
-        
-        // NOTE: as the z-axis in tool frame is aligned with camera z-axis, no need to invert the coordinate axis
-// #   if (!FEATURE_ENABLE_ARM_VICON_SUPPORT) // stub Ground Truth Vicon data:
-//         // T_c = T_c * Rp_corr_T; //* coord-axis 
-// #   endif //(!FEATURE_ENABLE_ARM_VICON_SUPPORT) // stub Ground Truth Vicon data:
         
 #   if (FEATURE_ENABLE_ARM_ODOMETRY_ZEROING) 
         // FIXME this compensation is not right
@@ -495,6 +503,9 @@ void EstimatorManager::_postProcessArmJnts_unsafe(const double t, const Vector7d
         // rebasing to the EE est frame:
         T_e = this->arm_prev_data.arm_pose_st_0 * T_e; 
         T_b = this->arm_prev_data.arm_pose_st_0 * T_b; 
+        
+        // rebasing to the Base est frame:
+        T_b2 = this->arm_prev_data.arm_pose_ts_0 * T_b2; 
 
 #   endif // (FEATURE_ENABLE_ARM_ODOMETRY_ZEROING) 
         
@@ -511,17 +522,20 @@ void EstimatorManager::_postProcessArmJnts_unsafe(const double t, const Vector7d
         this->arm_prev_data.arm_pose_header = arm_prev_data.t_header;
         // PRINT_DEBUG("> ArmOdometry [%f]: \n R=\n%s \n p=\n%s", t, Lie::to_string(R).c_str(), Lie::to_string(p).c_str());
 
-#     if (FEATURE_ENABLE_ARM_ODOMETRY_EE_TO_BASE)
-        T_b2 = this->arm_prev_data.arm_pose_ts_0 * T_b2; 
+#   if (FEATURE_ENABLE_ARM_ODOMETRY_EE_TO_BASE)
         // for base, project to SO2:
-        double yaw = Utility::R2y_rad(T_b2.block<3,3>(0,0));
-        T_b2.block<3,3>(0,0) = Utility::y2R_rad(yaw) * R_corr_c2w.transpose(); // camera axis
-        T_b2(2,3) = 0;
+#       if (FEATURE_ENABLE_ARM_ODOMETRY_EE_TO_BASE_ENFORCE_SO2)
+            // SO3 --proj--> SO2:
+            double yaw = Utility::R2y_rad(T_b2.block<3,3>(0,0));
+            T_b2.block<3,3>(0,0) = Utility::y2R_rad(yaw) * R_corr_c2w.transpose(); // camera axis
+            T_b2(2,3) = 0;
+#       endif //(FEATURE_ENABLE_ARM_ODOMETRY_EE_TO_BASE_ENFORCE_SO2)
         // publish immediately:
         Lie::SO3xR3_from_SE3(R_c2, p_c2, T_b2); // reuse placeholder R_c2, p_c2
         queue_ArmOdometry_safe(arm_prev_data.t_header, R_c2, p_c2, BASE_DEV);
         this->arm_prev_data.arm_pose_ts = T_b2;
-#     endif //(FEATURE_ENABLE_ARM_ODOMETRY_EE_TO_BASE)
+        // PRINT_DEBUG("> ArmOdometry Base [%f]: \n T=\n%s \n", t, Lie::to_string(T_b2).c_str());
+#   endif //(FEATURE_ENABLE_ARM_ODOMETRY_EE_TO_BASE)
     }
     else
     {

@@ -22,7 +22,7 @@ typedef struct{
 const link_t ARM_LINKS[ARM_NUM_LINKS] = {
     { // F0-->F1
         .name = "base_B3350",
-        .tip_frame_Tq = Lie::R3(0,0,ARM_MODEL_CONFIG_L_SHOULDER),
+        .tip_frame_Tq = Lie::R3(0,0,0),
         .tip_frame_Tw = Lie::R3(0,0,1),
         .tip_frame_Tt = 0,
         .tip_frame_lb = -2.6,
@@ -63,7 +63,7 @@ const link_t ARM_LINKS[ARM_NUM_LINKS] = {
     { // F5-->F6
         .name = "wrist_yaw_B3345",
         .tip_frame_Tq = Lie::R3(0,0,0),
-        .tip_frame_Tw = Lie::R3(0,0,1),
+        .tip_frame_Tw = Lie::R3(1,0,0),
         .tip_frame_Tt = -M_PI_2, // -pi/2
         .tip_frame_lb = -1.6,
         .tip_frame_ub = 1.6,
@@ -71,7 +71,7 @@ const link_t ARM_LINKS[ARM_NUM_LINKS] = {
     { // F6-->F7
         .name = "wrist_pitch",
         .tip_frame_Tq = Lie::R3(0,0,0),
-        .tip_frame_Tw = Lie::R3(0,0,1),
+        .tip_frame_Tw = Lie::R3(1,0,0),
         .tip_frame_Tt = M_PI_2, // pi/2
         .tip_frame_lb = -2.2,
         .tip_frame_ub = 2.2,
@@ -84,6 +84,16 @@ const link_t ARM_LINKS[ARM_NUM_LINKS] = {
         .tip_frame_lb = 0,
         .tip_frame_ub = 0,
     },
+#if (FEATURE_ENABLE_CAMERA_TOOL_TIPS)
+    { // F8-->F9
+        .name = "camera_EE",
+        .tip_frame_Tq = Lie::R3(-0.185091,0,0.052259),
+        .tip_frame_Tw = Lie::R3(0,0,1),
+        .tip_frame_Tt = 0, //
+        .tip_frame_lb = 0,
+        .tip_frame_ub = 0,
+    },
+#endif //(FEATURE_ENABLE_CAMERA_TOOL_TIPS)
 };
 
 
@@ -102,9 +112,14 @@ ArmModel::~ArmModel()
 
 // TODO: we may make the config file for the arm model
 const Lie::SE3 T0_summit = Lie::SE3::Identity();
-const Lie::R3 summit_dP_wam = Lie::R3(0.14,0,0.405);
-const Lie::R3 summit_dP_cam_base = Lie::R3(0.362,0,0.387);  // TODO: MEASUREMENT NEEDED
-const Lie::R3 wam_dP_cam_ee = Lie::R3(-0.10,0,-0.04);       // TODO: Calibration Needed, here is manually approx/tuned with vicon visually
+// -> robot frame:
+const Lie::R3 summit_dP_wam = Lie::R3(0.100901,0,0.709702);       // vicon : vins-research-pkg/research-project/analysis/camera_report.py
+const Lie::R3 summit_dP_cam_base = Lie::R3(0.297595,0.0,0.399599);  // vicon : vins-research-pkg/research-project/analysis/camera_report.py
+#if (FEATURE_ENABLE_CAMERA_TOOL_TIPS)
+const Lie::R3 wam_dP_cam_ee = Lie::R3(0,0,0);
+#else
+const Lie::R3 wam_dP_cam_ee = Lie::R3(-0.185091,0,0.042259);      // vicon : vins-research-pkg/research-project/analysis/camera_report.py
+#endif //(FEATURE_ENABLE_CAMERA_TOOL_TIPS)
 
 void ArmModel::_model_initialization_unsafe()
 {
@@ -163,8 +178,11 @@ void ArmModel::setAngles_unsafely(const double theta[], const size_t N, const do
     // m_arm.guard.lock();
     for (size_t i = 0; (i < N) && (i < ARM_NUM_DOF); i++)
     {
-        m_arm.sXi_[i].theta = theta[i];
-        m_arm.jUnProcessed |= (1<<i);
+        if (m_arm.jActive & (1<<i)) // apply actuation fiter
+        {
+            m_arm.sXi_[i].theta = theta[i];
+            m_arm.jUnProcessed |= (1<<i);
+        }
     }
     // m_arm.guard.unlock();
 }
@@ -172,10 +190,13 @@ void ArmModel::setAngles_unsafely(const Vector7d_t theta, const double t)
 {
     m_arm.t = t;
     // m_arm.guard.lock();
-    for (size_t i = 0; (i < 7) && (i < ARM_NUM_DOF); i++)
+    for (size_t i = 0; (i < theta.size()) && (i < ARM_NUM_DOF); i++)
     {
-        m_arm.sXi_[i].theta = theta(i);
-        m_arm.jUnProcessed |= (1<<i);
+        if (m_arm.jActive & (1<<i)) // apply actuation fiter
+        {
+            m_arm.sXi_[i].theta = theta(i);
+            m_arm.jUnProcessed |= (1<<i);
+        }
     }
     // m_arm.guard.unlock();
 }
@@ -234,11 +255,12 @@ bool ArmModel::getEndEffectorPose_unsafely(Lie::SE3& T){
     }
     return success;
 }
+
 Lie::SE3 ArmModel::getCamEE(){
-    return m_arm.tG_cam_EE;
+    return m_arm.tG_cam_EE; // robot axis
 }
 Lie::SE3 ArmModel::getCamBase(){
-    return m_arm.sG_cam_base;
+    return m_arm.sG_cam_base; // robot axis
 }
 
 void ArmModel::storeTransformations_unsafely(Lie::SE3& T){

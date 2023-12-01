@@ -103,6 +103,19 @@ namespace Lie {
         Lie::SO3xR3_from_SE3(R, p, T);
         return Lie::inverse_SO3xR3(R, p);
     }
+ 
+    SE3 invert_SO3xR3(const SO3& R, const R3& p){
+        SE3 m_ret;
+        m_ret << R.transpose(), - p, 
+                0, 0, 0, 1;
+		return m_ret;
+    }
+    
+    SE3 invert_SE3(const SE3& T){
+        SO3 R; R3 p;
+        Lie::SO3xR3_from_SE3(R, p, T);
+        return Lie::invert_SO3xR3(R, p);
+    }
 
     // SE3 prod_chain_forward(const SE3 mat[], const size_t N){
     //     SE3 m_ret = mat[0];

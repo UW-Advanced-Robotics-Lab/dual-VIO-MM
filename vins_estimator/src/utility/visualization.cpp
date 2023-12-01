@@ -403,9 +403,10 @@ void queue_ViconOdometry_safe(const Vector7d_t &vicon_msg, const double t, const
     {
         // SO3 --proj--> SO2:
         // Extract the angle about the z-axis (ensure SO2 with z axis aligned up)
-        double theta = Utility::R2y_rad(R);
-        R = Utility::y2R_rad(theta);
+        // double theta = Utility::R2y_rad(R);
+        // R = Utility::y2R_rad(theta);
         // T0_inv : for offset correction
+        // X---- NAh
 
         m_buf[device_id].vicon_R0 = R.transpose();
         m_buf[device_id].vicon_p0 = - p;
@@ -420,22 +421,23 @@ void queue_ViconOdometry_safe(const Vector7d_t &vicon_msg, const double t, const
 #   else
     if (init_vicon)
     {
-        const Lie::SO3 R_corr(
+        const Lie::SO3 R_corr_c2w(
             (Lie::SO3() <<  1,  0,  0,
-                            0,  0,  1,
-                            0, -1,  0).finished()
+                            0,  0, -1,
+                            0,  1,  0).finished()
         );// convert from world axis to camera axis 
         
         if (device_id == EE_DEV)
         {
-            R = R * R_corr;
+            R = R * R_corr_c2w;
         }
         // SO3 --proj--> SO2:
         // Extract the angle about the z-axis (ensure SO2 with z axis aligned up)
         //      otherwise, the intial pose may cause drift overtime:
-        double theta = Utility::R2y_rad(R);
-        R = Utility::y2R_rad(theta);
+        // double theta = Utility::R2y_rad(R);
+        // R = Utility::y2R_rad(theta);
         // T0_inv : for offset correction
+        // X---- NAh
 
         m_buf[device_id].vicon_R0 = R.transpose();
         m_buf[device_id].vicon_p0 = - p;

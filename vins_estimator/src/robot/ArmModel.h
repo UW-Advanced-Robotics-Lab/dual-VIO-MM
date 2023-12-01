@@ -9,15 +9,17 @@
 
 #include <mutex>
 
+#define FEATURE_ENABLE_CAMERA_TOOL_TIPS         (0U)
+
 #define ROTATION_AXIS_Z     (Lie::R3(0,0,1))
 #define ARM_NUM_DOF         (7U)
-#define ARM_NUM_LINKS       (ARM_NUM_DOF + 1U)
+#define ARM_NUM_LINKS       (ARM_NUM_DOF + 1U + FEATURE_ENABLE_CAMERA_TOOL_TIPS)
 
 // --- Configuration:
-#define ARM_MODEL_CONFIG_L_SHOULDER          ((double)(0.352))
-#define ARM_MODEL_CONFIG_L_ARM               ((double)(0.551))
-#define ARM_MODEL_CONFIG_L_ELBOW             ((double)(0.3))
-#define ARM_MODEL_CONFIG_L_WRIST             ((double)(0.072))
+#define ARM_MODEL_CONFIG_L_SHOULDER          ((double)(0.346))
+#define ARM_MODEL_CONFIG_L_ARM               ((double)(0.55))
+#define ARM_MODEL_CONFIG_L_ELBOW             ((double)(0.32))
+#define ARM_MODEL_CONFIG_L_WRIST             ((double)(0.06))
 #define ARM_MODEL_CONFIG_W_ELBOW_JNT         ((double)(0.045))
 
 class ArmModel { 

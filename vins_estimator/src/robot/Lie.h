@@ -79,7 +79,9 @@ namespace Lie {
     SE3 inverse_SE3(const SE3& T);
     // SE3 prod_chain_forward(const SE3 mat[], const size_t N);
     // SE3 prod_chain_reverse(const SE3 mat[], const size_t N);
-
+    SE3 invert_SO3xR3(const SO3& R, const R3& p);
+    SE3 invert_SE3(const SE3& T);
+    
 // Adjoint Transformation --------------------------------
     /* Ad: A linear Transformations for a particular T\in SE3, that can be applied to the lie algebra g\in se3-R6
     * For each group element g in G with a linear transformation Ad(g) on the lie algebra g
