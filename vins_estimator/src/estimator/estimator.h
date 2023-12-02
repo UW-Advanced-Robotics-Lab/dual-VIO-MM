@@ -47,7 +47,7 @@ class Estimator
   public:
     Estimator(std::shared_ptr<DeviceConfig_t> _pCfg);
     ~Estimator();
-    void setParameter();
+    void setParameter_safe();
 
     // interface
     void initFirstPose(Lie::SE3 &Rp);
@@ -56,7 +56,7 @@ class Estimator
     void inputImage(double t, const cv::Mat &_img);
     // void inputImage(double t, const cv::Mat &_img, const cv::Mat &_img1 = cv::Mat());
     void processIMU(double t, double dt, const Vector3d &linear_acceleration, const Vector3d &angular_velocity);
-    void processImage(const map<int, vector<pair<int, Eigen::Matrix<double, 7, 1>>>> &image, const double header, const Lie::SE3 pT_arm);
+    bool processImage(const map<int, vector<pair<int, Eigen::Matrix<double, 7, 1>>>> &image, const double header, const Lie::SE3 pT_arm);
     void processMeasurements_thread();
     void processMeasurements_once();
 // #if (FEATURE_ENABLE_STEREO_SUPPORT)
@@ -64,7 +64,7 @@ class Estimator
 // #endif 
 
     // internal
-    void clearState();
+    void clearState_safe();
     bool initialStructure();
     bool visualInitialAlign();
     bool relativePose(Matrix3d &relative_R, Vector3d &relative_T, int &l);

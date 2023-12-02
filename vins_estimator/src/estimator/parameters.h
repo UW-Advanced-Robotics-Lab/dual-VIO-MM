@@ -142,7 +142,7 @@ using namespace std;
 #define FEATURE_MODE_DEBUG_RUNTIME           ( ENABLED) // overrides below ...
 #define FEATURE_MODE_DEBUG_KINEMATICS        ( ENABLED) 
 
-#define FLAG_OURS                            ( ENABLED) // enable: to enable our solution
+#define FLAG_OURS                            ( ENABLED) // enable: to enable our tightly-coupled solution
 
 // ----------------------------------------------------------------
 // FUTURE SUPPORTS:
@@ -180,7 +180,7 @@ using namespace std;
     // ... NOT ADDED YET
     
 #elif (FEATURE_MODE_DEBUG_RUNTIME)
-    #define ZEROING_WRT_TO_BASE (DISABLED)
+    #define ZEROING_WRT_TO_BASE ( ENABLED)
     // fps:
     #define FEATURE_ENABLE_DYNAMIC_FRAME_DROP_FOR_RT        (DISABLED) // set via "IMAGE_BEHIND_SCHEDULE_TIME_TOLERANCE"
     #define FEATURE_ENABLE_PROCESS_FRAME_FPS_FOR_RT         ( ENABLED) // set via #define IMAGE_PROCESSING_FPS
@@ -196,7 +196,7 @@ using namespace std;
     #   define FEATURE_ENABLE_VICON_ZEROING_SUPPORT              ( ENABLED) // zeroing vicons independently
     #       define FEATURE_ENABLE_VICON_ZEROING_WRT_BASE_SUPPORT (ZEROING_WRT_TO_BASE) // zeroing vicons wrt base
     #   define FEATURE_ENABLE_VICON_ONLY_AFTER_INIT_SFM          ( ENABLED) // initialize vicon after sfm
-    #   define FEATURE_ENABLE_VICON_ONLY_AFTER_INIT_BOTH_SFM          ( ENABLED) // initialize vicon after sfm
+    #   define FEATURE_ENABLE_VICON_ONLY_AFTER_INIT_BOTH_SFM     (DISABLED) // initialize vicon after sfm
     // TODO: we should try to initialize when one is not inited/ stationary
 
     // arm odometry support:
@@ -208,13 +208,16 @@ using namespace std;
     #define     FEATURE_ENABLE_ARM_ODOMETRY_FACTOR             ((FLAG_OURS) & (FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT)) // [Our-Solution] Arm Marginalization
     //              - disabled [baseline]: baseline without arm odometry marginalization
     //              - enabled  [ours]: with arm odometry marginalization
-    #define         FEATURE_ENABLE_ARM_ODOMETRY_ZEROING             ((!FEATURE_ENABLE_VICON_ZEROING_WRT_BASE_SUPPORT) & (FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT)) // init first pose with arm odometry
+    #define         FEATURE_ENABLE_ARM_ODOMETRY_ZEROING             ((!ZEROING_WRT_TO_BASE) & (FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT)) // init first pose with arm odometry
+    //              - enabled [default]: consider relative poses with respect to the first frame
+    //              - disabled: to see direct comparison vs vicon
     #define         FEATURE_ENABLE_ARM_ODOMETRY_EE_TO_BASE          (( ENABLED) & (FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT))
     //                  - apply arm odometry to estimate base from ee
     #define         FEATURE_ENABLE_ARM_ODOMETRY_EE_TO_BASE_ENFORCE_SO2     (( ENABLED))
     //                  - enforcing SO2 projection for arm odometry to estimate base from ee
     #define         FEATURE_ENABLE_ARM_ODOMETRY_FACTOR_TO_BASE      (( ENABLED) & (FEATURE_ENABLE_ARM_ODOMETRY_FACTOR))
     //                  - apply arm odometry factor to base
+    #define     FEATURE_ENABLE_ARM_ODOMETRY_TO_IMU_INIT         (ZEROING_WRT_TO_BASE)
 
 #elif (FEATURE_MODE_DEBUG_KINEMATICS) // (Debugging kinematics)
     // other features:

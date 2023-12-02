@@ -17,7 +17,7 @@ Estimator::Estimator(
     ): pCfg{_pCfg}, f_manager{Rs,_pCfg}, featureTracker{_pCfg}
 {
     ROS_INFO("init begins");
-    clearState();
+    clearState_safe();
 #if (FEATURE_NON_THREADING_SUPPORT)
     assert("> Assume threading supported all the time!");
 #endif
@@ -33,7 +33,7 @@ Estimator::~Estimator()
     pCfg.reset();
 }
 
-void Estimator::clearState()
+void Estimator::clearState_safe()
 {
     mProcess.lock();
     while(!accBuf.empty())
@@ -99,7 +99,7 @@ void Estimator::clearState()
     mProcess.unlock();
 }
 
-void Estimator::setParameter()
+void Estimator::setParameter_safe()
 {
 	const double FOCAL_LENGTH = pCfg->FOCAL_LENGTH;
     mProcess.lock();
@@ -155,8 +155,8 @@ void Estimator::setParameter()
 //     mProcess.unlock();
 //     if(restart)
 //     {
-//         clearState();
-//         setParameter();
+//         clearState_safe();
+//         setParameter_safe();
 //     }
 // }
 // #endif
@@ -443,8 +443,9 @@ void Estimator::processIMU(double t, double dt, const Vector3d &linear_accelerat
     gyr_0 = angular_velocity; 
 }
 
-void Estimator::processImage(const map<int, vector<pair<int, Eigen::Matrix<double, 7, 1>>>> &image, const double header, const Lie::SE3 pT_arm)
+bool Estimator::processImage(const map<int, vector<pair<int, Eigen::Matrix<double, 7, 1>>>> &image, const double header, const Lie::SE3 pT_arm)
 {
+    bool success = true;
     ROS_DEBUG("new image coming ------------------------------------------");
     ROS_DEBUG("Adding feature points %lu", image.size());
     if (f_manager.addFeatureCheckParallax(frame_count, image, td))
@@ -603,12 +604,18 @@ void Estimator::processImage(const map<int, vector<pair<int, Eigen::Matrix<doubl
 
         if (failureDetection())
         {
+#ifndef ESTIMATOR_MANAGER_H // Original, but it has deadlocking
             ROS_WARN("failure detection!");
             failure_occur = 1;
             clearState();
             setParameter(); // reinit
             ROS_WARN("system reboot!");
             return;
+#else // Let Manager to do the reset safely
+            failure_occur = 1;
+            success = false;
+            return success;
+#endif //ESTIMATOR_MANAGER_H
         }
 
         slideWindow();
@@ -623,7 +630,8 @@ void Estimator::processImage(const map<int, vector<pair<int, Eigen::Matrix<doubl
         last_R0 = Rs[0];
         last_P0 = Ps[0];
         updateLatestStates();
-    }  
+    }
+    return success;
 }
 
 bool Estimator::initialStructure()

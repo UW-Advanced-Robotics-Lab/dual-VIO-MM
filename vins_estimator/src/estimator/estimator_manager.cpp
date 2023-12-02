@@ -1,5 +1,6 @@
 #include "estimator_manager.h"
 #include "../robot/Lie.h"
+// #include "../utility/pool.hpp"
 
 EstimatorManager::EstimatorManager(std::shared_ptr<DeviceConfig_t> _pCfgs[])
 {
@@ -44,10 +45,10 @@ EstimatorManager::~EstimatorManager()
 void EstimatorManager::restartManager()
 {
     // reset estimators:
-    pEsts[BASE_DEV]->clearState();
-    pEsts[EE_DEV  ]->clearState();
-    pEsts[BASE_DEV]->setParameter();
-    pEsts[EE_DEV  ]->setParameter();
+    pEsts[BASE_DEV]->clearState_safe();
+    pEsts[EE_DEV  ]->clearState_safe();
+    pEsts[BASE_DEV]->setParameter_safe();
+    pEsts[EE_DEV  ]->setParameter_safe();
 
     // activate threads if not already:
     if (pProcessThread == nullptr)
@@ -147,8 +148,12 @@ void EstimatorManager::processMeasurements_thread()
                             pEsts[id]->initFirstIMUPose(accVector[id]);
                             if ((id == EE_DEV) && (is_arm_avail))
                             {
+# if (FEATURE_ENABLE_ARM_ODOMETRY_TO_IMU_INIT)
                                 // FIXME: we need to init first pose offset
                                 // pEsts[EE_DEV]->initFirstPose(this->arm_prev_data.arm_pose_st);
+                                pEsts[EE_DEV]->initFirstPose(this->arm_prev_data.arm_g_st);
+                                PRINT_DEBUG("initFirstPose: %s", Lie::to_string(this->arm_prev_data.arm_g_st).c_str());
+# endif //! (FEATURE_ENABLE_ARM_ODOMETRY_TO_IMU_INIT)
                             }
                             else
                             {
@@ -158,7 +163,6 @@ void EstimatorManager::processMeasurements_thread()
                     }
 
                     TOK_TAG(ellapsed_process_i,"fetch_imu");
-
                     // process imu iteratively:
                     TIK(ellapsed_process_i);
                     for(size_t id = BASE_DEV; id < MAX_NUM_DEVICES; id++)
@@ -183,11 +187,12 @@ void EstimatorManager::processMeasurements_thread()
                     TOK_TAG(ellapsed_process_i,"imu_proc");
 
                     //TODO: around 20ms x2 = 40ms, we should parallel these two processes? [@later, @run-time-concern]
+                    bool _success[MAX_NUM_DEVICES] = {false, false};
+                    // quickpool::parallel_for(BASE_DEV, MAX_NUM_DEVICES, [&] (int id) { // NOTE: not so well
                     for(size_t id = BASE_DEV; id < MAX_NUM_DEVICES; id++)
                     {
                         // process Image:
-                        // NOTE: process and publish has to be under same lock!
-                        // TODO: [@urgent] please investigate the source of error that does not allow the process and publish to be separated
+                        // NOTE: process and publish has to be under same lock?
                         pEsts[id]->mProcess.lock();
                         TIK(ellapsed_process_i);
 #if (FEATURE_ENABLE_ARM_ODOMETRY_EE_TO_BASE)
@@ -195,12 +200,30 @@ void EstimatorManager::processMeasurements_thread()
 #else
                         Lie::SE3 pose = arm_prev_data.arm_pose_st;
 #endif //(!FEATURE_ENABLE_ARM_ODOMETRY_EE_TO_BASE)
-                        pEsts[id]->processImage(feature[id].second, feature[id].first, pose);
+                        _success[id] = pEsts[id]->processImage(feature[id].second, feature[id].first, pose);
                         prevTime[id] = curTime[id];
-                        TOK_TAG(ellapsed_process_i,"img_proc");
+                        pEsts[id]->mProcess.unlock();
+                        
+                        // in case of failure, restart:
+                        if (_success[id] == false)
+                        {
+                            ROS_WARN("failure detection!");
+                            PRINT_ERROR("[DEV:%d] failure detection!", id);
+                            // TODO: clear state
+                            pEsts[id]->clearState_safe();
+                            pEsts[id]->setParameter_safe(); // reinit
+                            PRINT_WARN("[DEV:%d] system reboot!", id);
+                        }
+                    }
+                    // });
+                    TOK_TAG(ellapsed_process_i,"img_proc");
 
-                        /*** Publish ***/
-                        TIK(ellapsed_process_i);
+                    /*** Publish ***/
+                    // publish only if successfully processed previously
+                    TIK(ellapsed_process_i);
+                    for(size_t id = BASE_DEV; id < MAX_NUM_DEVICES && _success[id]; id++)
+                    {
+                        pEsts[id]->mProcess.lock();
 #if (FEATURE_ENABLE_STATISTICS_LOGGING)
                         // Print Statistics:
                         printStatistics(*pEsts[id], 0);
@@ -224,9 +247,7 @@ void EstimatorManager::processMeasurements_thread()
                             queue_PointCloud_unsafe(*pEsts[id], header);
                         }
                         visualization_guard_unlock(*pEsts[id]);
-#endif //(FEATURE_VIZ_PUBLISH)
-                        TOK_TAG(ellapsed_process_i,"img_pub");
-                        
+#endif //(FEATURE_VIZ_PUBLISH)                        
                         // store latest result:
                         m_data.latest_R[id] = pEsts[id]->latest_Q.toRotationMatrix();
                         m_data.latest_P[id] = pEsts[id]->latest_P;
@@ -234,6 +255,7 @@ void EstimatorManager::processMeasurements_thread()
                         // End-of-publishing
                         pEsts[id]->mProcess.unlock();
                     }
+                    TOK_TAG(ellapsed_process_i,"img_pub");
                 }
                 else
                 {
@@ -406,8 +428,11 @@ void EstimatorManager::_postProcessArmJnts_unsafe(const double t, const Vector7d
                         0, -1,  0,  0, 
                         0,  0,  0,  1 ).finished()
     ); // convert from robot axis back to base cam axis
-    // placeholders:
-    Lie::SE3 T_c, g_st, T_b, T_e, b_st, T_c2, T_b2;
+
+    // [Arm] compute current theta --> SE3:
+    // pArm->setAngles_unsafely(Vector7d_t::Zero());
+    pArm->setAngles_unsafely(jnt_vec, t);
+    pArm->processJntAngles_unsafely();
 
     // compute:
 #if (FEATURE_ENABLE_ARM_VICON_SUPPORT) 
@@ -423,11 +448,17 @@ void EstimatorManager::_postProcessArmJnts_unsafe(const double t, const Vector7d
 #endif //(!FEATURE_ENABLE_ARM_VICON_SUPPORT)
     if ((arm_prev_data.t_header > 0) && if_estimator_ready)
     {
-        // 1. fetch R,p previous:
-        Lie::R3 p_c; Lie::SO3 R_c;
-        Lie::R3 p_c2; Lie::SO3 R_c2;
+        // placeholders:
+        Lie::SE3 T_c, T_b, T_e, T_c2, T_b2;
+        Lie::R3 p_c, p_c2; 
+        Lie::SO3 R_c, R_c2;
+        Lie::SE3 g_st, b_st;
         
-#   if (FEATURE_ENABLE_ARM_VICON_SUPPORT) // stub Ground Truth Vicon data:
+        /* 1. Fetch Pose Reference */
+        g_st = arm_prev_data.arm_g_st;
+        
+#   if (FEATURE_ENABLE_ARM_VICON_SUPPORT) 
+        // stub previously published Ground Truth Vicon data:
         geometry_msgs::Pose pose;
         getLatestViconPose_safe(pose, BASE_DEV);
         p_c = Eigen::Vector3d(pose.position.x, pose.position.y, pose.position.z);
@@ -438,11 +469,11 @@ void EstimatorManager::_postProcessArmJnts_unsafe(const double t, const Vector7d
         p_c2 = Eigen::Vector3d(pose.position.x, pose.position.y, pose.position.z);
         R_c2 = Eigen::Quaterniond(pose.orientation.w, pose.orientation.x, pose.orientation.y, pose.orientation.z).toRotationMatrix();
         T_c2 = Lie::SE3_from_SO3xR3((R_c2 * R_corr_w2r), p_c2); // robot axis
-
         // - base estimator for orientation:
         // R_c = pEsts[BASE_DEV]->latest_Q.toRotationMatrix(); // previous frame
         // T_c = Lie::SE3_from_SO3xR3(R_c * R_corr_c2w, p_c);
-#   else // feed in estimator latest state:
+#   else 
+        // feed in previously optimized estimator latest state:
         p_c = m_data.latest_P[BASE_DEV]; // previous frame
         R_c = m_data.latest_R[BASE_DEV]; // previous frame
         p_c2 = m_data.latest_P[EE_DEV]; // previous frame
@@ -460,12 +491,6 @@ void EstimatorManager::_postProcessArmJnts_unsafe(const double t, const Vector7d
 
         this->arm_prev_data.arm_pose_ready = true;
 
-        // 2. [Arm] compute theta --> SE3:
-        // pArm->setAngles_unsafely(Vector7d_t::Zero());
-        pArm->setAngles_unsafely(arm_prev_data.arm_vec, t);
-        pArm->processJntAngles_unsafely();
-        pArm->getEndEffectorPose_unsafely(g_st);
-        
         // Lie::SE3 T_out = T_c; // summit base if summit_base
         T_b = T_c * Tc_b; // cam_base
         // ^s_T_{cam_EE} = ^s_T_{cam_base} * {cam_base}_T_{cam_EE}  
@@ -518,6 +543,7 @@ void EstimatorManager::_postProcessArmJnts_unsafe(const double t, const Vector7d
 #   endif // (FEATURE_ENABLE_ARM_ODOMETRY_ZEROING) 
         
 
+        /* BASE --> EE */
 #   if(FEATURE_ENABLE_ARM_ODOMETRY_VIZ)
         pArm->storeTransformations_unsafely(T_b); // for arm visualization
         // publish immediately:
@@ -530,6 +556,7 @@ void EstimatorManager::_postProcessArmJnts_unsafe(const double t, const Vector7d
         this->arm_prev_data.arm_pose_header = arm_prev_data.t_header;
         // PRINT_DEBUG("> ArmOdometry [%f]: \n R=\n%s \n p=\n%s", t, Lie::to_string(R).c_str(), Lie::to_string(p).c_str());
 
+        /* EE --> BASE */
 #   if (FEATURE_ENABLE_ARM_ODOMETRY_EE_TO_BASE)
         // for base, project to SO2:
 #       if (FEATURE_ENABLE_ARM_ODOMETRY_EE_TO_BASE_ENFORCE_SO2)
@@ -549,9 +576,16 @@ void EstimatorManager::_postProcessArmJnts_unsafe(const double t, const Vector7d
     {
         PRINT_WARN("ArmOdometry: no previous data available!");
     }
-    // cache, compute next time:
-    arm_prev_data.t_header = t;
-    arm_prev_data.arm_vec = jnt_vec;
+    // cache, we will use them next time:
+    if (pArm->getEndEffectorPose_unsafely(arm_prev_data.arm_g_st))
+    {
+        arm_prev_data.t_header = t;
+        arm_prev_data.arm_vec = jnt_vec;
+    }
+    else
+    {
+        PRINT_ERROR("ArmOdometry: failed to compute end-effector pose!");
+    }
 }
 #endif 
 

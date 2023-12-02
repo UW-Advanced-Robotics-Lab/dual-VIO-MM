@@ -70,6 +70,7 @@ typedef struct{
             // cache:
             double      t_header = -1; 
             Vector7d_t  arm_vec;
+            Lie::SE3    arm_g_st;
             // output:
             double      arm_pose_header = -1; // [UNUSED]
             Lie::SE3    arm_pose_st;

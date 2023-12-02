@@ -91,7 +91,7 @@ int main(int argc, char** argv)
 	}
 
 	readParameters(config_file);
-	estimator.setParameter();
+	estimator.setParameter_safe();
 	registerPub(n);
 
 	FILE* outFile;

@@ -54,7 +54,7 @@ int main(int argc, char** argv)
 	string dataPath = sequence + "/";
 
 	readParameters(config_file);
-	estimator.setParameter();
+	estimator.setParameter_safe();
 	registerPub(n);
 
 	// load image list

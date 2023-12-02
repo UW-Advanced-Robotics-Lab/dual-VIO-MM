@@ -33,6 +33,7 @@ Panels:
     Name: Displays
     Property Tree Widget:
       Expanded:
+        - /Loop1/loopPath Base1
         - /Vicon1
       Splitter Ratio: 0.5
     Tree Height: 256
@@ -499,7 +500,7 @@ Visualization Manager:
         - Alpha: 1
           Buffer Length: 1
           Class: rviz/Path
-          Color: 164; 0; 0
+          Color: 0; 255; 255
           Enabled: true
           Head Diameter: 0.30000001192092896
           Head Length: 0.20000000298023224
@@ -523,7 +524,7 @@ Visualization Manager:
         - Alpha: 1
           Buffer Length: 1
           Class: rviz/Path
-          Color: 196; 160; 0
+          Color: 255; 170; 255
           Enabled: true
           Head Diameter: 0.30000001192092896
           Head Length: 0.20000000298023224
@@ -544,7 +545,7 @@ Visualization Manager:
           Topic: /loop_fusion/EE/pose_graph_path
           Unreliable: false
           Value: true
-      Enabled: false
+      Enabled: true
       Name: Loop
     - Class: rviz/Group
       Displays:
@@ -752,7 +753,7 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/ThirdPersonFollower
-      Distance: 10.018136978149414
+      Distance: 13.24547290802002
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
@@ -760,17 +761,17 @@ Visualization Manager:
         Value: false
       Field of View: 0.7853981852531433
       Focal Point:
-        X: 0.2022625207901001
-        Y: 0.6636493802070618
-        Z: -2.8609160835912917e-06
+        X: -1.7631556987762451
+        Y: 1.3949977159500122
+        Z: -3.099334662692854e-06
       Focal Shape Fixed Size: false
       Focal Shape Size: 0.05000000074505806
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 0.23479756712913513
+      Pitch: 0.6297980546951294
       Target Frame: world
-      Yaw: 3.278599500656128
+      Yaw: 3.088606595993042
     Saved: ~
 Window Geometry:
   BASE/Inf1:
