@@ -579,9 +579,12 @@ void EstimatorManager::_postProcessArmJnts_unsafe(const double t, const Vector7d
             /* BASE --> EE */
             if (!this->arm_prev_data.arm_pose_st_inited)
             {   
-                this->arm_prev_data.arm_pose_st_0 = T_c2 * T_corr_r2w * Lie::inverse_SE3(T_e); // world/cam_EE
-                // this->arm_prev_data.arm_pose_st_0.block<3,3>(0,0) = Lie::SO3::Identity(); 
                 this->arm_prev_data.arm_pose_st_inited = true;
+                this->arm_prev_data.arm_pose_st_0 = T_c2 * T_corr_r2w * Lie::inverse_SE3(T_e); // world/cam_EE
+    #   if (FEATURE_ENABLE_ARM_ODOMETRY_POSE_ZERO_ENFORCE_SO2)
+                double yaw = Utility::R2y_rad(this->arm_prev_data.arm_pose_st_0.block<3,3>(0,0));
+                this->arm_prev_data.arm_pose_st_0.block<3,3>(0,0) = Utility::y2R_rad(yaw); // to avoid pitch/roll bias
+    #   endif //(FEATURE_ENABLE_ARM_ODOMETRY_POSE_ZERO_ENFORCE_SO2)
                 PRINT_DEBUG("this->arm_prev_data.arm_pose_st_0:\n%s\n", Lie::to_string(this->arm_prev_data.arm_pose_st_0).c_str());
                 PRINT_DEBUG("T_c2\n%s\n", Lie::to_string(T_c2).c_str());
             }
@@ -596,8 +599,10 @@ void EstimatorManager::_postProcessArmJnts_unsafe(const double t, const Vector7d
     #   else
                 this->arm_prev_data.arm_pose_ts_0 = T_c * T_corr_r2c * Lie::inverse_SE3(T_b2); // cam_base
     #   endif //(FEATURE_ENABLE_ARM_VICON_SUPPORT)
-                // this->arm_prev_data.arm_pose_ts_0.block<3,3>(0,0) = Lie::SO3::Identity();
-                // TODO: enforcing SO2 for base?
+    #   if (FEATURE_ENABLE_ARM_ODOMETRY_POSE_ZERO_ENFORCE_SO2)
+                double yaw = Utility::R2y_rad(this->arm_prev_data.arm_pose_ts_0.block<3,3>(0,0));
+                this->arm_prev_data.arm_pose_ts_0.block<3,3>(0,0) = Utility::y2R_rad(yaw); // to avoid pitch/roll bias
+    #   endif //(FEATURE_ENABLE_ARM_ODOMETRY_POSE_ZERO_ENFORCE_SO2)
                 PRINT_DEBUG("this->arm_prev_data.arm_pose_ts_0:\n%s\n", Lie::to_string(this->arm_prev_data.arm_pose_ts_0).c_str());
                 PRINT_DEBUG("T_c\n%s\n", Lie::to_string(T_c).c_str());
             }
@@ -620,7 +625,7 @@ void EstimatorManager::_postProcessArmJnts_unsafe(const double t, const Vector7d
 
         /* EE --> BASE */
         {
-# if (FEATURE_ENABLE_ARM_ODOMETRY_EE_TO_BASE_ENFORCE_SO2)
+# if (FEATURE_ENABLE_ARM_ODOMETRY_EE_TO_BASE_ENFORCE_SE2)
             // for base, project to SO2:
             // SO3 --proj--> SO2:
             double yaw = Utility::R2y_rad(T_b2.block<3,3>(0,0));

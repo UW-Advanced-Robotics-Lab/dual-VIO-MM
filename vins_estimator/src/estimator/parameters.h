@@ -181,7 +181,8 @@ using namespace std;
     //              - disabled: to see direct comparison vs vicon
     #define         FEATURE_ENABLE_ARM_ODOMETRY_EE_TO_BASE                  (( ENABLED))
     //                  - apply arm odometry to estimate base from ee
-    #define         FEATURE_ENABLE_ARM_ODOMETRY_EE_TO_BASE_ENFORCE_SO2      (( ENABLED))
+    #define         FEATURE_ENABLE_ARM_ODOMETRY_EE_TO_BASE_ENFORCE_SE2      (( ENABLED))
+    #define         FEATURE_ENABLE_ARM_ODOMETRY_POSE_ZERO_ENFORCE_SO2       (( ENABLED))
     //                  - enforcing SO2 projection for arm odometry to estimate base from ee
     #define         FEATURE_ENABLE_ARM_ODOMETRY_FACTOR_TO_BASE              ((FLAG_OURS) & ( ENABLED))
     //                  - apply arm odometry factor to base
