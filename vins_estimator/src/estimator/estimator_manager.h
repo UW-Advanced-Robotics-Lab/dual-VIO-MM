@@ -75,21 +75,21 @@ typedef struct{
             double      arm_pose_header = -1; // [UNUSED]
             Lie::SE3    arm_pose_st;
             Lie::SE3    arm_pose_st_0;
-#   if (FEATURE_ENABLE_ARM_ODOMETRY_EE_TO_BASE)
-            Lie::SE3    arm_pose_ts; // TODO: lets implement the odometry backwards
+            Lie::SE3    arm_pose_ts;
             Lie::SE3    arm_pose_ts_0;
-#   endif //(FEATURE_ENABLE_ARM_ODOMETRY_EE_TO_BASE)
 
-            bool        arm_pose_ready = false;
-            bool        arm_pose_inited = false;
+            bool        arm_pose_st_ready = false;
+            bool        arm_pose_ts_ready = false;
+            bool        arm_pose_st_inited = false;
+            bool        arm_pose_ts_inited = false;
         } arm_data_t;
         arm_buffer_t                    arm_buf;
         arm_data_t                      arm_prev_data;
 
         typedef struct{
-            Lie::SO3 latest_R[MAX_NUM_DEVICES];
-            Lie::R3  latest_P[MAX_NUM_DEVICES];
-            bool     latest_RP_ready[MAX_NUM_DEVICES];
+            Lie::SO3 last_R[MAX_NUM_DEVICES];
+            Lie::R3  last_P[MAX_NUM_DEVICES];
+            bool     last_RP_ready[MAX_NUM_DEVICES];
         } manager_data_t;
         manager_data_t                  m_data;
 

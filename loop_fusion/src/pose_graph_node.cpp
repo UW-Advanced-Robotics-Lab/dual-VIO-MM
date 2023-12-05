@@ -274,6 +274,7 @@ void vio_buf_pro_pub_callback(const nav_msgs::Odometry::ConstPtr &pose_msg, cons
     vio_q.y() = pose_msg->pose.pose.orientation.y;
     vio_q.z() = pose_msg->pose.pose.orientation.z;
     
+    // rectify:
     vio_t = w_r_vio * vio_t + w_t_vio;
     vio_q = w_r_vio *  vio_q;
 

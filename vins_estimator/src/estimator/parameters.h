@@ -32,6 +32,7 @@ using namespace std;
 #define DISABLED            (0U)
 #define NOT_IMPLEMENTED     (0U)
 #define FOREVER             (1U)
+#define TODO                (0U)
 
 #define NO_IMG              (cv::Mat())
 
@@ -61,6 +62,9 @@ using namespace std;
 
 #define TOPIC_PUBLISH_FPS                       ((int)(10))        // [run-time,visual] reduce if the frame drops are significant, visual only
 #define TOPIC_PUBLISH_INTERVAL_MS               ((int)(1000/TOPIC_PUBLISH_FPS))
+
+#define N_FRAMES_BEHIND_FOR_LOOP_FUSION         (2) 
+#define NTH_FRAME                               (WINDOW_SIZE - N_FRAMES_BEHIND_FOR_LOOP_FUSION)
 /* Hyperparams:
 *   @IMAGE_SYNCHRONIZATION_TIME_DELTA_MAX:
 *       - Ex: 0.03 sync tolerance: we throw out images if the time between two devices' image is greater than this value
@@ -83,58 +87,6 @@ using namespace std;
 #define IMAGE_ARM_SYNC_TIME_DELTA_MAX           (double)(0.01)
 
 // ----------------------------------------------------------------
-// : ROS TOPICS :
-// ----------------------------------------------------------------
-#define FUSE_TOPIC(BRANCH, LEAF)      ( BRANCH "/" LEAF )// combine string
-// publisher: ----------------------------------------------------
-// listened by loop fusion
-#define TOPIC_ODOMETRY_B              (FUSE_TOPIC("base" , "odometry"))
-#define TOPIC_ODOMETRY_E              (FUSE_TOPIC("EE"   , "odometry"))
-#define TOPIC_KEYFRAME_POSE_B         (FUSE_TOPIC("base" , "keyframe_pose"))
-#define TOPIC_KEYFRAME_POSE_E         (FUSE_TOPIC("EE"   , "keyframe_pose"))
-#define TOPIC_EXTRINSIC_B             (FUSE_TOPIC("base" , "extrinsic"))
-#define TOPIC_EXTRINSIC_E             (FUSE_TOPIC("EE"   , "extrinsic"))
-#define TOPIC_KEYFRAME_POINT_B        (FUSE_TOPIC("base" , "keyframe_point"))
-#define TOPIC_KEYFRAME_POINT_E        (FUSE_TOPIC("EE"   , "keyframe_point"))
-#define TOPIC_MARGIN_CLOUD_B          (FUSE_TOPIC("base" , "margin_cloud"))
-#define TOPIC_MARGIN_CLOUD_E          (FUSE_TOPIC("EE"   , "margin_cloud"))
-
-#define TOPIC_CAMERA_POSE_B           (FUSE_TOPIC("base" , "camera_pose"))
-#define TOPIC_CAMERA_POSE_E           (FUSE_TOPIC("EE"   , "camera_pose"))
-#define TOPIC_IMU_PROPAGATE_B         (FUSE_TOPIC("base" , "imu_propagate"))
-#define TOPIC_IMU_PROPAGATE_E         (FUSE_TOPIC("EE"   , "imu_propagate"))
-#define TOPIC_KEY_POSES_B             (FUSE_TOPIC("base" , "key_poses"))
-#define TOPIC_KEY_POSES_E             (FUSE_TOPIC("EE"   , "key_poses"))
-#define TOPIC_CAMERA_POSE_VISUAL_B    (FUSE_TOPIC("base" , "camera_pose_visual"))
-#define TOPIC_CAMERA_POSE_VISUAL_E    (FUSE_TOPIC("EE"   , "camera_pose_visual"))
-#define TOPIC_PATH_B                  (FUSE_TOPIC("base" , "path"))
-#define TOPIC_PATH_E                  (FUSE_TOPIC("EE"   , "path"))
-#define TOPIC_IMAGE_TRACK_B           (FUSE_TOPIC("base" , "image_track"))
-#define TOPIC_IMAGE_TRACK_E           (FUSE_TOPIC("EE"   , "image_track"))
-#define TOPIC_POINT_CLOUD_B           (FUSE_TOPIC("base" , "point_cloud"))
-#define TOPIC_POINT_CLOUD_E           (FUSE_TOPIC("EE"   , "point_cloud"))
-#define PUBLISHER_BUFFER_SIZE         (1000)
-
-#define TOPIC_VICON_PATH_B            (FUSE_TOPIC("base" , "vicon/path"))
-#define TOPIC_VICON_PATH_E            (FUSE_TOPIC("EE"   , "vicon/path"))
-
-#define TOPIC_ARM_PATH_B              (FUSE_TOPIC("base" , "arm/path"))
-#define TOPIC_ARM_PATH_E              (FUSE_TOPIC("EE"   , "arm/path"))
-
-#define TOPIC_ARM_PATH_VIZ            (FUSE_TOPIC("arm"   , "visual"))
-
-// buffer size: -----------------------------
-#define SUB_IMG_BUFFER_SIZE         (30U)
-#define SUB_IMU_BUFFER_SIZE         (100U)
-#define SUB_FEAT_BUFFER_SIZE        (100U)
-#define SUB_ARM_BUFFER_SIZE         (100U)
-
-// converter: --------------------------------
-#define CV_YAML_TO_BOOL(X)          ((bool)(static_cast<int>(X)!=0))
-#define FLOAT_IN_RANGE(X, BOUND)    (((X < BOUND) && (X > -BOUND)))
-#define FLOAT_IN_BOUND(X, LB, UB)   (((X < UB) && (X > LB)))
-
-// ----------------------------------------------------------------
 // : Feature Definitions :
 // ----------------------------------------------------------------
 // MAJOR FEATURES:
@@ -142,7 +94,11 @@ using namespace std;
 #define FEATURE_MODE_DEBUG_RUNTIME           ( ENABLED) // overrides below ...
 #define FEATURE_MODE_DEBUG_KINEMATICS        ( ENABLED) 
 
-#define FLAG_OURS                            ( ENABLED) // enable: to enable our tightly-coupled solution
+// selection:
+#define USER_PARAMS                 (ENABLED) // indicates USER_PARAMS
+#define ZEROING_WRT_TO_BASE         ((USER_PARAMS) & (DISABLED)) // enable tp debug raw odometry offset from base
+#define USER_VICON_DEBUG            ((USER_PARAMS) & (DISABLED)) // enable to debug arm config (TODO: the BASE->EE seems not working?)
+#define FLAG_OURS                   ((USER_PARAMS) & (DISABLED)) // To toggle between our tightly-coupled solution vs baseline
 
 // ----------------------------------------------------------------
 // FUTURE SUPPORTS:
@@ -150,7 +106,9 @@ using namespace std;
 #define FEATURE_ENABLE_PT_CLOUD_SUPPORT      (NOT_IMPLEMENTED) // allow stereo support per device [TODO: let's study stereo later]
 #define FEATURE_ENABLE_8UC1_IMAGE_SUPPORT    (NOT_IMPLEMENTED) // allow 8UC1 image support per device [opt out for runtime]
 #define FEATURE_ENABLE_STANDALONE_SUPPORT    (NOT_IMPLEMENTED) // allow standalone support for one device [opt out for runtime]
-
+#define FEATURE_ENABLE_CALIBRATION           (NOT_IMPLEMENTED) // allow extrinsic calibration
+// ----------------------------------------------------------------
+// Performance Support:
 // performance related feature support:
 #define FEATURE_ENABLE_PERFORMANCE_EVAL                 (( ENABLED) & (!FEATURE_MODE_RUNTIME)) // report performance
 #    define FEATURE_PERFORMANCE_EVAL_THRESHOLD_MS           (30U) // TODO: [concise] report to console when above X ms, else ros debug
@@ -159,8 +117,18 @@ using namespace std;
 //TODO: we should have a performance logger to a text file
 
 // other feature support more than originally supported:
-#define FEATURE_ASSUME_INIT_IMU_TO_BE_ZEROED_ABSOLUTELY (DISABLED)  // originally, it is zeroed against the initial value, true to set to zero at the init.
+#define FEATURE_ASSUME_INIT_IMU_TO_BE_ZEROED_ABSOLUTELY ( ENABLED)
+//      - default: enabled, originally it is zeroed against the initial value, true to set to zero at the init.
+//      - disabled: it may not be steady when system stopped
+#define FEATURE_REINIT_ONLY_AT_NON_LINEAR_OPTIMIZATION  ( ENABLED)
+//     - default: enabled
+//     - disabled: reinit even when initialization failed, discard the slidewindow, restart
+#define FEATURE_BROADCAST_ESTIMATOR_TF                  (DISABLED)
+//     - original: enabled, but we are not using it
 
+// ----------------------------------------------------------------
+// MAJOR SUPPORTS:
+#if (FEATURE_MODE_RUNTIME)
 /* To enforce the real-time performance, we will drop frames if we are n seconds behind the schedule */
 /* FEATURE_ENABLE_FRAME_DROP_FOR_REAL_TIME
 *  @problem: it seems that we are running behind the schedule for the high res image feeds ??? 
@@ -173,51 +141,51 @@ using namespace std;
 *       Let's try to drop the frame before the input image
 *   @ solution to above: by isolating visual publisher to a separate thread, we are able to achieve no frame loss with two flags disabled
 */
-#if (FEATURE_MODE_RUNTIME)
     #define FEATURE_ENABLE_DYNAMIC_FRAME_DROP_FOR_RT        (DISABLED) // set via "IMAGE_BEHIND_SCHEDULE_TIME_TOLERANCE"
     #define FEATURE_ENABLE_PROCESS_FRAME_FPS_FOR_RT         ( ENABLED) // set via #define IMAGE_PROCESSING_FPS
     #define FEATURE_ENABLE_PROCESS_FRAME_FPS_FOR_RT_INSIDE_INPUT_IMG    (! FEATURE_ENABLE_PROCESS_FRAME_FPS_FOR_RT)
     // ... NOT ADDED YET
     
 #elif (FEATURE_MODE_DEBUG_RUNTIME)
-    #define ZEROING_WRT_TO_BASE ( ENABLED)
     // fps:
-    #define FEATURE_ENABLE_DYNAMIC_FRAME_DROP_FOR_RT        (DISABLED) // set via "IMAGE_BEHIND_SCHEDULE_TIME_TOLERANCE"
-    #define FEATURE_ENABLE_PROCESS_FRAME_FPS_FOR_RT         ( ENABLED) // set via #define IMAGE_PROCESSING_FPS
-    #define FEATURE_ENABLE_PROCESS_FRAME_FPS_FOR_RT_INSIDE_INPUT_IMG    (! FEATURE_ENABLE_PROCESS_FRAME_FPS_FOR_RT)
+    #define FEATURE_ENABLE_DYNAMIC_FRAME_DROP_FOR_RT                        (DISABLED) // set via "IMAGE_BEHIND_SCHEDULE_TIME_TOLERANCE"
+    #define FEATURE_ENABLE_PROCESS_FRAME_FPS_FOR_RT                         ( ENABLED) // set via #define IMAGE_PROCESSING_FPS
+    #define FEATURE_ENABLE_PROCESS_FRAME_FPS_FOR_RT_INSIDE_INPUT_IMG        (! FEATURE_ENABLE_PROCESS_FRAME_FPS_FOR_RT)
     // other features:
-    #define FEATURE_ENABLE_STATISTICS_LOGGING               (DISABLED) // `printStatistics`
-    #define FEATURE_NON_THREADING_SUPPORT                   (DISABLED) // disable non-threading
-    #define FEATURE_ESTIMATOR_THREADING_SUPPORT             (DISABLED) // backward-compatible with threading in estimator
-    #define FEATURE_PERMIT_WITHOUT_IMU_SUPPORT              (FEATURE_ENABLE_STEREO_SUPPORT) // since there is no support from stereo, we will assume imu to be enabled all the time
+    #define FEATURE_ENABLE_STATISTICS_LOGGING                               (DISABLED) // `printStatistics`
+    #define FEATURE_NON_THREADING_SUPPORT                                   (DISABLED) // disable non-threading
+    #define FEATURE_ESTIMATOR_THREADING_SUPPORT                             (DISABLED) // backward-compatible with threading in estimator
+    #define FEATURE_PERMIT_WITHOUT_IMU_SUPPORT                              (NOT_IMPLEMENTED) // since there is no support from stereo, we will assume imu to be enabled all the time
 
     // vicon support:
-    #define FEATURE_ENABLE_VICON_SUPPORT                    ( ENABLED) // to feed vicon data and output as nav_msg::path for visualization
-    #   define FEATURE_ENABLE_VICON_ZEROING_SUPPORT              ( ENABLED) // zeroing vicons independently
-    #       define FEATURE_ENABLE_VICON_ZEROING_WRT_BASE_SUPPORT (ZEROING_WRT_TO_BASE) // zeroing vicons wrt base
-    #   define FEATURE_ENABLE_VICON_ONLY_AFTER_INIT_SFM          ( ENABLED) // initialize vicon after sfm
-    #   define FEATURE_ENABLE_VICON_ONLY_AFTER_INIT_BOTH_SFM     (DISABLED) // initialize vicon after sfm
+    #define FEATURE_ENABLE_VICON_SUPPORT                                    (( ENABLED) || (USER_VICON_DEBUG)) // to feed vicon data and output as nav_msg::path for visualization
+    #   define FEATURE_ENABLE_VICON_ZEROING_SUPPORT                             ( ENABLED) // zeroing vicons independently
+    #       define FEATURE_ENABLE_VICON_ZEROING_WRT_BASE_SUPPORT                (ZEROING_WRT_TO_BASE) // zeroing vicons wrt base
+    // initialize vicon after sfm:
+    //     - disable in ZEROING_WRT_TO_BASE: as we are basing vicon wrt base only
+    #   define FEATURE_ENABLE_VICON_ONLY_AFTER_INIT_SFM                     ((USER_PARAMS) & (ENABLED))
+    #   define FEATURE_ENABLE_VICON_ONLY_AFTER_INIT_BOTH_SFM                ((USER_PARAMS) & (ENABLED))
     // TODO: we should try to initialize when one is not inited/ stationary
 
     // arm odometry support:
-    #define FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT             ( ENABLED) // [WIP]
-    #define     FEATURE_ENABLE_ARM_VICON_SUPPORT               ((DISABLED) & (FEATURE_ENABLE_VICON_SUPPORT)) 
+    #define FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT                             ( ENABLED) // [WIP]
+    #define     FEATURE_ENABLE_ARM_VICON_SUPPORT                            (USER_VICON_DEBUG) 
     //              - stubing vicon base data for arm odometry (to see arm kinematics accuracy)
-    #define     FEATURE_ENABLE_ARM_ODOMETRY_VIZ                (( ENABLED) & (FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT))
-    #define         FEATURE_ENABLE_ARM_ODOMETRY_VIZ_ARM             (( ENABLED) & (FEATURE_ENABLE_ARM_ODOMETRY_VIZ)) // init first pose with arm odometry
-    #define     FEATURE_ENABLE_ARM_ODOMETRY_FACTOR             ((FLAG_OURS) & (FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT)) // [Our-Solution] Arm Marginalization
+    #define     FEATURE_ENABLE_ARM_ODOMETRY_VIZ                             (( ENABLED))
+    #define         FEATURE_ENABLE_ARM_ODOMETRY_VIZ_ARM                     (FEATURE_ENABLE_ARM_ODOMETRY_VIZ) // init first pose with arm odometry
+    #define     FEATURE_ENABLE_ARM_ODOMETRY_FACTOR                          ((FLAG_OURS)) // [Our-Solution] Arm Marginalization
     //              - disabled [baseline]: baseline without arm odometry marginalization
     //              - enabled  [ours]: with arm odometry marginalization
-    #define         FEATURE_ENABLE_ARM_ODOMETRY_ZEROING             ((!ZEROING_WRT_TO_BASE) & (FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT)) // init first pose with arm odometry
+    #define         FEATURE_ENABLE_ARM_ODOMETRY_WRT_TO_BASE                 (ZEROING_WRT_TO_BASE) // init first pose with arm odometry
     //              - enabled [default]: consider relative poses with respect to the first frame
     //              - disabled: to see direct comparison vs vicon
-    #define         FEATURE_ENABLE_ARM_ODOMETRY_EE_TO_BASE          (( ENABLED) & (FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT))
+    #define         FEATURE_ENABLE_ARM_ODOMETRY_EE_TO_BASE                  (( ENABLED))
     //                  - apply arm odometry to estimate base from ee
-    #define         FEATURE_ENABLE_ARM_ODOMETRY_EE_TO_BASE_ENFORCE_SO2     (( ENABLED))
+    #define         FEATURE_ENABLE_ARM_ODOMETRY_EE_TO_BASE_ENFORCE_SO2      (( ENABLED))
     //                  - enforcing SO2 projection for arm odometry to estimate base from ee
-    #define         FEATURE_ENABLE_ARM_ODOMETRY_FACTOR_TO_BASE      (( ENABLED) & (FEATURE_ENABLE_ARM_ODOMETRY_FACTOR))
+    #define         FEATURE_ENABLE_ARM_ODOMETRY_FACTOR_TO_BASE              ((FLAG_OURS) & ( ENABLED))
     //                  - apply arm odometry factor to base
-    #define     FEATURE_ENABLE_ARM_ODOMETRY_TO_IMU_INIT         (ZEROING_WRT_TO_BASE)
+    #define     FEATURE_ENABLE_ARM_ODOMETRY_TO_POSE_INIT                    (TODO) //TODO: we should figureout a way to apply pose
 
 #elif (FEATURE_MODE_DEBUG_KINEMATICS) // (Debugging kinematics)
     // other features:
@@ -262,6 +230,7 @@ using namespace std;
 #   define FEATURE_TRACKING_IMAGE_SUPPORT                   (( ENABLED) & (FEATURE_DEBUGGING)) 
 #   define FEATURE_PERFORMANCE_DEBUG_PRINTF                 (( ENABLED) & (FEATURE_DEBUGGING)) 
 #   define FEATURE_VIZ_PUBLISH                              (( ENABLED) & (FEATURE_DEBUGGING)) 
+#   define FEATURE_ROS_PUBLISH_IMU_PROPAGATION              ((DISABLED) & (FEATURE_DEBUGGING)) 
 // debug only features (additional images):
 #   define FEATURE_DEBUG_IMAGE_AT_CONNECTIONS               ((DISABLED) & (FEATURE_DEBUGGING))
 // ----------------------------------------------------------------
@@ -309,6 +278,69 @@ using namespace std;
 #   define TOK_TAG(PM, TAG)     {} // do nothing
 #   define TOK_IF(PM, MS)       {} // do nothing
 #endif
+
+
+// ----------------------------------------------------------------
+// : ROS TOPICS :
+// ----------------------------------------------------------------
+#define FUSE_TOPIC(BRANCH, LEAF)      ( BRANCH "/" LEAF )// combine string
+// publisher: ----------------------------------------------------
+// listened by loop fusion
+//      - pub by processMeasurements_thread() everytime after successful processImage()
+//      (buf->pose)
+#define TOPIC_KEYFRAME_POSE_B         (FUSE_TOPIC("base" , "keyframe_pose")) // pubKeyframe_Odometry_and_Points_immediately [N Frames Behind]
+#define TOPIC_KEYFRAME_POSE_E         (FUSE_TOPIC("EE"   , "keyframe_pose")) // pubKeyframe_Odometry_and_Points_immediately [N Frames Behind]
+//      (buf->point)
+#define TOPIC_KEYFRAME_POINT_B        (FUSE_TOPIC("base" , "keyframe_point"))// pubKeyframe_Odometry_and_Points_immediately [N Frames Behind]
+#define TOPIC_KEYFRAME_POINT_E        (FUSE_TOPIC("EE"   , "keyframe_point"))// pubKeyframe_Odometry_and_Points_immediately [N Frames Behind]
+//      (viz)
+#define TOPIC_MARGIN_CLOUD_B          (FUSE_TOPIC("base" , "margin_cloud"))  // [VIZ] queue_PointCloud_unsafe -> pubPointClouds_safe 
+#define TOPIC_MARGIN_CLOUD_E          (FUSE_TOPIC("EE"   , "margin_cloud"))  // [VIZ] queue_PointCloud_unsafe -> pubPointClouds_safe 
+//      (camera_pose_visual, odometry_rect)
+#define TOPIC_ODOMETRY_B              (FUSE_TOPIC("base" , "odometry"))      // [VIZ] queue_Odometry_unsafe -> pubOdometry_safe, pubOdometryPath_safe
+#define TOPIC_ODOMETRY_E              (FUSE_TOPIC("EE"   , "odometry"))      // [VIZ] queue_Odometry_unsafe -> pubOdometry_safe, pubOdometryPath_safe
+//      (dev->tic, dev->qic)
+#define TOPIC_EXTRINSIC_B             (FUSE_TOPIC("base" , "extrinsic"))     // [VIZ] queue_TF_unsafe -> pubExtrinsic_TF_safe
+#define TOPIC_EXTRINSIC_E             (FUSE_TOPIC("EE"   , "extrinsic"))     // [VIZ] queue_TF_unsafe -> pubExtrinsic_TF_safe
+// not listened:
+#define TOPIC_CAMERA_POSE_B           (FUSE_TOPIC("base" , "camera_pose"))
+#define TOPIC_CAMERA_POSE_E           (FUSE_TOPIC("EE"   , "camera_pose"))
+#if (FEATURE_ROS_PUBLISH_IMU_PROPAGATION)
+#   define TOPIC_IMU_PROPAGATE_B      (FUSE_TOPIC("base" , "imu_propagate")) // UNUSED
+#   define TOPIC_IMU_PROPAGATE_E      (FUSE_TOPIC("EE"   , "imu_propagate")) // UNUSED
+#endif // (FEATURE_ROS_PUBLISH_IMU_PROPAGATION)
+#define TOPIC_KEY_POSES_B             (FUSE_TOPIC("base" , "key_poses"))     // queue_KeyPoses_unsafe
+#define TOPIC_KEY_POSES_E             (FUSE_TOPIC("EE"   , "key_poses"))     // queue_KeyPoses_unsafe
+#define TOPIC_CAMERA_POSE_VISUAL_B    (FUSE_TOPIC("base" , "camera_pose_visual"))
+#define TOPIC_CAMERA_POSE_VISUAL_E    (FUSE_TOPIC("EE"   , "camera_pose_visual"))
+#define TOPIC_IMAGE_TRACK_B           (FUSE_TOPIC("base" , "image_track"))
+#define TOPIC_IMAGE_TRACK_E           (FUSE_TOPIC("EE"   , "image_track"))
+#define TOPIC_POINT_CLOUD_B           (FUSE_TOPIC("base" , "point_cloud"))
+#define TOPIC_POINT_CLOUD_E           (FUSE_TOPIC("EE"   , "point_cloud"))
+// Visualization and Evaluation:
+#define TOPIC_PATH_B                  (FUSE_TOPIC("base" , "path"))
+#define TOPIC_PATH_E                  (FUSE_TOPIC("EE"   , "path"))
+#define PUBLISHER_BUFFER_SIZE         (1000)
+
+// vicon Ground Truth:
+#define TOPIC_VICON_PATH_B            (FUSE_TOPIC("base" , "vicon/path"))
+#define TOPIC_VICON_PATH_E            (FUSE_TOPIC("EE"   , "vicon/path"))
+// Arm Odometry Path (Debug/Reference):
+#define TOPIC_ARM_PATH_B              (FUSE_TOPIC("base" , "arm/path"))
+#define TOPIC_ARM_PATH_E              (FUSE_TOPIC("EE"   , "arm/path"))
+// Arm Visualization:
+#define TOPIC_ARM_PATH_VIZ            (FUSE_TOPIC("arm"   , "visual"))
+
+// buffer size: -----------------------------
+#define SUB_IMG_BUFFER_SIZE         (30U)
+#define SUB_IMU_BUFFER_SIZE         (100U)
+#define SUB_FEAT_BUFFER_SIZE        (100U)
+#define SUB_ARM_BUFFER_SIZE         (100U)
+
+// converter: --------------------------------
+#define CV_YAML_TO_BOOL(X)          ((bool)(static_cast<int>(X)!=0))
+#define FLOAT_IN_RANGE(X, BOUND)    (((X < BOUND) && (X > -BOUND)))
+#define FLOAT_IN_BOUND(X, LB, UB)   (((X < UB) && (X > LB)))
 // ----------------------------------------------------------------
 // : Definitions :
 // ----------------------------------------------------------------

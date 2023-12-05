@@ -62,9 +62,12 @@ void EstimatorManager::restartManager()
 
 #if (FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT)
     // arm:
-    arm_prev_data.t_header = -1;
-    arm_prev_data.arm_pose_header = -1;
-    arm_prev_data.arm_pose_ready = false;
+    this->arm_prev_data.t_header = -1;
+    this->arm_prev_data.arm_pose_header = -1;
+    this->arm_prev_data.arm_pose_st_0 = Lie::SE3::Identity();
+    this->arm_prev_data.arm_pose_ts_0 = Lie::SE3::Identity();
+    this->arm_prev_data.arm_pose_st_inited = false;
+    this->arm_prev_data.arm_pose_ts_inited = false;
 #endif
     PRINT_DEBUG("[EstimatorManager::restartManager] Manager Ready!");
 }
@@ -122,8 +125,27 @@ void EstimatorManager::processMeasurements_thread()
                         pArm->releaseLock();
                     }
                 }
-
                 TOK_TAG(ellapsed_process_i,"fetch_arm_odom");
+
+                // PRINT_INFO("pEsts[BASE_DEV]->_status : %d", pEsts[BASE_DEV]->_status);
+                // PRINT_INFO("pEsts[  EE_DEV]->_status : %d", pEsts[  EE_DEV]->_status);
+#  if (FEATURE_ENABLE_ARM_ODOMETRY_TO_POSE_INIT)
+//                 // Pose Initialization based on arm:
+                // based on previous status:
+                if (    ((pEsts[  EE_DEV]->_status & Estimator::STATUS_NON_LINEAR_OPT) && (pEsts[BASE_DEV]->_status & Estimator::STATUS_INITIALIZED))
+                    ||  ((pEsts[BASE_DEV]->_status & Estimator::STATUS_NON_LINEAR_OPT) && (pEsts[  EE_DEV]->_status & Estimator::STATUS_INITIALIZED)) )
+                {
+                    Lie::SE3 pose = Lie::inverse_SO3xR3(m_data.last_R[EE_DEV], m_data.last_P[EE_DEV]);
+                    pEsts[EE_DEV]->initFirstBodyPose(pose);
+                    PRINT_DEBUG("[EE<-BASE:] initFirstPose: \nST:\n%s\nTS:\n%s", 
+                        Lie::to_string(this->arm_prev_data.arm_pose_st).c_str(),
+                        Lie::to_string(this->arm_prev_data.arm_pose_ts).c_str());
+                }
+                else
+                {
+                    // DO NOTHING;
+                }
+#  endif //! (FEATURE_ENABLE_ARM_ODOMETRY_TO_IMU_INIT)
 #endif //FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT
 
                 const bool is_base_imu_avail    = pEsts[BASE_DEV]->IMUAvailable(curTime[BASE_DEV]);
@@ -146,19 +168,6 @@ void EstimatorManager::processMeasurements_thread()
                         if (! pEsts[id]->initFirstPoseFlag)
                         {
                             pEsts[id]->initFirstIMUPose(accVector[id]);
-                            if ((id == EE_DEV) && (is_arm_avail))
-                            {
-# if (FEATURE_ENABLE_ARM_ODOMETRY_TO_IMU_INIT)
-                                // FIXME: we need to init first pose offset
-                                // pEsts[EE_DEV]->initFirstPose(this->arm_prev_data.arm_pose_st);
-                                pEsts[EE_DEV]->initFirstPose(this->arm_prev_data.arm_g_st);
-                                PRINT_DEBUG("initFirstPose: %s", Lie::to_string(this->arm_prev_data.arm_g_st).c_str());
-# endif //! (FEATURE_ENABLE_ARM_ODOMETRY_TO_IMU_INIT)
-                            }
-                            else
-                            {
-                                PRINT_ERROR("Error initializing");
-                            }
                         }
                     }
 
@@ -181,6 +190,7 @@ void EstimatorManager::processMeasurements_thread()
                             }
                             else // middle
                                 dt = accVector[id][i].first - accVector[id][i - 1].first;
+                            // process IMU: 
                             pEsts[id]->processIMU(accVector[id][i].first, dt, accVector[id][i].second, gyrVector[id][i].second);
                         }
                     }
@@ -200,19 +210,55 @@ void EstimatorManager::processMeasurements_thread()
 #else
                         Lie::SE3 pose = arm_prev_data.arm_pose_st;
 #endif //(!FEATURE_ENABLE_ARM_ODOMETRY_EE_TO_BASE)
+                        pEsts[  EE_DEV]->arm_inited = this->arm_prev_data.arm_pose_st_inited; // indicates if valid
+                        pEsts[BASE_DEV]->arm_inited = this->arm_prev_data.arm_pose_ts_inited; // indicates if valid
                         _success[id] = pEsts[id]->processImage(feature[id].second, feature[id].first, pose);
                         prevTime[id] = curTime[id];
                         pEsts[id]->mProcess.unlock();
                         
-                        // in case of failure, restart:
+                        // in case of failure, restart @ optimization failure:  
                         if (_success[id] == false)
                         {
-                            ROS_WARN("failure detection!");
-                            PRINT_ERROR("[DEV:%d] failure detection!", id);
-                            // TODO: clear state
-                            pEsts[id]->clearState_safe();
-                            pEsts[id]->setParameter_safe(); // reinit
-                            PRINT_WARN("[DEV:%d] system reboot!", id);
+                            if (pEsts[id]->_status & Estimator::STATUS_NON_LINEAR_OPT)
+                            {
+                                ROS_WARN("failure detection!");
+                                PRINT_ERROR("[DEV:%d] failure detection!", id);
+                                // TODO: clear state
+                                pEsts[id]->clearState_safe();
+                                pEsts[id]->setParameter_safe(); // reinit
+                                PRINT_WARN("[DEV:%d] system reboot!", id);
+                                // device will re-initialize
+                                //TODO:
+                                // this->arm_prev_data.arm_pose_st_0 = Lie::SE3::Identity();
+                                // this->arm_prev_data.arm_pose_ts_0 = Lie::SE3::Identity();
+                                // this->arm_prev_data.arm_pose_st_inited = false;
+                                // this->arm_prev_data.arm_pose_ts_inited = false;
+                            }
+                            else if (pEsts[id]->_status & Estimator::STATUS_INITIALIZING)
+                            {
+                                PRINT_ERROR("[DEV:%d] failed to initialize!", id);
+                            }
+                        }
+                        // PRINT_INFO("pEsts[%d]->_status : %d", id, pEsts[id]->_status);
+                        
+                        // store latest result: (only valid after initialization)
+                        //   -> used by _postProcessArmJnts_unsafe() at the start of next run
+                        if (pEsts[id]->_status & Estimator::STATUS_UPDATED) 
+                        {
+                            m_data.last_R[id] = pEsts[id]->last_R;
+                            m_data.last_P[id] = pEsts[id]->last_P;
+                            m_data.last_RP_ready[id] = true;
+                        }
+                        else if (pEsts[id]->_status & Estimator::STATUS_INITIALIZED) 
+                        {
+                            // for initialization:
+                            m_data.last_R[id] = pEsts[id]->latest_R;
+                            m_data.last_P[id] = pEsts[id]->latest_P;
+                            m_data.last_RP_ready[id] = true;
+                        }
+                        else
+                        {
+                            m_data.last_RP_ready[id] = false;
                         }
                     }
                     // });
@@ -232,27 +278,22 @@ void EstimatorManager::processMeasurements_thread()
                         std_msgs::Header header;
                         header.frame_id = "world";
                         header.stamp = ros::Time(feature[id].first);
-                        // immediate updates:
+                        // immediate updates (used by loop fusion):
                         {
                             pubKeyframe_Odometry_and_Points_immediately(*pEsts[id]);
-                            pubTF_immediately(*pEsts[id], header);
-                            pubOdometry_Immediately(*pEsts[id], header);
                         }
 #if (FEATURE_VIZ_PUBLISH)
                         // visualization updates:
                         visualization_guard_lock(*pEsts[id]);
                         {
+                            queue_TF_unsafe(*pEsts[id], header);
+                            queue_Odometry_unsafe(*pEsts[id], header);
                             queue_KeyPoses_unsafe(*pEsts[id], header);
                             queue_CameraPose_unsafe(*pEsts[id], header);
                             queue_PointCloud_unsafe(*pEsts[id], header);
                         }
                         visualization_guard_unlock(*pEsts[id]);
-#endif //(FEATURE_VIZ_PUBLISH)                        
-                        // store latest result:
-                        m_data.latest_R[id] = pEsts[id]->latest_Q.toRotationMatrix();
-                        m_data.latest_P[id] = pEsts[id]->latest_P;
-                        m_data.latest_RP_ready[id] = true;
-                        // End-of-publishing
+#endif //(FEATURE_VIZ_PUBLISH)
                         pEsts[id]->mProcess.unlock();
                     }
                     TOK_TAG(ellapsed_process_i,"img_pub");
@@ -267,11 +308,12 @@ void EstimatorManager::processMeasurements_thread()
                 for(size_t id = BASE_DEV; id < MAX_NUM_DEVICES; id++)
                 {
 #   if (FEATURE_ENABLE_VICON_ONLY_AFTER_INIT_SFM)
+                //NOTE: If Enabled, the vicon will aligned based on the first initialization, skipping all initialization process
 #       if (FEATURE_ENABLE_VICON_ONLY_AFTER_INIT_BOTH_SFM)
-                    if ((pEsts[BASE_DEV]->solver_flag == Estimator::INITIAL) || 
-                        (pEsts[  EE_DEV]->solver_flag == Estimator::INITIAL)) 
+                    if ((pEsts[BASE_DEV]->_status & Estimator::STATUS_INITIALIZING) &&
+                        (pEsts[  EE_DEV]->_status & Estimator::STATUS_INITIALIZING)) 
 #       else
-                    if (pEsts[id]->solver_flag == Estimator::INITIAL)
+                    if (pEsts[id]->_status & Estimator::STATUS_INITIALIZING)
 #       endif //(FEATURE_ENABLE_VICON_ONLY_AFTER_INIT_BOTH_SFM)
                     {
                         // do not process till SFM initialized
@@ -435,24 +477,25 @@ void EstimatorManager::_postProcessArmJnts_unsafe(const double t, const Vector7d
     pArm->processJntAngles_unsafely();
 
     // compute:
-#if (FEATURE_ENABLE_ARM_VICON_SUPPORT) 
-    // No need to wait for estimator if fed from vicon
-    const bool if_estimator_ready = true;
-#else
-    const bool if_estimator_ready = (  
-           (pEsts[BASE_DEV]->solver_flag == Estimator::SolverFlag::NON_LINEAR)
-        && (pEsts[EE_DEV  ]->solver_flag == Estimator::SolverFlag::NON_LINEAR)
-        && (m_data.latest_RP_ready[BASE_DEV] == true)
-        && (m_data.latest_RP_ready[EE_DEV  ] == true)
-    );
-#endif //(!FEATURE_ENABLE_ARM_VICON_SUPPORT)
-    if ((arm_prev_data.t_header > 0) && if_estimator_ready)
+# if (FEATURE_ENABLE_ARM_ODOMETRY_EE_TO_BASE)
+    const bool if_estimator_ready[MAX_NUM_DEVICES] = {
+        (m_data.last_RP_ready[BASE_DEV] == true), 
+        (m_data.last_RP_ready[EE_DEV  ] == true)
+    };
+# else //(!FEATURE_ENABLE_ARM_ODOMETRY_EE_TO_BASE)
+    const bool if_estimator_ready[MAX_NUM_DEVICES] = {
+        (m_data.last_RP_ready[BASE_DEV] == true), 
+        (false) // Disable
+    };
+# endif 
+    if ((arm_prev_data.t_header > 0))
     {
         // placeholders:
         Lie::SE3 T_c, T_b, T_e, T_c2, T_b2;
         Lie::R3 p_c, p_c2; 
         Lie::SO3 R_c, R_c2;
         Lie::SE3 g_st, b_st;
+        T_b = Lie::SE3::Identity();
         
         /* 1. Fetch Pose Reference */
         g_st = arm_prev_data.arm_g_st;
@@ -460,117 +503,149 @@ void EstimatorManager::_postProcessArmJnts_unsafe(const double t, const Vector7d
 #   if (FEATURE_ENABLE_ARM_VICON_SUPPORT) 
         // stub previously published Ground Truth Vicon data:
         geometry_msgs::Pose pose;
-        getLatestViconPose_safe(pose, BASE_DEV);
-        p_c = Eigen::Vector3d(pose.position.x, pose.position.y, pose.position.z);
-        R_c = Eigen::Quaterniond(pose.orientation.w, pose.orientation.x, pose.orientation.y, pose.orientation.z).toRotationMatrix();
-        T_c = Lie::SE3_from_SO3xR3((R_c * R_corr_w2r), p_c); // vicon is aligned with world axis -> robot axis
-        
-        getLatestViconPose_safe(pose, EE_DEV);
-        p_c2 = Eigen::Vector3d(pose.position.x, pose.position.y, pose.position.z);
-        R_c2 = Eigen::Quaterniond(pose.orientation.w, pose.orientation.x, pose.orientation.y, pose.orientation.z).toRotationMatrix();
-        T_c2 = Lie::SE3_from_SO3xR3((R_c2 * R_corr_w2r), p_c2); // robot axis
-        // - base estimator for orientation:
-        // R_c = pEsts[BASE_DEV]->latest_Q.toRotationMatrix(); // previous frame
-        // T_c = Lie::SE3_from_SO3xR3(R_c * R_corr_c2w, p_c);
+        if (if_estimator_ready[BASE_DEV])
+        {
+            getLatestViconPose_safe(pose, BASE_DEV);
+            p_c = Eigen::Vector3d(pose.position.x, pose.position.y, pose.position.z);
+            R_c = Eigen::Quaterniond(pose.orientation.w, pose.orientation.x, pose.orientation.y, pose.orientation.z).toRotationMatrix();
+            T_c = Lie::SE3_from_SO3xR3((R_c * R_corr_w2r), p_c); // vicon is aligned with world axis -> robot axis
+        }
+        else
+        {
+            T_c = Lie::SE3_from_SO3xR3((R_corr_c2w * R_corr_w2r), p_c);
+        }
+        if (if_estimator_ready[EE_DEV])
+        {
+            getLatestViconPose_safe(pose, EE_DEV);
+            p_c2 = Eigen::Vector3d(pose.position.x, pose.position.y, pose.position.z);
+            R_c2 = Eigen::Quaterniond(pose.orientation.w, pose.orientation.x, pose.orientation.y, pose.orientation.z).toRotationMatrix();
+            T_c2 = Lie::SE3_from_SO3xR3((R_c2 * R_corr_w2r), p_c2); // robot axis
+        }
+        else
+        {
+            T_c2 =Lie::SE3_from_SO3xR3((R_corr_w2r), p_c);
+        }
 #   else 
         // feed in previously optimized estimator latest state:
-        p_c = m_data.latest_P[BASE_DEV]; // previous frame
-        R_c = m_data.latest_R[BASE_DEV]; // previous frame
-        p_c2 = m_data.latest_P[EE_DEV]; // previous frame
-        R_c2 = m_data.latest_R[EE_DEV]; // previous frame
-
-        // convert frame axis -(R_corr_c2w)-> world frame axis -(R_corr_w2r)-> robot frame axis:
-        T_c = Lie::SE3_from_SO3xR3(((R_c * R_corr_c2w) * R_corr_w2r), p_c);// a coordinate transformation is needed
-        T_c2 = Lie::SE3_from_SO3xR3((R_c2 * R_corr_w2r), p_c2); // robot axis
+        if (if_estimator_ready[BASE_DEV])
+        {
+            p_c = m_data.last_P[BASE_DEV]; // previous frame
+            R_c = m_data.last_R[BASE_DEV]; // previous frame
+            // convert frame axis -(R_corr_c2w)-> world frame axis -(R_corr_w2r)-> robot frame axis:
+            T_c = Lie::SE3_from_SO3xR3(((R_c * R_corr_c2w) * R_corr_w2r), p_c);// a coordinate transformation is needed
+        }
+        else
+        {
+            T_c = Lie::SE3_from_SO3xR3(R_corr_c2w * R_corr_w2r, Lie::R3::Zero());
+        }
+        if (if_estimator_ready[EE_DEV])
+        {
+            p_c2 = m_data.last_P[EE_DEV]; // previous frame
+            R_c2 = m_data.last_R[EE_DEV]; // previous frame
+            T_c2 = Lie::SE3_from_SO3xR3((R_c2 * R_corr_w2r), p_c2); // robot axis
+        }
+        else
+        {
+            T_c2 = Lie::SE3_from_SO3xR3(R_corr_w2r, Lie::R3::Zero());
+        }
 #   endif // (!FEATURE_ENABLE_ARM_VICON_SUPPORT)
 
-#   if ((FEATURE_ENABLE_ARM_ODOMETRY_VIZ) && (!FEATURE_ENABLE_ARM_ODOMETRY_EE_TO_BASE) )
-        // publish to the base channel if not used by arm odometry
-        queue_ArmOdometry_safe(arm_prev_data.t_header, R_c, p_c, BASE_DEV);
-#   endif //(FEATURE_ENABLE_ARM_ODOMETRY_VIZ)
-
-        this->arm_prev_data.arm_pose_ready = true;
-
-        // Lie::SE3 T_out = T_c; // summit base if summit_base
-        T_b = T_c * Tc_b; // cam_base
-        // ^s_T_{cam_EE} = ^s_T_{cam_base} * {cam_base}_T_{cam_EE}  
-        T_e = T_b * g_st * Te * T_corr_r2w; // world axis = cam axis (ee camera axis @ 0config)
-
-#   if (FEATURE_ENABLE_ARM_ODOMETRY_EE_TO_BASE)
-        // camera @ EE calib @ zero config is aligned with world axis
-        b_st = Lie::inverse_SE3(g_st);
-        T_b2 = T_c2; // to ee
-        T_b2 = T_b2 * b_st; // to base
-        T_b2 = T_b2 * Tb; // inv(Tc_b) to base camera
-    #if(FEATURE_ENABLE_ARM_VICON_SUPPORT)
-        T_b2 = T_b2 * T_corr_r2w; // world axis
-    #else
-        T_b2 = T_b2 * T_corr_r2c; // camera axis
-    #endif //(FEATURE_ENABLE_ARM_VICON_SUPPORT)
-#   endif //(FEATURE_ENABLE_ARM_ODOMETRY_EE_TO_BASE)
-        
-#   if (FEATURE_ENABLE_ARM_ODOMETRY_ZEROING) 
-        // FIXME this compensation is not right
-        if (this->arm_prev_data.arm_pose_ready && !this->arm_prev_data.arm_pose_inited)
-        {   
-            this->arm_prev_data.arm_pose_inited = true;
-            // p_c = m_data.latest_P[EE_DEV]; // previous frame
-            // R_c = m_data.latest_R[EE_DEV]; // previous frame
-            // instead, lets reuse:
-            // T0_inv : for offset correction
-            Lie::SE3 T_est = Lie::SE3_from_SO3xR3(R_c2, p_c2); // camera axis
-            this->arm_prev_data.arm_pose_st_0 = T_est * Lie::inverse_SE3(T_e);
-            // only applying translational correction:
-            this->arm_prev_data.arm_pose_st_0.block<3,3>(0,0) = Lie::SO3::Identity(); 
-            // signal for initialization [only used with Zeroing for residualblock]
-            pEsts[EE_DEV]->arm_inited = true;
-
-#     if (FEATURE_ENABLE_ARM_ODOMETRY_EE_TO_BASE)
-            // do the same for base:
-            T_est = Lie::SE3_from_SO3xR3(R_c, p_c); // camera axis
-            this->arm_prev_data.arm_pose_ts_0 = T_est * Lie::inverse_SE3(T_b2); 
-            this->arm_prev_data.arm_pose_ts_0.block<3,3>(0,0) = Lie::SO3::Identity();
-#     endif //(FEATURE_ENABLE_ARM_ODOMETRY_EE_TO_BASE)
+        /* 2. Apply Arm Pose */
+        /* BASE --> EE */
+        {
+            // Lie::SE3 T_out = T_c; // summit base if summit_base
+            T_b = T_c * Tc_b; // cam_base
+            // ^s_T_{cam_EE} = ^s_T_{cam_base} * {cam_base}_T_{cam_EE}  
+            T_e = T_b * g_st * Te * T_corr_r2w; // world axis = cam axis (ee camera axis @ 0config)
+        }
+        /* EE --> BASE */
+        {
+            // camera @ EE calib @ zero config is aligned with world axis
+            b_st = Lie::inverse_SE3(g_st);
+            T_b2 = T_c2; // to ee
+            T_b2 = T_b2 * b_st; // to base
+            T_b2 = T_b2 * Tb; // inv(Tc_b) to base camera
+#   if(FEATURE_ENABLE_ARM_VICON_SUPPORT)
+            T_b2 = T_b2 * T_corr_r2w; // world axis
+#   else
+            T_b2 = T_b2 * T_corr_r2c; // camera axis
+#   endif //(FEATURE_ENABLE_ARM_VICON_SUPPORT)
         }
         
-        // rebasing to the EE est frame:
+#   if (!FEATURE_ENABLE_ARM_ODOMETRY_WRT_TO_BASE) 
+        /* 2. Apply Zeroing Compensation */
+        if (if_estimator_ready[BASE_DEV] && if_estimator_ready[  EE_DEV])
+        {
+            /* BASE --> EE */
+            if (!this->arm_prev_data.arm_pose_st_inited)
+            {   
+                this->arm_prev_data.arm_pose_st_0 = T_c2 * T_corr_r2w * Lie::inverse_SE3(T_e); // world/cam_EE
+                // this->arm_prev_data.arm_pose_st_0.block<3,3>(0,0) = Lie::SO3::Identity(); 
+                this->arm_prev_data.arm_pose_st_inited = true;
+                PRINT_DEBUG("this->arm_prev_data.arm_pose_st_0:\n%s\n", Lie::to_string(this->arm_prev_data.arm_pose_st_0).c_str());
+                PRINT_DEBUG("T_c2\n%s\n", Lie::to_string(T_c2).c_str());
+            }
+            
+            /* EE --> BASE */
+            if (!this->arm_prev_data.arm_pose_ts_inited)
+            {
+                this->arm_prev_data.arm_pose_ts_inited = true;
+                // do the same for base:
+    #   if(FEATURE_ENABLE_ARM_VICON_SUPPORT)
+                this->arm_prev_data.arm_pose_ts_0 = T_c * T_corr_r2w * Lie::inverse_SE3(T_b2); // world
+    #   else
+                this->arm_prev_data.arm_pose_ts_0 = T_c * T_corr_r2c * Lie::inverse_SE3(T_b2); // cam_base
+    #   endif //(FEATURE_ENABLE_ARM_VICON_SUPPORT)
+                // this->arm_prev_data.arm_pose_ts_0.block<3,3>(0,0) = Lie::SO3::Identity();
+                // TODO: enforcing SO2 for base?
+                PRINT_DEBUG("this->arm_prev_data.arm_pose_ts_0:\n%s\n", Lie::to_string(this->arm_prev_data.arm_pose_ts_0).c_str());
+                PRINT_DEBUG("T_c\n%s\n", Lie::to_string(T_c).c_str());
+            }
+        }
+
+        // Compensation:
         T_e = this->arm_prev_data.arm_pose_st_0 * T_e; 
         T_b = this->arm_prev_data.arm_pose_st_0 * T_b; 
-        
-        // rebasing to the Base est frame:
         T_b2 = this->arm_prev_data.arm_pose_ts_0 * T_b2; 
-
 #   endif // (FEATURE_ENABLE_ARM_ODOMETRY_ZEROING) 
         
 
         /* BASE --> EE */
-#   if(FEATURE_ENABLE_ARM_ODOMETRY_VIZ)
-        pArm->storeTransformations_unsafely(T_b); // for arm visualization
-        // publish immediately:
-        Lie::SO3xR3_from_SE3(R_c, p_c, T_e); // reuse placeholder R_c, p_c
-        queue_ArmOdometry_safe(arm_prev_data.t_header, R_c, p_c, EE_DEV);
-#   endif //(FEATURE_ENABLE_ARM_ODOMETRY_VIZ)
-
-        // - update arm pose:
-        this->arm_prev_data.arm_pose_st = T_e;
-        this->arm_prev_data.arm_pose_header = arm_prev_data.t_header;
-        // PRINT_DEBUG("> ArmOdometry [%f]: \n R=\n%s \n p=\n%s", t, Lie::to_string(R).c_str(), Lie::to_string(p).c_str());
+        {            
+            // - update arm pose:
+            this->arm_prev_data.arm_pose_st = T_e;
+            this->arm_prev_data.arm_pose_header = arm_prev_data.t_header;
+            // PRINT_DEBUG("> ArmOdometry [%f]: \n R=\n%s \n p=\n%s", t, Lie::to_string(R).c_str(), Lie::to_string(p).c_str());
+        }
 
         /* EE --> BASE */
-#   if (FEATURE_ENABLE_ARM_ODOMETRY_EE_TO_BASE)
-        // for base, project to SO2:
-#       if (FEATURE_ENABLE_ARM_ODOMETRY_EE_TO_BASE_ENFORCE_SO2)
+        {
+# if (FEATURE_ENABLE_ARM_ODOMETRY_EE_TO_BASE_ENFORCE_SO2)
+            // for base, project to SO2:
             // SO3 --proj--> SO2:
             double yaw = Utility::R2y_rad(T_b2.block<3,3>(0,0));
             T_b2.block<3,3>(0,0) = Utility::y2R_rad(yaw) * R_corr_c2w.transpose(); // camera axis
             T_b2(2,3) = 0;
-#       endif //(FEATURE_ENABLE_ARM_ODOMETRY_EE_TO_BASE_ENFORCE_SO2)
-        // publish immediately:
-        Lie::SO3xR3_from_SE3(R_c2, p_c2, T_b2); // reuse placeholder R_c2, p_c2
-        queue_ArmOdometry_safe(arm_prev_data.t_header, R_c2, p_c2, BASE_DEV);
-        this->arm_prev_data.arm_pose_ts = T_b2;
-        // PRINT_DEBUG("> ArmOdometry Base [%f]: \n T=\n%s \n", t, Lie::to_string(T_b2).c_str());
-#   endif //(FEATURE_ENABLE_ARM_ODOMETRY_EE_TO_BASE)
+# endif //(FEATURE_ENABLE_ARM_ODOMETRY_EE_TO_BASE_ENFORCE_SO2)
+            this->arm_prev_data.arm_pose_ts = T_b2;
+        }
+
+        /* Queue for rostopic visualization via rviz */
+# if(FEATURE_ENABLE_ARM_ODOMETRY_VIZ_ARM) // arm viz 
+        pArm->storeTransformations_unsafely(T_b); // for arm visualization
+# endif //(FEATURE_ENABLE_ARM_ODOMETRY_VIZ_ARM)
+# if (FEATURE_ENABLE_ARM_ODOMETRY_VIZ) // viz pub
+        if (this->arm_prev_data.arm_pose_st_inited) // indicates if it is valid
+        {
+            Lie::SO3xR3_from_SE3(R_c, p_c, T_e); // reuse placeholder R_c, p_c
+            queue_ArmOdometry_safe(arm_prev_data.t_header, R_c, p_c, EE_DEV);
+        }
+        if (this->arm_prev_data.arm_pose_ts_inited)
+        {
+            Lie::SO3xR3_from_SE3(R_c2, p_c2, T_b2); // reuse placeholder R_c2, p_c2
+            queue_ArmOdometry_safe(arm_prev_data.t_header, R_c2, p_c2, BASE_DEV);
+        }
+# endif // (FEATURE_ENABLE_ARM_ODOMETRY_VIZ) // viz pub
     }
     else
     {
@@ -612,7 +687,9 @@ void EstimatorManager::publishVisualization_thread()
 #if (FEATURE_ENABLE_VICON_SUPPORT)
             pubViconOdometryPath_safe(dev_id);
 #endif // (FEATURE_ENABLE_VICON_SUPPORT)
+            pubOdometry_safe(dev_id);
             pubOdometryPath_safe(dev_id);
+            pubExtrinsic_TF_safe(dev_id);
             pubKeyPoses_safe(dev_id);
             pubCameraPose_safe(dev_id);
             pubPointClouds_safe(dev_id);

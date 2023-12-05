@@ -20,7 +20,7 @@ class ARMFactor : public ceres::SizedCostFunction<6, 7>
     /* Params */
     Lie::R3 P_arm; 
     Lie::Qd Q_arm;
-    Eigen::Matrix<double, 6, 6> sqrt_info;
+    Eigen::Matrix<double, 6, 6> sqrt_info; // TODO: add non-uniform scale
 
     ARMFactor() = delete;
     ARMFactor(Lie::SO3 _R, Lie::R3 _p, double sqrt_info_scale = 120)

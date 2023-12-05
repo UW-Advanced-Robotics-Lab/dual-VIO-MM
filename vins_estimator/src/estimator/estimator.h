@@ -50,7 +50,7 @@ class Estimator
     void setParameter_safe();
 
     // interface
-    void initFirstPose(Lie::SE3 &Rp);
+    void initFirstBodyPose(Lie::SE3 &Rp);
     void inputIMU(double t, const Vector3d &linearAcceleration, const Vector3d &angularVelocity);
     // void inputFeature(double t, const map<int, vector<pair<int, Eigen::Matrix<double, 7, 1>>>> &featureFrame);
     void inputImage(double t, const cv::Mat &_img);
@@ -101,6 +101,17 @@ class Estimator
         MARGIN_SECOND_NEW = 1
     };
     
+    enum ProcessImageStatus
+    {
+        STATUS_EMPTY           = 0U,
+        STATUS_KEYFRAME        = (1 << 1U),
+        STATUS_INITIALIZING    = (1 << 2U),
+        STATUS_INITIALIZED     = (1 << 3U),
+        STATUS_NON_LINEAR_OPT  = (1 << 4U),
+        STATUS_UPDATED         = (1 << 5U),
+    };
+    uint8_t _status = STATUS_EMPTY;
+
     std::shared_ptr<DeviceConfig_t> pCfg; // this config may be modified by the estimator
     std::mutex mProcess;
     std::mutex mBuf;
@@ -132,9 +143,7 @@ class Estimator
     Vector3d        arm_Ps[(WINDOW_SIZE + 1)];
     Matrix3d        arm_Rs[(WINDOW_SIZE + 1)];
 #endif //(FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT)
-#if (FEATURE_ENABLE_ARM_ODOMETRY_ZEROING)
-    bool        arm_inited;
-#endif //(FEATURE_ENABLE_ARM_ODOMETRY_ZEROING)
+    bool            arm_inited;
     
     // moving window placeholders:
     Matrix3d back_R0, last_R, last_R0;
@@ -188,10 +197,13 @@ class Estimator
     Eigen::Vector3d initP;
     Eigen::Matrix3d initR;
 
+    // update latest states via @updateLatestStates(); Only valid after intialization finished
     double latest_time;
     Eigen::Vector3d latest_P, latest_V, latest_Ba, latest_Bg, latest_acc_0, latest_gyr_0;
+    Eigen::Matrix3d latest_R;
     Eigen::Quaterniond latest_Q;
 
+    int poseInitCounter = 0;
     bool initFirstPoseFlag;
     bool initThreadFlag;
 

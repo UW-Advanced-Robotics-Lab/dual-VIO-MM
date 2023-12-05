@@ -46,8 +46,9 @@ void registerPub(ros::NodeHandle &n, const int N_DEVICES);
 
 void visualization_guard_lock(const Estimator &estimator);
 void visualization_guard_unlock(const Estimator &estimator);
-
+#if (FEATURE_ROS_PUBLISH_IMU_PROPAGATION)
 void pubLatestOdometry_immediately(const Eigen::Vector3d &P, const Eigen::Quaterniond &Q, const Eigen::Vector3d &V, const double t, const int device_id);
+#endif //(FEATURE_ROS_PUBLISH_IMU_PROPAGATION)
 
 #if (FEATURE_TRACKING_IMAGE_SUPPORT)
 void queue_TrackImage_safe(const cv::Mat &imgTrack, const double t, const int device_id);
@@ -57,7 +58,8 @@ void pubTrackImage_safe(const int device_id);
 void printStatistics(const Estimator &estimator, const double t);
 #endif
 
-void pubOdometry_Immediately(const Estimator &estimator, const std_msgs::Header &header);
+void queue_Odometry_unsafe(const Estimator &estimator, const std_msgs::Header &header);
+void pubOdometry_safe(const int device_id);
 void pubOdometryPath_safe(const int device_id);
 
 #if (FEATURE_ENABLE_VICON_SUPPORT)
@@ -79,7 +81,8 @@ void pubCameraPose_safe(const size_t device_id);
 void queue_PointCloud_unsafe(const Estimator &estimator, const std_msgs::Header &header);
 void pubPointClouds_safe(const size_t device_id);
 
-void pubTF_immediately(const Estimator &estimator, const std_msgs::Header &header);
+void queue_TF_unsafe(const Estimator &estimator, const std_msgs::Header &header);
+void pubExtrinsic_TF_safe(const size_t device_id);
 
 void pubKeyframe_Odometry_and_Points_immediately(const Estimator &estimator);
 

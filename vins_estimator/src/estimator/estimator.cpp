@@ -18,6 +18,7 @@ Estimator::Estimator(
 {
     ROS_INFO("init begins");
     clearState_safe();
+    poseInitCounter = 0;
 #if (FEATURE_NON_THREADING_SUPPORT)
     assert("> Assume threading supported all the time!");
 #endif
@@ -206,7 +207,9 @@ void Estimator::inputIMU(double t, const Vector3d &linearAcceleration, const Vec
     {
         mPropagate.lock();
         fastPredictIMU(t, linearAcceleration, angularVelocity);
+#if (FEATURE_ROS_PUBLISH_IMU_PROPAGATION) // Publish for debugging
         pubLatestOdometry_immediately(latest_P, latest_Q, latest_V, t, pCfg->DEVICE_ID);
+#endif // (FEATURE_ROS_PUBLISH_IMU_PROPAGATION)
         mPropagate.unlock();
     }
 }
@@ -383,21 +386,20 @@ void Estimator::initFirstIMUPose(vector<pair<double, Eigen::Vector3d>> &accVecto
         averAcc = averAcc + accVector[i].second;
     }
     averAcc = averAcc / n;
-    PRINT_WARN("averge acc %f %f %f\n", averAcc.x(), averAcc.y(), averAcc.z());
+    PRINT_WARN("[%d] averge acc %f %f %f\n", this->pCfg->DEVICE_ID, averAcc.x(), averAcc.y(), averAcc.z());
     Matrix3d R0 = Utility::g2R(averAcc);
     double yaw = Utility::R2ypr(R0).x();
     R0 = Utility::ypr2R(Eigen::Vector3d{-yaw, 0, 0}) * R0;
     Rs[0] = R0;
-    cout << "init R0 " << endl << Rs[0] << endl;
+    PRINT_INFO("[%d] init Rs[0]:\nT=\n%s", this->pCfg->DEVICE_ID, Lie::to_string(Rs[0]).c_str());
     //Vs[0] = Vector3d(5, 0, 0);
 }
 
-void Estimator::initFirstPose(Lie::SE3 &Rp)
+void Estimator::initFirstBodyPose(Lie::SE3 &Rp)
 {
-    Lie::SO3xR3_from_SE3(initR, initP, Rp);
-    Ps[0] = initP;
-    Rs[0] = initR;
-    PRINT_INFO("init first pose:\nT=\n%s", Lie::to_string(Rp).c_str());
+    poseInitCounter ++;
+    Lie::SO3xR3_from_SE3(initR, initP, Rp); // cache initialization
+    PRINT_INFO("[%d] init first pose:\nT=\n%s", this->pCfg->DEVICE_ID, Lie::to_string(Rp).c_str());
 }
 
 void Estimator::processIMU(double t, double dt, const Vector3d &linear_acceleration, const Vector3d &angular_velocity)
@@ -409,7 +411,9 @@ void Estimator::processIMU(double t, double dt, const Vector3d &linear_accelerat
         acc_0 = Vector3d::Zero();
         gyr_0 = Vector3d::Zero();
 #else
-        // aeroing with respect to current a and w
+        // zeroing with respect to current a and w 
+        assert(false, "[DO NOT USE] Invalid assumption: init imu to be zeroed absolutely!");
+        // If true, system may drift at stopping point
         acc_0 = linear_acceleration;
         gyr_0 = angular_velocity;
 #endif
@@ -445,17 +449,21 @@ void Estimator::processIMU(double t, double dt, const Vector3d &linear_accelerat
 
 bool Estimator::processImage(const map<int, vector<pair<int, Eigen::Matrix<double, 7, 1>>>> &image, const double header, const Lie::SE3 pT_arm)
 {
+    TicToc t_solver;
+    this->_status = STATUS_EMPTY; // reset status
     bool success = true;
     ROS_DEBUG("new image coming ------------------------------------------");
     ROS_DEBUG("Adding feature points %lu", image.size());
     if (f_manager.addFeatureCheckParallax(frame_count, image, td))
     {
         marginalization_flag = MARGIN_OLD;
+        this->_status |= (STATUS_KEYFRAME);
         //printf("keyframe\n");
     }
     else
     {
         marginalization_flag = MARGIN_SECOND_NEW;
+        this->_status ^= (STATUS_KEYFRAME);
         //printf("non-keyframe\n");
     }
 
@@ -469,6 +477,7 @@ bool Estimator::processImage(const map<int, vector<pair<int, Eigen::Matrix<doubl
     all_image_frame.insert(make_pair(header, imageframe));
     tmp_pre_integration = new IntegrationBase{acc_0, gyr_0, Bas[frame_count], Bgs[frame_count], pCfg}; // prep for next image
 
+#if (FEATURE_ENABLE_CALIBRATION)
     if(pCfg->ESTIMATE_EXTRINSIC == 2)
     {
         ROS_INFO("calibrating extrinsic param, rotation movement is needed");
@@ -486,9 +495,18 @@ bool Estimator::processImage(const map<int, vector<pair<int, Eigen::Matrix<doubl
             }
         }
     }
+#else
+    assert((pCfg->ESTIMATE_EXTRINSIC != 2));//, "Extrinsic Estimation To be Implemented!");
+#endif // (FEATURE_ENABLE_STEREO_SUPPORT)
 
-    if (solver_flag == INITIAL)
+    // A) Initialization from SfM:
+    if (solver_flag == INITIAL) 
     {
+        this->_status |= (STATUS_INITIALIZING);
+
+#if (FEATURE_ENABLE_CALIBRATION)
+    // TODO: add support for overlapped region
+#   if (FEATURE_ENABLE_STEREO_SUPPORT) // TODO: support for stereo (for overlap regions of two cameras)
         // monocular + IMU initilization
 // #if (FEATURE_ENABLE_STEREO_SUPPORT) // condition only necessary for stereo support 
 //         if (!pCfg->STEREO && pCfg->USE_IMU) 
@@ -512,9 +530,6 @@ bool Estimator::processImage(const map<int, vector<pair<int, Eigen::Matrix<doubl
                 slideWindow();
             }
         }
-
-    // TODO: add support for overlapped region
-#if (FEATURE_ENABLE_STEREO_SUPPORT) // TODO: support for stereo (for overlap regions of two cameras)
         // stereo + IMU initilization
         if(pCfg->STEREO && pCfg->USE_IMU)
         {
@@ -559,8 +574,7 @@ bool Estimator::processImage(const map<int, vector<pair<int, Eigen::Matrix<doubl
                 ROS_INFO("Initialization finish!");
             }
         }
-#endif
-
+#   endif
         if(frame_count < WINDOW_SIZE)
         {
             frame_count++;
@@ -571,36 +585,69 @@ bool Estimator::processImage(const map<int, vector<pair<int, Eigen::Matrix<doubl
             Bas[frame_count] = Bas[prev_frame];
             Bgs[frame_count] = Bgs[prev_frame];
         }
+#else
+        // pre-requisite assumption:
+        assert((pCfg->STEREO == false));//, "Only Monocular!");
+        assert((pCfg->USE_IMU == true));//, "Only Monocular with IMU!");
 
+        // queue window before initializing:
+        if(frame_count < WINDOW_SIZE)
+        {
+            frame_count++;
+            const int prev_frame = frame_count - 1;
+            Ps[frame_count] = Ps[prev_frame];
+            Vs[frame_count] = Vs[prev_frame];
+            Rs[frame_count] = Rs[prev_frame];
+            Bas[frame_count] = Bas[prev_frame];
+            Bgs[frame_count] = Bgs[prev_frame];
+        }
+        // only init, when new frame incoming while buffer is full! (i.e. else if)
+        else if (frame_count == WINDOW_SIZE) 
+        {
+            // monocular + IMU initilization:
+            if((header - initial_timestamp) > 0.1)
+            {
+                success = initialStructure();
+                initial_timestamp = header;
+                if(success)
+                {
+                    optimization();
+                    updateLatestStates();
+                    solver_flag = NON_LINEAR;
+                    this->_status |= (STATUS_INITIALIZED);
+                    ROS_INFO("Initialization finish!");
+                    PRINT_WARN("[%d] Initialization finish!", pCfg->DEVICE_ID);
+                }
+                else
+                {
+                    PRINT_WARN("[%d] Initialization failed!", pCfg->DEVICE_ID);
+                    // DO NOT Clear State , else the initialization will be based on the current state?
+                    // TODO: we should clear state, and reinitialize wrt base
+                }
+            }
+            slideWindow();
+            PRINT_INFO("[%d] SlideWindow : %s", pCfg->DEVICE_ID, (marginalization_flag == MARGIN_OLD)?"OLD":"NEW");
+        }
+#endif // NO CALIBRATION SUPPORT
+    
     }
     else
+    // B) PnP tracking:
     {
+        this->_status |= (STATUS_NON_LINEAR_OPT);
 
 #if (FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT)
-        Lie::SO3xR3_from_SE3(
-            arm_Rs[frame_count-1], 
-            arm_Ps[frame_count-1], 
-            pT_arm
-        ); 
+        Lie::SO3xR3_from_SE3(arm_Rs[frame_count-1], arm_Ps[frame_count-1], pT_arm); 
 #endif //(FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT)
 
-        TicToc t_solve;
+        TIK(t_solver);
         f_manager.initFramePoseByPnP(frame_count, Ps, Rs, tic, ric); // IMU only supports
         f_manager.triangulate(frame_count, Ps, Rs, tic, ric);
         optimization();
         set<int> removeIndex;
         outliersRejection(removeIndex);
         f_manager.removeOutlier(removeIndex);
-
-#if (DISABLED)
-        if (! pCfg->MULTIPLE_THREAD)
-        {
-            featureTracker.removeOutliers(removeIndex);
-            predictPtsInNextFrame();
-        }
-#endif //(DISABLED)
-            
-        TOK(t_solve);
+        TOK(t_solver);
 
         if (failureDetection())
         {
@@ -614,22 +661,24 @@ bool Estimator::processImage(const map<int, vector<pair<int, Eigen::Matrix<doubl
 #else // Let Manager to do the reset safely
             failure_occur = 1;
             success = false;
-            return success;
 #endif //ESTIMATOR_MANAGER_H
         }
+        else
+        {
+            slideWindow();
+            f_manager.removeFailures();
+            // prepare output of VINS
+            key_poses.clear();
+            for (int i = 0; i <= WINDOW_SIZE; i++)
+                key_poses.push_back(Ps[i]);
 
-        slideWindow();
-        f_manager.removeFailures();
-        // prepare output of VINS
-        key_poses.clear();
-        for (int i = 0; i <= WINDOW_SIZE; i++)
-            key_poses.push_back(Ps[i]);
-
-        last_R = Rs[WINDOW_SIZE];
-        last_P = Ps[WINDOW_SIZE];
-        last_R0 = Rs[0];
-        last_P0 = Ps[0];
-        updateLatestStates();
+            last_R = Rs[WINDOW_SIZE];
+            last_P = Ps[WINDOW_SIZE];
+            last_R0 = Rs[0];
+            last_P0 = Ps[0];
+            updateLatestStates();
+            this->_status |= STATUS_UPDATED;
+        }
     }
     return success;
 }
@@ -1785,10 +1834,12 @@ void Estimator::fastPredictIMU(double t, Eigen::Vector3d linear_acceleration, Ei
 void Estimator::updateLatestStates()
 {
     mPropagate.lock();
+    // update the latest states
     latest_time = Headers[frame_count] + td;
-    latest_P = Ps[frame_count];
-    latest_Q = Rs[frame_count];
-    latest_V = Vs[frame_count];
+    latest_P = Ps[frame_count]; // set keyframe poses
+    latest_R = Rs[frame_count]; // set keyframe poses
+    latest_Q = Eigen::Quaterniond(latest_R); 
+    latest_V = Vs[frame_count]; // set keyframe poses
     latest_Ba = Bas[frame_count];
     latest_Bg = Bgs[frame_count];
     latest_acc_0 = acc_0;
