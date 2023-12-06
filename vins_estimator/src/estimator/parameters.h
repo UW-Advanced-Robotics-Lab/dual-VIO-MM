@@ -169,6 +169,7 @@ using namespace std;
     #define FEATURE_ENABLE_VICON_SUPPORT                                    (( ENABLED) || (USER_VICON_DEBUG)) // to feed vicon data and output as nav_msg::path for visualization
     #   define FEATURE_ENABLE_VICON_ZEROING_SUPPORT                             ( ENABLED) // zeroing vicons independently
     #       define FEATURE_ENABLE_VICON_ZEROING_WRT_BASE_SUPPORT                (ZEROING_WRT_TO_BASE) // zeroing vicons wrt base
+    #       define FEATURE_ENABLE_VICON_ZEROING_ENFORCE_SO2                     ( ENABLED) // enforcing SO2 to R
     // initialize vicon after sfm:
     //     - disable in ZEROING_WRT_TO_BASE: as we are basing vicon wrt base only
     #   define FEATURE_ENABLE_VICON_ONLY_AFTER_INIT_SFM                     ((USER_PARAMS) & (ENABLED))

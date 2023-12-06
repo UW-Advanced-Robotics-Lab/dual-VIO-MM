@@ -450,6 +450,12 @@ void queue_ViconOdometry_safe(const Vector7d_t &vicon_msg, const double t, const
             R = R * R_corr_c2w;
         }
 
+#   if (FEATURE_ENABLE_VICON_ZEROING_ENFORCE_SO2)
+        // enforce SO2 correction from base? (not SE2)
+        double yaw = Utility::R2y_rad(R);
+        R = Utility::y2R_rad(yaw); // to avoid pitch/roll bias
+#   endif //(FEATURE_ENABLE_VICON_ZEROING_ENFORCE_SO2)
+
         m_buf[device_id].vicon_R0 = R.transpose();
         m_buf[device_id].vicon_p0 = - p;
         m_buf[device_id].vicon_inited = true;
