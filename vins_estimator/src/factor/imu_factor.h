@@ -85,9 +85,10 @@ class IMUFactor : public ceres::SizedCostFunction<15, 7, 9, 7, 9>
             Eigen::Matrix3d dv_dba = pre_integration->jacobian.template block<3, 3>(O_V, O_BA);
             Eigen::Matrix3d dv_dbg = pre_integration->jacobian.template block<3, 3>(O_V, O_BG);
 
-            if (pre_integration->jacobian.maxCoeff() > 1e8 || pre_integration->jacobian.minCoeff() < -1e8)
+            if (IF_NUMERICAL_UNSRABLE(pre_integration->jacobian))
             {
-                ROS_WARN("numerical unstable in preintegration");
+                PRINT_WARN("jacobian @ numerical unstable in preintegration");
+                // ROS_WARN("numerical unstable in preintegration");
                 //std::cout << pre_integration->jacobian << std::endl;
 ///                ROS_BREAK();
             }
@@ -111,9 +112,10 @@ class IMUFactor : public ceres::SizedCostFunction<15, 7, 9, 7, 9>
 
                 jacobian_pose_i = sqrt_info * jacobian_pose_i;
 
-                if (jacobian_pose_i.maxCoeff() > 1e8 || jacobian_pose_i.minCoeff() < -1e8)
+                if (IF_NUMERICAL_UNSRABLE(jacobian_pose_i))
                 {
-                    ROS_WARN("numerical unstable in preintegration");
+                    PRINT_WARN("jacobian_pose_i @ numerical unstable in preintegration");
+                    // ROS_WARN("numerical unstable in preintegration");
                     //std::cout << sqrt_info << std::endl;
                     //ROS_BREAK();
                 }
@@ -143,7 +145,11 @@ class IMUFactor : public ceres::SizedCostFunction<15, 7, 9, 7, 9>
                 jacobian_speedbias_i.block<3, 3>(O_BG, O_BG - O_V) = -Eigen::Matrix3d::Identity();
 
                 jacobian_speedbias_i = sqrt_info * jacobian_speedbias_i;
-
+                
+                if (IF_NUMERICAL_UNSRABLE(jacobian_speedbias_i))
+                {
+                    PRINT_WARN("jacobian_speedbias_i @ numerical unstable in preintegration");
+                }
                 //ROS_ASSERT(fabs(jacobian_speedbias_i.maxCoeff()) < 1e8);
                 //ROS_ASSERT(fabs(jacobian_speedbias_i.minCoeff()) < 1e8);
             }
@@ -162,7 +168,10 @@ class IMUFactor : public ceres::SizedCostFunction<15, 7, 9, 7, 9>
 #endif
 
                 jacobian_pose_j = sqrt_info * jacobian_pose_j;
-
+                if (IF_NUMERICAL_UNSRABLE(jacobian_pose_j))
+                {
+                    PRINT_WARN("jacobian_pose_j @ numerical unstable in preintegration");
+                }
                 //ROS_ASSERT(fabs(jacobian_pose_j.maxCoeff()) < 1e8);
                 //ROS_ASSERT(fabs(jacobian_pose_j.minCoeff()) < 1e8);
             }

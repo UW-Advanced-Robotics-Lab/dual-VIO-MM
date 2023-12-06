@@ -87,6 +87,13 @@ using namespace std;
 #define IMAGE_BEHIND_SCHEDULE_TIME_TOLERANCE    (double)(0.06) 
 #define IMAGE_ARM_SYNC_TIME_DELTA_MAX           (double)(0.01)
 
+// [imu]
+#define NUMERICAL_UNSTABLE_COEF_THRESHOLD       (float)(1e8)
+#define IF_NUMERICAL_UNSRABLE(jacob)            (bool)(((jacob).maxCoeff() > (NUMERICAL_UNSTABLE_COEF_THRESHOLD)) || ((jacob).minCoeff() < -(NUMERICAL_UNSTABLE_COEF_THRESHOLD)))
+
+// [Arm]
+#define ESTIMATOR_ARM_FACTOR_TO_EE              (double)(100.0) // 100.0
+#define ESTIMATOR_ARM_FACTOR_TO_BASE            (double)(10.0)  //  10.0
 // ----------------------------------------------------------------
 // : Feature Definitions :
 // ----------------------------------------------------------------
