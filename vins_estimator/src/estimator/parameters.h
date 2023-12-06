@@ -31,6 +31,7 @@ using namespace std;
 #define ENABLED             (1U)
 #define DISABLED            (0U)
 #define NOT_IMPLEMENTED     (0U)
+#define IMPLEMENTED         (1U)
 #define FOREVER             (1U)
 #define TODO                (0U)
 
@@ -95,10 +96,10 @@ using namespace std;
 #define FEATURE_MODE_DEBUG_KINEMATICS        ( ENABLED) 
 
 // selection:
-#define USER_PARAMS                 (ENABLED) // indicates USER_PARAMS
+#define USER_PARAMS                 (IMPLEMENTED) // indicates as USER_PARAMS, do not disable
 #define ZEROING_WRT_TO_BASE         ((USER_PARAMS) & (DISABLED)) // enable tp debug raw odometry offset from base
 #define USER_VICON_DEBUG            ((USER_PARAMS) & (DISABLED)) // enable to debug arm config (TODO: the BASE->EE seems not working?)
-#define FLAG_OURS                   ((USER_PARAMS) & (DISABLED)) // To toggle between our tightly-coupled solution vs baseline
+#define FLAG_OURS                   ((USER_PARAMS) & ( ENABLED)) // To toggle between our tightly-coupled solution vs baseline
 
 // ----------------------------------------------------------------
 // FUTURE SUPPORTS:

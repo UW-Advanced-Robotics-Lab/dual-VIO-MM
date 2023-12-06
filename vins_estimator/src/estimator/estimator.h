@@ -56,7 +56,7 @@ class Estimator
     void inputImage(double t, const cv::Mat &_img);
     // void inputImage(double t, const cv::Mat &_img, const cv::Mat &_img1 = cv::Mat());
     void processIMU(double t, double dt, const Vector3d &linear_acceleration, const Vector3d &angular_velocity);
-    bool processImage(const map<int, vector<pair<int, Eigen::Matrix<double, 7, 1>>>> &image, const double header, const Lie::SE3 pT_arm);
+    bool processImage(const map<int, vector<pair<int, Eigen::Matrix<double, 7, 1>>>> &image, const double header, const Lie::SE3 pT_arm, const bool pT_arm_valid);
     void processMeasurements_thread();
     void processMeasurements_once();
 // #if (FEATURE_ENABLE_STEREO_SUPPORT)
@@ -142,6 +142,7 @@ class Estimator
     // arm buffer:
     Vector3d        arm_Ps[(WINDOW_SIZE + 1)];
     Matrix3d        arm_Rs[(WINDOW_SIZE + 1)];
+    bool            arm_valid[(WINDOW_SIZE + 1)];
 #endif //(FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT)
     bool            arm_inited;
     

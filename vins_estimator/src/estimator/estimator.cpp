@@ -447,7 +447,7 @@ void Estimator::processIMU(double t, double dt, const Vector3d &linear_accelerat
     gyr_0 = angular_velocity; 
 }
 
-bool Estimator::processImage(const map<int, vector<pair<int, Eigen::Matrix<double, 7, 1>>>> &image, const double header, const Lie::SE3 pT_arm)
+bool Estimator::processImage(const map<int, vector<pair<int, Eigen::Matrix<double, 7, 1>>>> &image, const double header, const Lie::SE3 pT_arm, const bool pT_arm_valid)
 {
     TicToc t_solver;
     this->_status = STATUS_EMPTY; // reset status
@@ -638,6 +638,7 @@ bool Estimator::processImage(const map<int, vector<pair<int, Eigen::Matrix<doubl
 
 #if (FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT)
         Lie::SO3xR3_from_SE3(arm_Rs[frame_count-1], arm_Ps[frame_count-1], pT_arm); 
+        arm_valid[frame_count-1] = pT_arm_valid;
 #endif //(FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT)
 
         TIK(t_solver);
@@ -1304,22 +1305,27 @@ void Estimator::optimization() // TODO: add arm odometry into optimization probl
 
 #if (FEATURE_ENABLE_ARM_ODOMETRY_FACTOR)
     // - TODO: Arm Odometry Residuals
-# if (FEATURE_ENABLE_ARM_ODOMETRY_ZEROING) 
-#   if (FEATURE_ENABLE_ARM_ODOMETRY_FACTOR_TO_BASE)
-    if (this->arm_inited)
-#   else //(!FEATURE_ENABLE_ARM_ODOMETRY_FACTOR_TO_BASE)
-    if (pCfg->DEVICE_ID == EE_DEV && this->arm_inited) // EE only when initialized
-#   endif 
-# else // (!FEATURE_ENABLE_ARM_ODOMETRY_ZEROING) 
-    if (pCfg->DEVICE_ID == EE_DEV) // EE only when initialized
-#  endif
+# if (FEATURE_ENABLE_ARM_ODOMETRY_WRT_TO_BASE) 
+    if (pCfg->DEVICE_ID == EE_DEV)                      // EE only when initialized
+# else // (!FEATURE_ENABLE_ARM_ODOMETRY_WRT_TO_BASE) 
+#  if (FEATURE_ENABLE_ARM_ODOMETRY_FACTOR_TO_BASE)
+    if (this->arm_inited)                               // only if initialized
+#  else //(!FEATURE_ENABLE_ARM_ODOMETRY_FACTOR_TO_BASE)
+    if (pCfg->DEVICE_ID == EE_DEV && this->arm_inited)  // EE only when initialized
+#  endif 
+# endif
     {
         for (int i = 0; i < frame_count-1; i++)
         {
-            // TODO: do not use arm factor if base imu is not stable?
-            ARMFactor* arm_factor = new ARMFactor(arm_Rs[i],arm_Ps[i]);
-            // ARMFactor* arm_factor = new ARMFactor(arm_Rs[i], arm_Ps[i]);
-            problem.AddResidualBlock(arm_factor, NULL, para_Pose[i]);
+            if (arm_valid[i]) // only valid posees
+            {
+                const double weight = (pCfg->DEVICE_ID == EE_DEV)?100.0:10.0;
+                // TODO: do not use arm factor if base imu is not stable? / weighted factor
+                ARMFactor* arm_factor = new ARMFactor(arm_Rs[i],arm_Ps[i],weight);
+                // ARMFactor* arm_factor = new ARMFactor(arm_Rs[i], arm_Ps[i]);
+                problem.AddResidualBlock(arm_factor, NULL, para_Pose[i]);
+            }
+                
         }
     }
 #endif //(FEATURE_ENABLE_ARM_ODOMETRY_FACTOR)
@@ -1575,6 +1581,7 @@ void Estimator::slideWindow()
 #if (FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT)
                 arm_Rs[i].swap(arm_Rs[i + 1]);
                 arm_Ps[i].swap(arm_Ps[i + 1]);
+                arm_valid[i] = arm_valid[i + 1];
 #endif //(FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT)
                 
                 // if(pCfg->USE_IMU) IMU Support
@@ -1596,6 +1603,7 @@ void Estimator::slideWindow()
 #if (FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT)
             arm_Rs[WINDOW_SIZE] = arm_Rs[WINDOW_SIZE - 1];
             arm_Ps[WINDOW_SIZE] = arm_Ps[WINDOW_SIZE - 1];
+            arm_valid[WINDOW_SIZE] = arm_valid[WINDOW_SIZE - 1];
 #endif //(FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT)
 
             // if(pCfg->USE_IMU) IMU Support
@@ -1632,6 +1640,7 @@ void Estimator::slideWindow()
 #if (FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT)
             arm_Rs[frame_count - 1] = arm_Rs[frame_count];
             arm_Ps[frame_count - 1] = arm_Ps[frame_count];
+            arm_valid[frame_count - 1] = arm_valid[frame_count];
 #endif //(FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT)
 
 

@@ -207,12 +207,13 @@ void EstimatorManager::processMeasurements_thread()
                         TIK(ellapsed_process_i);
 #if (FEATURE_ENABLE_ARM_ODOMETRY_EE_TO_BASE)
                         Lie::SE3 pose = (id == EE_DEV)?arm_prev_data.arm_pose_st:arm_prev_data.arm_pose_ts;
+                        bool pose_valid = (id == EE_DEV)?m_data.last_RP_ready[BASE_DEV]:m_data.last_RP_ready[EE_DEV];
+                        pEsts[id]->arm_inited =  (id == EE_DEV)?arm_prev_data.arm_pose_st_inited:arm_prev_data.arm_pose_ts_inited;
 #else
                         Lie::SE3 pose = arm_prev_data.arm_pose_st;
+                        bool pose_valid = false;
 #endif //(!FEATURE_ENABLE_ARM_ODOMETRY_EE_TO_BASE)
-                        pEsts[  EE_DEV]->arm_inited = this->arm_prev_data.arm_pose_st_inited; // indicates if valid
-                        pEsts[BASE_DEV]->arm_inited = this->arm_prev_data.arm_pose_ts_inited; // indicates if valid
-                        _success[id] = pEsts[id]->processImage(feature[id].second, feature[id].first, pose);
+                        _success[id] = pEsts[id]->processImage(feature[id].second, feature[id].first, pose, pose_valid);
                         prevTime[id] = curTime[id];
                         pEsts[id]->mProcess.unlock();
                         
@@ -311,7 +312,8 @@ void EstimatorManager::processMeasurements_thread()
                 //NOTE: If Enabled, the vicon will aligned based on the first initialization, skipping all initialization process
 #       if (FEATURE_ENABLE_VICON_ONLY_AFTER_INIT_BOTH_SFM)
                     if ((pEsts[BASE_DEV]->_status & Estimator::STATUS_INITIALIZING) &&
-                        (pEsts[  EE_DEV]->_status & Estimator::STATUS_INITIALIZING)) 
+                        (pEsts[  EE_DEV]->_status & Estimator::STATUS_INITIALIZING) && 
+                        (!this->m_vicon[id].started)) // once it starts, it will not be stopped
 #       else
                     if (pEsts[id]->_status & Estimator::STATUS_INITIALIZING)
 #       endif //(FEATURE_ENABLE_VICON_ONLY_AFTER_INIT_BOTH_SFM)
@@ -331,6 +333,7 @@ void EstimatorManager::processMeasurements_thread()
                         else
                         {
                             queue_ViconOdometry_safe(this->m_vicon[id].data.front().second, this->m_vicon[id].data.front().first, id);
+                            this->m_vicon[id].started = true;
                             break; // break the while loop
                         }
                     }
@@ -612,7 +615,7 @@ void EstimatorManager::_postProcessArmJnts_unsafe(const double t, const Vector7d
         T_e = this->arm_prev_data.arm_pose_st_0 * T_e; 
         T_b = this->arm_prev_data.arm_pose_st_0 * T_b; 
         T_b2 = this->arm_prev_data.arm_pose_ts_0 * T_b2; 
-#   endif // (FEATURE_ENABLE_ARM_ODOMETRY_ZEROING) 
+#   endif //  (!FEATURE_ENABLE_ARM_ODOMETRY_WRT_TO_BASE) 
         
 
         /* BASE --> EE */

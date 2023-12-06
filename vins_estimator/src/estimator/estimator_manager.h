@@ -55,6 +55,7 @@ typedef struct{
             // protected:
             queue<pair<double, Vector7d_t>>             data; // R3 + Q4
             std::mutex                                  guard;
+            bool                                        started = false;
         } vicon_buffer_t;
         vicon_buffer_t m_vicon[MAX_NUM_DEVICES];
         void _process_and_queueVicon_safe(const size_t DEV_ID, const pair<double, Vector7d_t> &_vicon_msg);
