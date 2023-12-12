@@ -17,7 +17,7 @@
 
 #define USE_ARM_FACTOR_SE3_ABSOLUTE_POSE_COVARIANCE (0U) // Minimal Jacob - ref: MCVIO - PoseError.cpp 
 #define USE_ARM_FACTOR_SE3_ABSOLUTE_POSE_COMPACT        (1U) // Left-Conjugate - ref: MCVIO - SE3AbsolutatePoseFactor 
-#define USE_ARM_FACTOR_SE3_ABSOLUTE_POSE_ANCHOR             (1U) // Right-Inverse  - ref: GVINS-2021 - PoseAnchorFactor
+#define USE_ARM_FACTOR_SE3_ABSOLUTE_POSE_ANCHOR             (0U) // Right-Inverse  - ref: GVINS-2021 - PoseAnchorFactor
 
 #if (USE_ARM_FACTOR_SE3_ABSOLUTE_POSE_COVARIANCE)
 class ARMFactor : public ceres::SizedCostFunction<6, 7>
@@ -112,11 +112,14 @@ class ARMFactor : public ceres::SizedCostFunction<6, 7>
         // P - P_arm:
         residual.head<3>() = P - P_arm;
         // Q_arm^-1 * Q: (error quaternion)
-        // residual.tail<3>() = 2.0 * (Q * Q_arm.inverse()).vec();
-        // residual = sqrt_info * residual;
+    #if (USE_ARM_FACTOR_SE3_ABSOLUTE_POSE_ANCHOR)
+        residual.tail<3>() = 2.0 * (Q * Q_arm.inverse()).vec();
+        residual = sqrt_info * residual;
+    #else
         // (OR) NOTE: left multiply by Q_arm^-1:
         residual.tail<3>() = 2.0 * (Q_arm.conjugate() * Q).vec(); // scalar * 1vec
         residual.applyOnTheLeft(sqrt_info);
+    #endif //(USE_ARM_FACTOR_SE3_ABSOLUTE_POSE_ANCHOR)
 
         if (jacobians && jacobians[0])
         {
@@ -124,17 +127,19 @@ class ARMFactor : public ceres::SizedCostFunction<6, 7>
             Eigen::Map<Eigen::Matrix<double, 6, 7, Eigen::RowMajor>> jacobian_pose(jacobians[0]);
             jacobian_pose.setZero();
             jacobian_pose.topLeftCorner<3, 3>().setIdentity();
-
-            // Eigen::Quaterniond Q_arm_inv = Q_arm.inverse();
-            // Eigen::Matrix3d J_q;
-            // J_q <<   Q_arm_inv.w(),  Q_arm_inv.z(), -Q_arm_inv.y(),
-            //         -Q_arm_inv.z(),  Q_arm_inv.w(),  Q_arm_inv.x(),
-            //          Q_arm_inv.y(), -Q_arm_inv.x(),  Q_arm_inv.w();
-            // jacobian_pose.block<3, 3>(3, 3) = J_q;
+    #if (USE_ARM_FACTOR_SE3_ABSOLUTE_POSE_ANCHOR)
+            Eigen::Quaterniond Q_arm_inv = Q_arm.inverse();
+            Eigen::Matrix3d J_q;
+            J_q <<   Q_arm_inv.w(),  Q_arm_inv.z(), -Q_arm_inv.y(),
+                    -Q_arm_inv.z(),  Q_arm_inv.w(),  Q_arm_inv.x(),
+                     Q_arm_inv.y(), -Q_arm_inv.x(),  Q_arm_inv.w();
+            jacobian_pose.block<3, 3>(3, 3) = J_q;
+            jacobian_pose = 2.0 * sqrt_info * jacobian_pose;
+    #else
             
             jacobian_pose.block<3, 3>(3, 3) = (Utility::Qleft(Q_arm.conjugate() * Q)).bottomRightCorner<3, 3>();
-            // jacobian_pose = 2.0 * sqrt_info * jacobian_pose;
             jacobian_pose.applyOnTheLeft(2.0 * sqrt_info);
+    #endif //(USE_ARM_FACTOR_SE3_ABSOLUTE_POSE_ANCHOR)
         }
 
         return true;
