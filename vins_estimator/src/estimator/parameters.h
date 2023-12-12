@@ -91,9 +91,11 @@ using namespace std;
 #define NUMERICAL_UNSTABLE_COEF_THRESHOLD       (float)(1e8)
 #define IF_NUMERICAL_UNSRABLE(jacob)            (bool)(((jacob).maxCoeff() > (NUMERICAL_UNSTABLE_COEF_THRESHOLD)) || ((jacob).minCoeff() < -(NUMERICAL_UNSTABLE_COEF_THRESHOLD)))
 
-// [Arm]
-#define ESTIMATOR_ARM_FACTOR_TO_EE              (double)(200.0) // 100.0
-#define ESTIMATOR_ARM_FACTOR_TO_BASE            (double)(10.0)  //  10.0
+// [Arm] TODO: add to config file:
+#define ESTIMATOR_ARM_FACTOR_TO_EE              (double)(150.0) // 100.0
+#define ESTIMATOR_ARM_FACTOR_TO_EE_Z            (double)(200.0) // 200.0
+#define ESTIMATOR_ARM_FACTOR_TO_BASE            (double)(20.0)  //  20.0
+#define ESTIMATOR_ARM_FACTOR_TO_BASE_Z          (double)(200.0) // 200.0
 // ----------------------------------------------------------------
 // : Feature Definitions :
 // ----------------------------------------------------------------
@@ -197,6 +199,7 @@ using namespace std;
     //                  - enforcing SO2 projection for arm odometry to estimate base from ee
     #define         FEATURE_ENABLE_ARM_ODOMETRY_FACTOR_TO_BASE              ((FLAG_OURS) & ( ENABLED))
     //                  - apply arm odometry factor to base
+    #define         FEATURE_ENABLE_ARM_ODOMETRY_FACTOR_NON_UNIFORM          ((FLAG_OURS) & ( ENABLED))
     #define     FEATURE_ENABLE_ARM_ODOMETRY_TO_POSE_INIT                    (TODO) //TODO: we should figureout a way to apply pose
 
 #elif (FEATURE_MODE_DEBUG_KINEMATICS) // (Debugging kinematics)

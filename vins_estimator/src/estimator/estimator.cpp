@@ -1326,13 +1326,31 @@ void Estimator::optimization() // TODO: add arm odometry into optimization probl
 #  endif 
 # endif
     {
+        // ceres::LossFunction *loss_function_arm;
+        // //loss_function = NULL;
+        // loss_function_arm = new ceres::HuberLoss(0.1); 
         for (int i = 0; i < frame_count-1; i++)
         {
             if (arm_valid[i]) // only valid posees
             {
+#           if (FEATURE_ENABLE_ARM_ODOMETRY_FACTOR_NON_UNIFORM)
+                ARMFactor* arm_factor;
+                if (pCfg->DEVICE_ID == EE_DEV)
+                {
+                    // TODO: do not use arm factor if base imu is not stable? / weighted factor
+                    const double w = ESTIMATOR_ARM_FACTOR_TO_EE;
+                    arm_factor = new ARMFactor(arm_Rs[i],arm_Ps[i],w,w,ESTIMATOR_ARM_FACTOR_TO_EE_Z,w);
+                }
+                else
+                {
+                    const double w = ESTIMATOR_ARM_FACTOR_TO_BASE;
+                    arm_factor = new ARMFactor(arm_Rs[i],arm_Ps[i],w,w,ESTIMATOR_ARM_FACTOR_TO_BASE_Z,w);
+                }
+#           else
                 const double weight = (pCfg->DEVICE_ID == EE_DEV)?(ESTIMATOR_ARM_FACTOR_TO_EE):(ESTIMATOR_ARM_FACTOR_TO_BASE);
                 // TODO: do not use arm factor if base imu is not stable? / weighted factor
                 ARMFactor* arm_factor = new ARMFactor(arm_Rs[i],arm_Ps[i],weight);
+#           endif //(FEATURE_ENABLE_ARM_ODOMETRY_FACTOR_NON_UNIFORM)
                 // ARMFactor* arm_factor = new ARMFactor(arm_Rs[i], arm_Ps[i]);
                 problem.AddResidualBlock(arm_factor, NULL, para_Pose[i]);
             }

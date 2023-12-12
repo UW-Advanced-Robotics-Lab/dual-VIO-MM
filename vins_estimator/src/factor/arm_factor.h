@@ -93,6 +93,15 @@ class ARMFactor : public ceres::SizedCostFunction<6, 7>
         Q_arm = Lie::Qd(_R);
     	sqrt_info = sqrt_info_scale * Eigen::Matrix<double, 6, 6>::Identity();
     }
+    
+    ARMFactor(Lie::SO3 _R, Lie::R3 _p, double W_x, double W_y, double W_z, double W_rot)
+    {
+        P_arm = _p;
+        Q_arm = Lie::Qd(_R);
+        Eigen::DiagonalMatrix<double, 6> sqrt_mat;
+        sqrt_mat.diagonal() << W_x,W_y,W_z,W_rot,W_rot,W_rot;
+    	sqrt_info = sqrt_mat * Eigen::Matrix<double, 6, 6>::Identity();
+    }
 
     virtual bool Evaluate(double const *const *parameters, double *residuals, double **jacobians) const
     { // TODO: we should check if the formulation is right
