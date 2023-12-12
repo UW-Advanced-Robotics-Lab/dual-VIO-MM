@@ -108,7 +108,7 @@ using namespace std;
 #define USER_PARAMS                 (IMPLEMENTED) // indicates as USER_PARAMS, do not disable
 #define ZEROING_WRT_TO_BASE         ((USER_PARAMS) & (DISABLED)) // enable tp debug raw odometry offset from base
 #define USER_VICON_DEBUG            ((USER_PARAMS) & (DISABLED)) // enable to debug arm config (TODO: the BASE->EE seems not working?)
-#define FLAG_OURS                   ((USER_PARAMS) & ( ENABLED)) // To toggle between our tightly-coupled solution vs baseline
+#define FLAG_OURS                   ((USER_PARAMS) & (DISABLED)) // To toggle between our tightly-coupled solution vs baseline
 
 // ----------------------------------------------------------------
 // FUTURE SUPPORTS:
