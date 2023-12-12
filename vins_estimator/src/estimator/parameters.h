@@ -92,7 +92,7 @@ using namespace std;
 #define IF_NUMERICAL_UNSRABLE(jacob)            (bool)(((jacob).maxCoeff() > (NUMERICAL_UNSTABLE_COEF_THRESHOLD)) || ((jacob).minCoeff() < -(NUMERICAL_UNSTABLE_COEF_THRESHOLD)))
 
 // [Arm]
-#define ESTIMATOR_ARM_FACTOR_TO_EE              (double)(100.0) // 100.0
+#define ESTIMATOR_ARM_FACTOR_TO_EE              (double)(200.0) // 100.0
 #define ESTIMATOR_ARM_FACTOR_TO_BASE            (double)(10.0)  //  10.0
 // ----------------------------------------------------------------
 // : Feature Definitions :
@@ -170,10 +170,11 @@ using namespace std;
     #   define FEATURE_ENABLE_VICON_ZEROING_SUPPORT                             ( ENABLED) // zeroing vicons independently
     #       define FEATURE_ENABLE_VICON_ZEROING_WRT_BASE_SUPPORT                (ZEROING_WRT_TO_BASE) // zeroing vicons wrt base
     #       define FEATURE_ENABLE_VICON_ZEROING_ENFORCE_SO2                     ( ENABLED) // enforcing SO2 to R
+    #       define FEATURE_ENABLE_VICON_ZEROING_ORIENTATION_WRT_BASE_SUPPORT    ((USER_PARAMS) & ( ENABLED)) // re-align to vins 0
     // initialize vicon after sfm:
     //     - disable in ZEROING_WRT_TO_BASE: as we are basing vicon wrt base only
-    #   define FEATURE_ENABLE_VICON_ONLY_AFTER_INIT_SFM                     ((USER_PARAMS) & (ENABLED))
-    #   define FEATURE_ENABLE_VICON_ONLY_AFTER_INIT_BOTH_SFM                ((USER_PARAMS) & (ENABLED))
+    #   define FEATURE_ENABLE_VICON_ONLY_AFTER_INIT_SFM                     ((USER_PARAMS) & ( ENABLED))
+    #   define FEATURE_ENABLE_VICON_ONLY_AFTER_INIT_BOTH_SFM                ((FEATURE_ENABLE_VICON_ZEROING_ORIENTATION_WRT_BASE_SUPPORT))
     // TODO: we should try to initialize when one is not inited/ stationary
 
     // arm odometry support:
@@ -190,8 +191,9 @@ using namespace std;
     //              - disabled: to see direct comparison vs vicon
     #define         FEATURE_ENABLE_ARM_ODOMETRY_EE_TO_BASE                  (( ENABLED))
     //                  - apply arm odometry to estimate base from ee
-    #define         FEATURE_ENABLE_ARM_ODOMETRY_EE_TO_BASE_ENFORCE_SE2      (( ENABLED))
-    #define         FEATURE_ENABLE_ARM_ODOMETRY_POSE_ZERO_ENFORCE_SO2       (( ENABLED))
+    #define         FEATURE_ENABLE_ARM_ODOMETRY_EE_TO_BASE_ENFORCE_SE2      (( ENABLED) & (!USER_VICON_DEBUG))
+    #define         FEATURE_ENABLE_ARM_ODOMETRY_POSE_ZERO_ENFORCE_SO2       (( ENABLED) & (!USER_VICON_DEBUG))
+    #define         FEATURE_ENABLE_ARM_ODOMETRY_POSE_NO_ORIENTATION         (( ENABLED) & (!USER_VICON_DEBUG))
     //                  - enforcing SO2 projection for arm odometry to estimate base from ee
     #define         FEATURE_ENABLE_ARM_ODOMETRY_FACTOR_TO_BASE              ((FLAG_OURS) & ( ENABLED))
     //                  - apply arm odometry factor to base

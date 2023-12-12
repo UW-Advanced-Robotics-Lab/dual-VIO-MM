@@ -90,6 +90,8 @@ typedef struct{
         typedef struct{
             Lie::SO3 last_R[MAX_NUM_DEVICES];
             Lie::R3  last_P[MAX_NUM_DEVICES];
+            Lie::SO3 R0[MAX_NUM_DEVICES];
+            Lie::R3  P0[MAX_NUM_DEVICES];
             bool     last_RP_ready[MAX_NUM_DEVICES];
         } manager_data_t;
         manager_data_t                  m_data;

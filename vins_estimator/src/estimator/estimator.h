@@ -147,8 +147,8 @@ class Estimator
     bool            arm_inited;
     
     // moving window placeholders:
-    Matrix3d back_R0, last_R, last_R0;
-    Vector3d back_P0, last_P, last_P0;
+    Matrix3d back_R0, last_R, last_R0, inited_R0_T;
+    Vector3d back_P0, last_P, last_P0, inited_P0;
     double Headers[(WINDOW_SIZE + 1)];
 
     IntegrationBase *pre_integrations[(WINDOW_SIZE + 1)];
@@ -184,7 +184,6 @@ class Estimator
     double para_Ex_Pose[2][SIZE_POSE];
     double para_Retrive_Pose[SIZE_POSE];
     double para_Td[1][1];
-    double para_Tr[1][1];
 
     int loop_window_index;
 

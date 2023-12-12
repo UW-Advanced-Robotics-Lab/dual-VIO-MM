@@ -132,11 +132,10 @@ void EstimatorManager::processMeasurements_thread()
 #  if (FEATURE_ENABLE_ARM_ODOMETRY_TO_POSE_INIT)
 //                 // Pose Initialization based on arm:
                 // based on previous status:
-                if (    ((pEsts[  EE_DEV]->_status & Estimator::STATUS_NON_LINEAR_OPT) && (pEsts[BASE_DEV]->_status & Estimator::STATUS_INITIALIZED))
-                    ||  ((pEsts[BASE_DEV]->_status & Estimator::STATUS_NON_LINEAR_OPT) && (pEsts[  EE_DEV]->_status & Estimator::STATUS_INITIALIZED)) )
+                if (((pEsts[  EE_DEV]->_status & Estimator::STATUS_INITIALIZING) && (pEsts[BASE_DEV]->_status & Estimator::STATUS_UPDATED)) )
                 {
-                    Lie::SE3 pose = Lie::inverse_SO3xR3(m_data.last_R[EE_DEV], m_data.last_P[EE_DEV]);
-                    pEsts[EE_DEV]->initFirstBodyPose(pose);
+                    // if base inited, but not EE, then use base odometry as the initialization
+                    pEsts[EE_DEV]->initFirstBodyPose(this->arm_prev_data.arm_pose_st);
                     PRINT_DEBUG("[EE<-BASE:] initFirstPose: \nST:\n%s\nTS:\n%s", 
                         Lie::to_string(this->arm_prev_data.arm_pose_st).c_str(),
                         Lie::to_string(this->arm_prev_data.arm_pose_ts).c_str());
@@ -168,6 +167,10 @@ void EstimatorManager::processMeasurements_thread()
                         if (! pEsts[id]->initFirstPoseFlag)
                         {
                             pEsts[id]->initFirstIMUPose(accVector[id]);
+                            // pEsts[EE_DEV]->initFirstBodyPose(this->arm_prev_data.arm_pose_st);
+                            // PRINT_DEBUG("[EE<-BASE:] initFirstPose: \nST:\n%s\nTS:\n%s", 
+                            //     Lie::to_string(this->arm_prev_data.arm_pose_st).c_str(),
+                            //     Lie::to_string(this->arm_prev_data.arm_pose_ts).c_str());
                         }
                     }
 
@@ -255,7 +258,12 @@ void EstimatorManager::processMeasurements_thread()
                             // for initialization:
                             m_data.last_R[id] = pEsts[id]->latest_R;
                             m_data.last_P[id] = pEsts[id]->latest_P;
+                            m_data.R0[id] = pEsts[id]->latest_R;
+                            m_data.P0[id] = pEsts[id]->latest_P;
                             m_data.last_RP_ready[id] = true;
+                            PRINT_DEBUG("[%d:] initedPose: \nR0:\n%s\nP0:\n%s", id,
+                                Lie::to_string(Utility::R2ypr(m_data.last_R[id]).transpose()).c_str(),
+                                Lie::to_string(m_data.last_P[id].transpose()).c_str());
                         }
                         else
                         {
@@ -315,7 +323,8 @@ void EstimatorManager::processMeasurements_thread()
                         (pEsts[  EE_DEV]->_status & Estimator::STATUS_INITIALIZING) && 
                         (!this->m_vicon[id].started)) // once it starts, it will not be stopped
 #       else
-                    if (pEsts[id]->_status & Estimator::STATUS_INITIALIZING)
+                    if ((pEsts[id]->_status & Estimator::STATUS_INITIALIZING) && 
+                        (!this->m_vicon[id].started))
 #       endif //(FEATURE_ENABLE_VICON_ONLY_AFTER_INIT_BOTH_SFM)
                     {
                         // do not process till SFM initialized
@@ -332,7 +341,10 @@ void EstimatorManager::processMeasurements_thread()
                         }
                         else
                         {
-                            queue_ViconOdometry_safe(this->m_vicon[id].data.front().second, this->m_vicon[id].data.front().first, id);
+                            queue_ViconOdometry_safe(
+                                this->m_vicon[id].data.front().second, 
+                                this->m_vicon[id].data.front().first, 
+                                id);
                             this->m_vicon[id].started = true;
                             break; // break the while loop
                         }
@@ -491,7 +503,12 @@ void EstimatorManager::_postProcessArmJnts_unsafe(const double t, const Vector7d
         (false) // Disable
     };
 # endif 
-    if ((arm_prev_data.t_header > 0))
+    if ((arm_prev_data.t_header < 0))
+    {
+        PRINT_WARN("ArmOdometry: no previous data available!");
+        pArm->getEndEffectorPose_unsafely(arm_prev_data.arm_g_st);
+    }
+    // compute arm odometry:
     {
         // placeholders:
         Lie::SE3 T_c, T_b, T_e, T_c2, T_b2;
@@ -539,7 +556,7 @@ void EstimatorManager::_postProcessArmJnts_unsafe(const double t, const Vector7d
         }
         else
         {
-            T_c = Lie::SE3_from_SO3xR3(R_corr_c2w * R_corr_w2r, Lie::R3::Zero());
+            T_c = Lie::SE3_from_SO3xR3(R_corr_w2r, Lie::R3::Zero());
         }
         if (if_estimator_ready[EE_DEV])
         {
@@ -565,7 +582,8 @@ void EstimatorManager::_postProcessArmJnts_unsafe(const double t, const Vector7d
         {
             // camera @ EE calib @ zero config is aligned with world axis
             b_st = Lie::inverse_SE3(g_st);
-            T_b2 = T_c2; // to ee
+            // T_b2 = T_c2; // to ee
+            T_b2 = T_c2 * Tc_e; // to ee
             T_b2 = T_b2 * b_st; // to base
             T_b2 = T_b2 * Tb; // inv(Tc_b) to base camera
 #   if(FEATURE_ENABLE_ARM_VICON_SUPPORT)
@@ -575,7 +593,10 @@ void EstimatorManager::_postProcessArmJnts_unsafe(const double t, const Vector7d
 #   endif //(FEATURE_ENABLE_ARM_VICON_SUPPORT)
         }
         
-#   if (!FEATURE_ENABLE_ARM_ODOMETRY_WRT_TO_BASE) 
+#   if (FEATURE_ENABLE_ARM_ODOMETRY_WRT_TO_BASE) 
+        this->arm_prev_data.arm_pose_ts_inited = true;
+        this->arm_prev_data.arm_pose_st_inited = true;
+#   else
         /* 2. Apply Zeroing Compensation */
         if (if_estimator_ready[BASE_DEV] && if_estimator_ready[  EE_DEV])
         {
@@ -587,6 +608,8 @@ void EstimatorManager::_postProcessArmJnts_unsafe(const double t, const Vector7d
     #   if (FEATURE_ENABLE_ARM_ODOMETRY_POSE_ZERO_ENFORCE_SO2)
                 double yaw = Utility::R2y_rad(this->arm_prev_data.arm_pose_st_0.block<3,3>(0,0));
                 this->arm_prev_data.arm_pose_st_0.block<3,3>(0,0) = Utility::y2R_rad(yaw); // to avoid pitch/roll bias
+    #   elif (FEATURE_ENABLE_ARM_ODOMETRY_POSE_NO_ORIENTATION)
+                this->arm_prev_data.arm_pose_st_0.block<3,3>(0,0) = Lie::SO3::Identity();
     #   endif //(FEATURE_ENABLE_ARM_ODOMETRY_POSE_ZERO_ENFORCE_SO2)
                 PRINT_DEBUG("this->arm_prev_data.arm_pose_st_0:\n%s\n", Lie::to_string(this->arm_prev_data.arm_pose_st_0).c_str());
                 PRINT_DEBUG("T_c2\n%s\n", Lie::to_string(T_c2).c_str());
@@ -605,6 +628,8 @@ void EstimatorManager::_postProcessArmJnts_unsafe(const double t, const Vector7d
     #   if (FEATURE_ENABLE_ARM_ODOMETRY_POSE_ZERO_ENFORCE_SO2)
                 double yaw = Utility::R2y_rad(this->arm_prev_data.arm_pose_ts_0.block<3,3>(0,0));
                 this->arm_prev_data.arm_pose_ts_0.block<3,3>(0,0) = Utility::y2R_rad(yaw); // to avoid pitch/roll bias
+    #   elif (FEATURE_ENABLE_ARM_ODOMETRY_POSE_NO_ORIENTATION)
+                this->arm_prev_data.arm_pose_ts_0.block<3,3>(0,0) = Lie::SO3::Identity();
     #   endif //(FEATURE_ENABLE_ARM_ODOMETRY_POSE_ZERO_ENFORCE_SO2)
                 PRINT_DEBUG("this->arm_prev_data.arm_pose_ts_0:\n%s\n", Lie::to_string(this->arm_prev_data.arm_pose_ts_0).c_str());
                 PRINT_DEBUG("T_c\n%s\n", Lie::to_string(T_c).c_str());
@@ -643,21 +668,17 @@ void EstimatorManager::_postProcessArmJnts_unsafe(const double t, const Vector7d
         pArm->storeTransformations_unsafely(T_b); // for arm visualization
 # endif //(FEATURE_ENABLE_ARM_ODOMETRY_VIZ_ARM)
 # if (FEATURE_ENABLE_ARM_ODOMETRY_VIZ) // viz pub
-        if (this->arm_prev_data.arm_pose_st_inited) // indicates if it is valid
+        if (this->arm_prev_data.arm_pose_st_inited & arm_prev_data.t_header > 0) // indicates if it is valid
         {
             Lie::SO3xR3_from_SE3(R_c, p_c, T_e); // reuse placeholder R_c, p_c
             queue_ArmOdometry_safe(arm_prev_data.t_header, R_c, p_c, EE_DEV);
         }
-        if (this->arm_prev_data.arm_pose_ts_inited)
+        if (this->arm_prev_data.arm_pose_ts_inited & arm_prev_data.t_header > 0)
         {
             Lie::SO3xR3_from_SE3(R_c2, p_c2, T_b2); // reuse placeholder R_c2, p_c2
             queue_ArmOdometry_safe(arm_prev_data.t_header, R_c2, p_c2, BASE_DEV);
         }
 # endif // (FEATURE_ENABLE_ARM_ODOMETRY_VIZ) // viz pub
-    }
-    else
-    {
-        PRINT_WARN("ArmOdometry: no previous data available!");
     }
     // cache, we will use them next time:
     if (pArm->getEndEffectorPose_unsafely(arm_prev_data.arm_g_st))

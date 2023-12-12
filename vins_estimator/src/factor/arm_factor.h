@@ -15,10 +15,69 @@
 #include "../robot/Lie.h"
 #include <ceres/ceres.h>
 
-#define USE_ARM_FACTOR_SE3_ABSOLUTE_POSE_COMPACT    (1U) // Left-Conjugate - ref: MCVIO - SE3AbsolutatePoseFactor 
-#define USE_ARM_FACTOR_SE3_ABSOLUTE_POSE_ANCHOR     (1U) // Right-Inverse  - ref: GVINS-2021 - PoseAnchorFactor
+#define USE_ARM_FACTOR_SE3_ABSOLUTE_POSE_COVARIANCE (0U) // Minimal Jacob - ref: MCVIO - PoseError.cpp 
+#define USE_ARM_FACTOR_SE3_ABSOLUTE_POSE_COMPACT        (1U) // Left-Conjugate - ref: MCVIO - SE3AbsolutatePoseFactor 
+#define USE_ARM_FACTOR_SE3_ABSOLUTE_POSE_ANCHOR             (1U) // Right-Inverse  - ref: GVINS-2021 - PoseAnchorFactor
 
-#if USE_ARM_FACTOR_SE3_ABSOLUTE_POSE_COMPACT
+#if (USE_ARM_FACTOR_SE3_ABSOLUTE_POSE_COVARIANCE)
+class ARMFactor : public ceres::SizedCostFunction<6, 7>
+{
+  public:
+    /* Params */
+    Lie::R3 P_arm; 
+    Lie::Qd Q_arm;
+    Eigen::Matrix<double, 6, 6> sqrt_info; // TODO: add non-uniform scale
+
+    ARMFactor() = delete;
+    ARMFactor(Lie::SO3 _R, Lie::R3 _p, double sqrt_info_scale = 120)
+    {
+        P_arm = _p;
+        Q_arm = Lie::Qd(_R);
+    	sqrt_info = sqrt_info_scale * Eigen::Matrix<double, 6, 6>::Identity();
+    }
+    
+    ARMFactor(Lie::SO3 _R, Lie::R3 _p, double translation_variance = 0.01, double rotation_variance = 0.01)
+    {
+        P_arm = _p;
+        Q_arm = Lie::Qd(_R);
+        sqrt_info.setZero();
+        // cov = info.inverse();
+    	sqrt_info.topLeftCorner<3, 3>() = Eigen::Matrix3d::Identity() * 1.0 / translation_variance;
+        sqrt_info.bottomRightCorner<3, 3>() = Eigen::Matrix3d::Identity() * 1.0 / rotation_variance;
+        // perform the Cholesky decomposition on order to obtain the correct error weighting
+        Eigen::LLT<information_t> lltOfInformation(sqrt_info);
+        sqrt_info = lltOfInformation.matrixL().transpose();
+    }
+
+    virtual bool Evaluate(double const *const *parameters, double *residuals, double **jacobians) const
+    { // TODO: we should check if the formulation is right
+    	Lie::R3 P(parameters[0][0], parameters[0][1], parameters[0][2]);
+    	Lie::Qd Q(parameters[0][6], parameters[0][3], parameters[0][4], parameters[0][5]);
+
+        Eigen::Map<Eigen::Matrix<double, 6, 1>> residual(residuals);
+        // P - P_arm:
+        residual.head<3>() = P - P_arm;
+        // Q_arm^-1 * Q: (error quaternion)
+        // (OR) NOTE: left multiply by Q_arm^-1:
+        residual.tail<3>() = 2.0 * (Q_arm.conjugate() * Q).vec(); // scalar * 1vec
+        residual.applyOnTheLeft(sqrt_info);
+
+        if (jacobians && jacobians[0])
+        {
+            // TODO: verify the jacobian formulation
+            Eigen::Map<Eigen::Matrix<double, 6, 7, Eigen::RowMajor>> jacobian_pose(jacobians[0]);
+            jacobian_pose.setZero();
+            jacobian_pose.topLeftCorner<3, 3>().setIdentity();
+            jacobian_pose.block<3, 3>(3, 3) = (Utility::Qleft(Q_arm.conjugate() * Q)).bottomRightCorner<3, 3>();
+            // jacobian_pose = 2.0 * sqrt_info * jacobian_pose;
+            jacobian_pose.applyOnTheLeft(2.0 * sqrt_info);
+        }
+
+        return true;
+    }
+};
+
+#elif (USE_ARM_FACTOR_SE3_ABSOLUTE_POSE_COMPACT)
 class ARMFactor : public ceres::SizedCostFunction<6, 7>
 {
   public:

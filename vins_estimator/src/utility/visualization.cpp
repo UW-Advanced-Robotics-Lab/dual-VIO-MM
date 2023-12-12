@@ -307,11 +307,6 @@ void queue_Odometry_unsafe(const Estimator &estimator, const std_msgs::Header &h
         tmp_Q = Quaterniond(estimator.Rs[WINDOW_SIZE]);
         tmp_P = estimator.Ps[WINDOW_SIZE];
         tmp_V = estimator.Vs[WINDOW_SIZE];
-#  if (FEATURE_ENABLE_ARM_ODOMETRY_TO_POSE_INIT & TODO) 
-        tmp_Q = Quaterniond(estimator.initR * estimator.Rs[WINDOW_SIZE]);
-        tmp_P = estimator.initR * estimator.Ps[WINDOW_SIZE] + estimator.initP;
-        tmp_V = estimator.initR * estimator.Vs[WINDOW_SIZE];
-#  endif //(FEATURE_ENABLE_ARM_ODOMETRY_TO_POSE_INIT)
         odometry.pose.pose.position.x = tmp_P.x();
         odometry.pose.pose.position.y = tmp_P.y();
         odometry.pose.pose.position.z = tmp_P.z();
@@ -459,8 +454,10 @@ void queue_ViconOdometry_safe(const Vector7d_t &vicon_msg, const double t, const
         m_buf[device_id].vicon_R0 = R.transpose();
         m_buf[device_id].vicon_p0 = - p;
         m_buf[device_id].vicon_inited = true;
-        
+
+#   if (FEATURE_ENABLE_VICON_ZEROING_ORIENTATION_WRT_BASE_SUPPORT)
         m_buf[EE_DEV].vicon_R0 = m_buf[BASE_DEV].vicon_R0; // EE pose should be based on base pose, compensate translation
+#   endif //(FEATURE_ENABLE_VICON_ZEROING_ORIENTATION_WRT_BASE_SUPPORT)
     }
 #   endif // (FEATURE_ENABLE_VICON_ZEROING_WRT_BASE_SUPPORT)
 

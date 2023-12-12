@@ -400,6 +400,15 @@ void Estimator::initFirstBodyPose(Lie::SE3 &Rp)
     poseInitCounter ++;
     Lie::SO3xR3_from_SE3(initR, initP, Rp); // cache initialization
     PRINT_INFO("[%d] init first pose:\nT=\n%s", this->pCfg->DEVICE_ID, Lie::to_string(Rp).c_str());
+
+    double yaw = Utility::R2ypr(initR).x();
+    initR = Utility::ypr2R(Eigen::Vector3d{-yaw, 0, 0}) * initR;
+    for (int i = 0; i < WINDOW_SIZE; i++)
+    {
+            // Headers[i] = Headers[i + 1];
+            Rs[i] = initR;
+            // Ps[i] = initP;
+    }
 }
 
 void Estimator::processIMU(double t, double dt, const Vector3d &linear_acceleration, const Vector3d &angular_velocity)
@@ -617,6 +626,8 @@ bool Estimator::processImage(const map<int, vector<pair<int, Eigen::Matrix<doubl
                     this->_status |= (STATUS_INITIALIZED);
                     ROS_INFO("Initialization finish!");
                     PRINT_WARN("[%d] Initialization finish!", pCfg->DEVICE_ID);
+                    this->inited_R0_T = latest_R.transpose();
+                    this->inited_P0   = latest_P;
                 }
                 else
                 {
@@ -1566,7 +1577,7 @@ void Estimator::optimization() // TODO: add arm odometry into optimization probl
 
 void Estimator::slideWindow()
 {
-    if (marginalization_flag == MARGIN_OLD)
+    if (marginalization_flag == MARGIN_OLD) // slide window as keyframe
     {
         double t_0 = Headers[0];
         back_R0 = Rs[0];
@@ -1630,7 +1641,7 @@ void Estimator::slideWindow()
             slideWindowOld();
         }
     }
-    else
+    else // carry over to the next frame, not a keyframe
     {
         if (frame_count == WINDOW_SIZE)
         {
@@ -1644,7 +1655,7 @@ void Estimator::slideWindow()
 #endif //(FEATURE_ENABLE_ARM_ODOMETRY_SUPPORT)
 
 
-            // if(pCfg->USE_IMU) IMU Support
+            // if(pCfg->USE_IMU) IMU Support: carry over the IMU pre-integration to next frame:
             {
                 for (unsigned int i = 0; i < dt_buf[frame_count].size(); i++)
                 {
