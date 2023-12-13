@@ -211,12 +211,14 @@ void EstimatorManager::processMeasurements_thread()
 #if (FEATURE_ENABLE_ARM_ODOMETRY_EE_TO_BASE)
                         Lie::SE3 pose = (id == EE_DEV)?arm_prev_data.arm_pose_st:arm_prev_data.arm_pose_ts;
                         bool pose_valid = (id == EE_DEV)?m_data.last_RP_ready[BASE_DEV]:m_data.last_RP_ready[EE_DEV];
-                        pEsts[id]->arm_inited =  (id == EE_DEV)?arm_prev_data.arm_pose_st_inited:arm_prev_data.arm_pose_ts_inited;
+                        pEsts[id]->arm_inited = (id == EE_DEV)?arm_prev_data.arm_pose_st_inited:arm_prev_data.arm_pose_ts_inited;
+                        // pose_valid &= pEsts[id]->arm_inited; // inited EE and valid base
 #else
                         Lie::SE3 pose = arm_prev_data.arm_pose_st;
                         bool pose_valid = false;
 #endif //(!FEATURE_ENABLE_ARM_ODOMETRY_EE_TO_BASE)
-                        _success[id] = pEsts[id]->processImage(feature[id].second, feature[id].first, pose, pose_valid);
+                        // _success[id] = pEsts[id]->processImage(feature[id].second, feature[id].first, pose, pose_valid); // only when valid
+                        _success[id] = pEsts[id]->processImage(feature[id].second, feature[id].first, pose, pEsts[id]->arm_inited);
                         prevTime[id] = curTime[id];
                         pEsts[id]->mProcess.unlock();
                         
@@ -529,6 +531,7 @@ void EstimatorManager::_postProcessArmJnts_unsafe(const double t, const Vector7d
 #   if (FEATURE_ENABLE_ARM_VICON_SUPPORT) 
         // stub previously published Ground Truth Vicon data:
         geometry_msgs::Pose pose;
+        /* BASE --> EE */
         if (if_estimator_ready[BASE_DEV])
         {
             getLatestViconPose_safe(pose, BASE_DEV);
@@ -540,6 +543,7 @@ void EstimatorManager::_postProcessArmJnts_unsafe(const double t, const Vector7d
         {
             T_c = Lie::SE3_from_SO3xR3((R_corr_w2r), p_c);
         }
+        /* EE --> BASE */
         if (if_estimator_ready[EE_DEV])
         {
             getLatestViconPose_safe(pose, EE_DEV);
@@ -553,6 +557,7 @@ void EstimatorManager::_postProcessArmJnts_unsafe(const double t, const Vector7d
         }
 #   else 
         // feed in previously optimized estimator latest state:
+        /* BASE --> EE */
         if (if_estimator_ready[BASE_DEV])
         {
             p_c = m_data.last_P[BASE_DEV]; // previous frame
@@ -565,6 +570,7 @@ void EstimatorManager::_postProcessArmJnts_unsafe(const double t, const Vector7d
             p_c = Lie::R3::Zero();
             T_c = Lie::SE3_from_SO3xR3(R_corr_w2r, Lie::R3::Zero());
         }
+        /* EE --> BASE */
         if (if_estimator_ready[EE_DEV])
         {
             p_c2 = m_data.last_P[EE_DEV]; // previous frame
@@ -606,7 +612,8 @@ void EstimatorManager::_postProcessArmJnts_unsafe(const double t, const Vector7d
         /* BASE --> EE */
         if (!this->arm_prev_data.arm_pose_st_inited)
         {   
-            if (if_estimator_ready[  EE_DEV])
+            // if (if_estimator_ready[BASE_DEV]) // NO
+            if (if_estimator_ready[  EE_DEV]) // if EE is ready (valid), we may set current Tb-->T_e as the initial config
             {
                 PRINT_WARN("> Arm st 0 inited !");
                 this->arm_prev_data.arm_pose_st_inited = true;
@@ -626,7 +633,8 @@ void EstimatorManager::_postProcessArmJnts_unsafe(const double t, const Vector7d
         /* EE --> BASE */
         if (!this->arm_prev_data.arm_pose_ts_inited)
         {
-            if (if_estimator_ready[BASE_DEV])
+            // if (if_estimator_ready[EE_DEV]) // NO
+            if (if_estimator_ready[BASE_DEV]) // if Base is ready (valid), we may set current Te-->T_b as the initial config
             {
                 PRINT_WARN("> Arm ts 0 inited !");
                 this->arm_prev_data.arm_pose_ts_inited = true;
@@ -678,12 +686,12 @@ void EstimatorManager::_postProcessArmJnts_unsafe(const double t, const Vector7d
 
         /* Queue for rostopic visualization via rviz */
 # if (FEATURE_ENABLE_ARM_ODOMETRY_VIZ) // viz pub
-        if (this->arm_prev_data.arm_pose_st_inited && if_estimator_ready[EE_DEV]) // indicates if it is valid
+        if (this->arm_prev_data.arm_pose_st_inited && if_estimator_ready[BASE_DEV]) 
         {
             Lie::SO3xR3_from_SE3(R_c, p_c, T_e); // reuse placeholder R_c, p_c
             queue_ArmOdometry_safe(arm_prev_data.t_header, R_c, p_c, EE_DEV);
         }
-        if (this->arm_prev_data.arm_pose_ts_inited && if_estimator_ready[BASE_DEV])
+        if (this->arm_prev_data.arm_pose_ts_inited && if_estimator_ready[  EE_DEV])
         {
             Lie::SO3xR3_from_SE3(R_c2, p_c2, T_b2); // reuse placeholder R_c2, p_c2
             queue_ArmOdometry_safe(arm_prev_data.t_header, R_c2, p_c2, BASE_DEV);
