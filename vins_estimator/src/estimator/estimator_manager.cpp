@@ -618,6 +618,9 @@ void EstimatorManager::_postProcessArmJnts_unsafe(const double t, const Vector7d
                 PRINT_WARN("> Arm st 0 inited !");
                 this->arm_prev_data.arm_pose_st_inited = true;
                 this->arm_prev_data.arm_pose_st_0 = T_corr_w2c * Lie::inverse_SE3(T_e); // world/cam_EE
+                // ensure its plannar motion only, to minimize the effect of pitch/roll:
+                double yaw = Utility::R2y_rad(this->arm_prev_data.arm_pose_st_0.block<3,3>(0,0));
+                this->arm_prev_data.arm_pose_st_0.block<3,3>(0,0) = Utility::y2R_rad(yaw);
             }
             else
             {
