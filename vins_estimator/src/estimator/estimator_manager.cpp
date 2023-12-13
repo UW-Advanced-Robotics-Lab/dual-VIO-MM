@@ -479,6 +479,12 @@ void EstimatorManager::_postProcessArmJnts_unsafe(const double t, const Vector7d
                         0,  0,  1, 0,
                         0,  0,  0, 1 ).finished()
     ); // convert from robot axis back to world axis 
+    const Lie::SE3 T_corr_w2c(
+        (Lie::SE3() <<  1,  0,  0, 0, 
+                        0,  0,  1, 0, 
+                        0, -1,  0, 0,
+                        0,  0,  0, 1 ).finished()
+    ); // convert from world to camera
     const Lie::SE3 T_corr_r2c(
         (Lie::SE3() <<  0,  0,  1,  0,
                        -1,  0,  0,  0,
@@ -511,7 +517,7 @@ void EstimatorManager::_postProcessArmJnts_unsafe(const double t, const Vector7d
     // compute arm odometry:
     {
         // placeholders:
-        Lie::SE3 T_c, T_b, T_e, T_c2, T_b2;
+        Lie::SE3 T_c, T_b, T_e, T_e2, T_b2;
         Lie::R3 p_c, p_c2; 
         Lie::SO3 R_c, R_c2;
         Lie::SE3 g_st, b_st;
@@ -532,18 +538,18 @@ void EstimatorManager::_postProcessArmJnts_unsafe(const double t, const Vector7d
         }
         else
         {
-            T_c = Lie::SE3_from_SO3xR3((R_corr_c2w * R_corr_w2r), p_c);
+            T_c = Lie::SE3_from_SO3xR3((R_corr_w2r), p_c);
         }
         if (if_estimator_ready[EE_DEV])
         {
             getLatestViconPose_safe(pose, EE_DEV);
             p_c2 = Eigen::Vector3d(pose.position.x, pose.position.y, pose.position.z);
             R_c2 = Eigen::Quaterniond(pose.orientation.w, pose.orientation.x, pose.orientation.y, pose.orientation.z).toRotationMatrix();
-            T_c2 = Lie::SE3_from_SO3xR3((R_c2 * R_corr_w2r), p_c2); // robot axis
+            T_e2 = Lie::SE3_from_SO3xR3((R_c2 * R_corr_w2r), p_c2); // robot axis
         }
         else
         {
-            T_c2 =Lie::SE3_from_SO3xR3((R_corr_w2r), p_c);
+            T_e2 =Lie::SE3_from_SO3xR3((R_corr_w2r), p_c);
         }
 #   else 
         // feed in previously optimized estimator latest state:
@@ -556,107 +562,114 @@ void EstimatorManager::_postProcessArmJnts_unsafe(const double t, const Vector7d
         }
         else
         {
+            p_c = Lie::R3::Zero();
             T_c = Lie::SE3_from_SO3xR3(R_corr_w2r, Lie::R3::Zero());
         }
         if (if_estimator_ready[EE_DEV])
         {
             p_c2 = m_data.last_P[EE_DEV]; // previous frame
             R_c2 = m_data.last_R[EE_DEV]; // previous frame
-            T_c2 = Lie::SE3_from_SO3xR3((R_c2 * R_corr_w2r), p_c2); // robot axis
+            T_e2 = Lie::SE3_from_SO3xR3((R_c2 * R_corr_w2r), p_c2); // robot axis
         }
         else
         {
-            T_c2 = Lie::SE3_from_SO3xR3(R_corr_w2r, Lie::R3::Zero());
+            p_c2 = Lie::R3::Zero();
+            T_e2 = Lie::SE3_from_SO3xR3(R_corr_w2r, Lie::R3::Zero());
         }
 #   endif // (!FEATURE_ENABLE_ARM_VICON_SUPPORT)
 
+        /* Compute Arm Link Transformation Map */
+        Lie::SE3 T_gst = Tc_b * g_st * Te;
+        Lie::SE3 T_gst_inv = T_gst.inverse();
+        
         /* 2. Apply Arm Pose */
         /* BASE --> EE */
         {
             // Lie::SE3 T_out = T_c; // summit base if summit_base
-            T_b = T_c * Tc_b; // cam_base
+            T_b = T_c * Tc_b; // cam @ robot axis -> wam_base
             // ^s_T_{cam_EE} = ^s_T_{cam_base} * {cam_base}_T_{cam_EE}  
-            T_e = T_b * g_st * Te * T_corr_r2w; // world axis = cam axis (ee camera axis @ 0config)
+            T_e = T_c * T_gst * T_corr_r2w; // world axis = cam axis (ee camera axis @ 0config)
         }
         /* EE --> BASE */
         {
             // camera @ EE calib @ zero config is aligned with world axis
-            b_st = Lie::inverse_SE3(g_st);
-            // T_b2 = T_c2; // to ee
-            T_b2 = T_c2 * Tc_e; // to ee
-            T_b2 = T_b2 * b_st; // to base
-            T_b2 = T_b2 * Tb; // inv(Tc_b) to base camera
-#   if(FEATURE_ENABLE_ARM_VICON_SUPPORT)
-            T_b2 = T_b2 * T_corr_r2w; // world axis
-#   else
-            T_b2 = T_b2 * T_corr_r2c; // camera axis
-#   endif //(FEATURE_ENABLE_ARM_VICON_SUPPORT)
+            // T_b2 = T_e2; // to ee
+            T_b2 = T_e2 * T_gst_inv * T_corr_r2c; // camera axis
         }
         
-#   if (FEATURE_ENABLE_ARM_ODOMETRY_WRT_TO_BASE) 
+#   if ((FEATURE_ENABLE_ARM_ODOMETRY_WRT_TO_BASE))
+        //Nope:
         this->arm_prev_data.arm_pose_ts_inited = true;
         this->arm_prev_data.arm_pose_st_inited = true;
 #   else
         /* 2. Apply Zeroing Compensation */
-        if (if_estimator_ready[BASE_DEV] && if_estimator_ready[  EE_DEV])
-        {
-            /* BASE --> EE */
-            if (!this->arm_prev_data.arm_pose_st_inited)
-            {   
-                this->arm_prev_data.arm_pose_st_inited = true;
-                this->arm_prev_data.arm_pose_st_0 = T_c2 * T_corr_r2w * Lie::inverse_SE3(T_e); // world/cam_EE
-    #   if (FEATURE_ENABLE_ARM_ODOMETRY_POSE_ZERO_ENFORCE_SO2)
-                double yaw = Utility::R2y_rad(this->arm_prev_data.arm_pose_st_0.block<3,3>(0,0));
-                this->arm_prev_data.arm_pose_st_0.block<3,3>(0,0) = Utility::y2R_rad(yaw); // to avoid pitch/roll bias
-    #   elif (FEATURE_ENABLE_ARM_ODOMETRY_POSE_NO_ORIENTATION)
-                this->arm_prev_data.arm_pose_st_0.block<3,3>(0,0) = Lie::SO3::Identity();
-    #   endif //(FEATURE_ENABLE_ARM_ODOMETRY_POSE_ZERO_ENFORCE_SO2)
-                PRINT_DEBUG("this->arm_prev_data.arm_pose_st_0:\n%s\n", Lie::to_string(this->arm_prev_data.arm_pose_st_0).c_str());
-                PRINT_DEBUG("T_c2\n%s\n", Lie::to_string(T_c2).c_str());
-            }
-            
-            /* EE --> BASE */
-            if (!this->arm_prev_data.arm_pose_ts_inited)
+        /* BASE --> EE */
+        if (!this->arm_prev_data.arm_pose_st_inited)
+        {   
+            if (if_estimator_ready[  EE_DEV])
             {
-                this->arm_prev_data.arm_pose_ts_inited = true;
-                // do the same for base:
-    #   if(FEATURE_ENABLE_ARM_VICON_SUPPORT)
-                this->arm_prev_data.arm_pose_ts_0 = T_c * T_corr_r2w * Lie::inverse_SE3(T_b2); // world
-    #   else
-                this->arm_prev_data.arm_pose_ts_0 = T_c * T_corr_r2c * Lie::inverse_SE3(T_b2); // cam_base
-    #   endif //(FEATURE_ENABLE_ARM_VICON_SUPPORT)
-    #   if (FEATURE_ENABLE_ARM_ODOMETRY_POSE_ZERO_ENFORCE_SO2)
-                double yaw = Utility::R2y_rad(this->arm_prev_data.arm_pose_ts_0.block<3,3>(0,0));
-                this->arm_prev_data.arm_pose_ts_0.block<3,3>(0,0) = Utility::y2R_rad(yaw); // to avoid pitch/roll bias
-    #   elif (FEATURE_ENABLE_ARM_ODOMETRY_POSE_NO_ORIENTATION)
-                this->arm_prev_data.arm_pose_ts_0.block<3,3>(0,0) = Lie::SO3::Identity();
-    #   endif //(FEATURE_ENABLE_ARM_ODOMETRY_POSE_ZERO_ENFORCE_SO2)
-                PRINT_DEBUG("this->arm_prev_data.arm_pose_ts_0:\n%s\n", Lie::to_string(this->arm_prev_data.arm_pose_ts_0).c_str());
-                PRINT_DEBUG("T_c\n%s\n", Lie::to_string(T_c).c_str());
+                PRINT_WARN("> Arm st 0 inited !");
+                this->arm_prev_data.arm_pose_st_inited = true;
+                this->arm_prev_data.arm_pose_st_0 = T_corr_w2c * Lie::inverse_SE3(T_e); // world/cam_EE
+            }
+            else
+            {
+                PRINT_ERROR("> Arm st 0 NOT inited !");
             }
         }
-
-        // Compensation:
-        T_e = this->arm_prev_data.arm_pose_st_0 * T_e; 
-        T_b = this->arm_prev_data.arm_pose_st_0 * T_b; 
-        T_b2 = this->arm_prev_data.arm_pose_ts_0 * T_b2; 
+        else
+        {
+            T_e = this->arm_prev_data.arm_pose_st_0 * T_e;
+            T_b = this->arm_prev_data.arm_pose_st_0 * T_b; 
+        }
+        
+        /* EE --> BASE */
+        if (!this->arm_prev_data.arm_pose_ts_inited)
+        {
+            if (if_estimator_ready[BASE_DEV])
+            {
+                PRINT_WARN("> Arm ts 0 inited !");
+                this->arm_prev_data.arm_pose_ts_inited = true;
+                this->arm_prev_data.arm_pose_ts_0 = T_corr_w2c * Lie::inverse_SE3(T_b2); // cam_base
+                // this->arm_prev_data.arm_pose_ts_0 = T_c * T_corr_r2c * Lie::inverse_SE3(T_b2); // cam_base
+    // #   if (FEATURE_ENABLE_ARM_ODOMETRY_POSE_ZERO_ENFORCE_SO2)
+    //             double yaw = Utility::R2y_rad(this->arm_prev_data.arm_pose_ts_0.block<3,3>(0,0));
+    //             this->arm_prev_data.arm_pose_ts_0.block<3,3>(0,0) = Utility::y2R_rad(yaw); // to avoid pitch/roll bias
+    // #   elif (FEATURE_ENABLE_ARM_ODOMETRY_POSE_NO_ORIENTATION)
+    //             this->arm_prev_data.arm_pose_ts_0.block<3,3>(0,0) = Lie::SO3::Identity();
+    // #   endif //(FEATURE_ENABLE_ARM_ODOMETRY_POSE_ZERO_ENFORCE_SO2)
+            }
+            else
+            {
+                PRINT_ERROR("> Arm ts 0 NOT inited !");
+            }
+        }
+        else
+        {
+            T_b2 = this->arm_prev_data.arm_pose_ts_0 * T_b2; 
+        }
 #   endif //  (!FEATURE_ENABLE_ARM_ODOMETRY_WRT_TO_BASE) 
         
+        this->arm_prev_data.arm_pose_header = arm_prev_data.t_header;
 
         /* BASE --> EE */
-        {            
+        if (this->arm_prev_data.arm_pose_st_inited)
+        {
             // - update arm pose:
             this->arm_prev_data.arm_pose_st = T_e;
-            this->arm_prev_data.arm_pose_header = arm_prev_data.t_header;
             // PRINT_DEBUG("> ArmOdometry [%f]: \n R=\n%s \n p=\n%s", t, Lie::to_string(R).c_str(), Lie::to_string(p).c_str());
         }
 
+# if(FEATURE_ENABLE_ARM_ODOMETRY_VIZ_ARM) // arm viz 
+        pArm->storeTransformations_unsafely(T_b); // for arm visualization
+# endif //(FEATURE_ENABLE_ARM_ODOMETRY_VIZ_ARM)
         /* EE --> BASE */
+        if (this->arm_prev_data.arm_pose_ts_inited)
         {
-# if (FEATURE_ENABLE_ARM_ODOMETRY_EE_TO_BASE_ENFORCE_SE2)
+# if (FEATURE_ENABLE_ARM_ODOMETRY_EE_TO_BASE_ENFORCE_SE2 || HACK_ON)
             // for base, project to SO2:
             // SO3 --proj--> SO2:
-            double yaw = Utility::R2y_rad(T_b2.block<3,3>(0,0));
+            double yaw = Utility::R2y_rad(T_b2.block<3,3>(0,0) * R_corr_c2w);
             T_b2.block<3,3>(0,0) = Utility::y2R_rad(yaw) * R_corr_c2w.transpose(); // camera axis
             T_b2(2,3) = 0;
 # endif //(FEATURE_ENABLE_ARM_ODOMETRY_EE_TO_BASE_ENFORCE_SO2)
@@ -664,16 +677,13 @@ void EstimatorManager::_postProcessArmJnts_unsafe(const double t, const Vector7d
         }
 
         /* Queue for rostopic visualization via rviz */
-# if(FEATURE_ENABLE_ARM_ODOMETRY_VIZ_ARM) // arm viz 
-        pArm->storeTransformations_unsafely(T_b); // for arm visualization
-# endif //(FEATURE_ENABLE_ARM_ODOMETRY_VIZ_ARM)
 # if (FEATURE_ENABLE_ARM_ODOMETRY_VIZ) // viz pub
-        if (this->arm_prev_data.arm_pose_st_inited & arm_prev_data.t_header > 0) // indicates if it is valid
+        if (this->arm_prev_data.arm_pose_st_inited && if_estimator_ready[EE_DEV]) // indicates if it is valid
         {
             Lie::SO3xR3_from_SE3(R_c, p_c, T_e); // reuse placeholder R_c, p_c
             queue_ArmOdometry_safe(arm_prev_data.t_header, R_c, p_c, EE_DEV);
         }
-        if (this->arm_prev_data.arm_pose_ts_inited & arm_prev_data.t_header > 0)
+        if (this->arm_prev_data.arm_pose_ts_inited && if_estimator_ready[BASE_DEV])
         {
             Lie::SO3xR3_from_SE3(R_c2, p_c2, T_b2); // reuse placeholder R_c2, p_c2
             queue_ArmOdometry_safe(arm_prev_data.t_header, R_c2, p_c2, BASE_DEV);

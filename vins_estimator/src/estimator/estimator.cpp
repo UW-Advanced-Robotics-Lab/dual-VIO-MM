@@ -1339,12 +1339,12 @@ void Estimator::optimization() // TODO: add arm odometry into optimization probl
                 {
                     // TODO: do not use arm factor if base imu is not stable? / weighted factor
                     const double w = ESTIMATOR_ARM_FACTOR_TO_EE;
-                    arm_factor = new ARMFactor(arm_Rs[i],arm_Ps[i],w,w,ESTIMATOR_ARM_FACTOR_TO_EE_Z,w);
+                    arm_factor = new ARMFactor(arm_Rs[i],arm_Ps[i],w,w,ESTIMATOR_ARM_FACTOR_TO_EE_Z,ESTIMATOR_ARM_FACTOR_TO_EE_Q);
                 }
                 else
                 {
                     const double w = ESTIMATOR_ARM_FACTOR_TO_BASE;
-                    arm_factor = new ARMFactor(arm_Rs[i],arm_Ps[i],w,w,ESTIMATOR_ARM_FACTOR_TO_BASE_Z,w);
+                    arm_factor = new ARMFactor(arm_Rs[i],arm_Ps[i],w,w,ESTIMATOR_ARM_FACTOR_TO_BASE_Z,ESTIMATOR_ARM_FACTOR_TO_BASE_Q);
                 }
 #           else
                 const double weight = (pCfg->DEVICE_ID == EE_DEV)?(ESTIMATOR_ARM_FACTOR_TO_EE):(ESTIMATOR_ARM_FACTOR_TO_BASE);

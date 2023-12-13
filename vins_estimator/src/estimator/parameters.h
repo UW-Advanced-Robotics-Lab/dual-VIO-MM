@@ -34,6 +34,8 @@ using namespace std;
 #define IMPLEMENTED         (1U)
 #define FOREVER             (1U)
 #define TODO                (0U)
+#define HACK_ON             (1U)
+#define HACK_OFF            (0U)
 
 #define NO_IMG              (cv::Mat())
 
@@ -93,9 +95,11 @@ using namespace std;
 
 // [Arm] TODO: add to config file:
 #define ESTIMATOR_ARM_FACTOR_TO_EE              (double)(150.0) // 100.0
+#define ESTIMATOR_ARM_FACTOR_TO_EE_Q            (double)(10.0) 
 #define ESTIMATOR_ARM_FACTOR_TO_EE_Z            (double)(200.0) // 200.0
-#define ESTIMATOR_ARM_FACTOR_TO_BASE            (double)(20.0)  //  20.0
-#define ESTIMATOR_ARM_FACTOR_TO_BASE_Z          (double)(200.0) // 200.0
+#define ESTIMATOR_ARM_FACTOR_TO_BASE            (double)(10.0)  //  20.0
+#define ESTIMATOR_ARM_FACTOR_TO_BASE_Q          (double)(10.0) 
+#define ESTIMATOR_ARM_FACTOR_TO_BASE_Z          (double)(20.0) // 200.0
 // ----------------------------------------------------------------
 // : Feature Definitions :
 // ----------------------------------------------------------------
@@ -108,7 +112,7 @@ using namespace std;
 #define USER_PARAMS                 (IMPLEMENTED) // indicates as USER_PARAMS, do not disable
 #define ZEROING_WRT_TO_BASE         ((USER_PARAMS) & (DISABLED)) // enable tp debug raw odometry offset from base
 #define USER_VICON_DEBUG            ((USER_PARAMS) & (DISABLED)) // enable to debug arm config (TODO: the BASE->EE seems not working?)
-#define FLAG_OURS                   ((USER_PARAMS) & (DISABLED)) // To toggle between our tightly-coupled solution vs baseline
+#define FLAG_OURS                   ((USER_PARAMS) & ( ENABLED)) // To toggle between our tightly-coupled solution vs baseline
 
 // ----------------------------------------------------------------
 // FUTURE SUPPORTS:
@@ -174,8 +178,8 @@ using namespace std;
     #       define FEATURE_ENABLE_VICON_ZEROING_ENFORCE_SO2                     ( ENABLED) // enforcing SO2 to R
     // initialize vicon after sfm:
     //     - disable in ZEROING_WRT_TO_BASE: as we are basing vicon wrt base only
-    #   define FEATURE_ENABLE_VICON_ONLY_AFTER_INIT_SFM                     ((USER_PARAMS) & ( ENABLED))
-    #   define FEATURE_ENABLE_VICON_ONLY_AFTER_INIT_BOTH_SFM                ((USER_PARAMS) & ( ENABLED)) 
+    #   define FEATURE_ENABLE_VICON_ONLY_AFTER_INIT_SFM                     ((USER_PARAMS) & ( DISABLED))
+    #   define FEATURE_ENABLE_VICON_ONLY_AFTER_INIT_BOTH_SFM                ((USER_PARAMS) & ( DISABLED)) 
     #       define FEATURE_ENABLE_VICON_ZEROING_ORIENTATION_WRT_BASE_SUPPORT    (FEATURE_ENABLE_VICON_ONLY_AFTER_INIT_BOTH_SFM)
     // TODO: we should try to initialize when one is not inited/ stationary
 
@@ -194,7 +198,7 @@ using namespace std;
     #define         FEATURE_ENABLE_ARM_ODOMETRY_EE_TO_BASE                  (( ENABLED))
     //                  - apply arm odometry to estimate base from ee
     #define         FEATURE_ENABLE_ARM_ODOMETRY_EE_TO_BASE_ENFORCE_SE2      (( ENABLED) & (!USER_VICON_DEBUG))
-    #define         FEATURE_ENABLE_ARM_ODOMETRY_POSE_ZERO_ENFORCE_SO2       (( ENABLED) & (!USER_VICON_DEBUG))
+    #define         FEATURE_ENABLE_ARM_ODOMETRY_POSE_ZERO_ENFORCE_SO2       ((DISABLED) & (!USER_VICON_DEBUG))
     #define         FEATURE_ENABLE_ARM_ODOMETRY_POSE_NO_ORIENTATION         (( ENABLED) & (!USER_VICON_DEBUG))
     //                  - enforcing SO2 projection for arm odometry to estimate base from ee
     #define         FEATURE_ENABLE_ARM_ODOMETRY_FACTOR_TO_BASE              ((FLAG_OURS) & ( ENABLED))
