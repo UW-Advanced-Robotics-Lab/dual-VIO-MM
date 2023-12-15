@@ -51,11 +51,6 @@ typedef struct{
     // GT:
     nav_msgs::Path      vicon_path; // buffer
     std::mutex          vicon_guard;
-#   if (FEATURE_ENABLE_VICON_ZEROING_SUPPORT)
-    Eigen::Vector3d     vicon_p0;
-    Eigen::Matrix3d     vicon_R0;
-    bool                vicon_inited;
-#   endif
 #   if (FEATURE_ENABLE_ARM_VICON_SUPPORT)
     geometry_msgs::Pose     latest_vicon_pose;
 #   endif // (FEATURE_ENABLE_ARM_VICON_SUPPORT)
@@ -379,99 +374,13 @@ void pubOdometryPath_safe(const int device_id)
 }
 
 #if (FEATURE_ENABLE_VICON_SUPPORT)
-void queue_ViconOdometry_safe(const Vector7d_t &vicon_msg, const double t, const int device_id)
+void queue_ViconOdometry_safe(const double t, const int device_id, const Eigen::Quaterniond q, const Vector3d p)
 {
     std_msgs::Header header;
     header.frame_id = "world";
     header.stamp = ros::Time(t); // copy the timestamp, TODO: should we do a sync?
     
     geometry_msgs::Pose pose;
-
-#if (!FEATURE_ENABLE_VICON_ZEROING_SUPPORT && !FEATURE_ENABLE_VICON_ZEROING_WRT_BASE_SUPPORT)    
-    pose.position.x = vicon_msg(0);
-    pose.position.y = vicon_msg(1);
-    pose.position.z = vicon_msg(2);
-    pose.orientation.x = vicon_msg(4);
-    pose.orientation.y = vicon_msg(5);
-    pose.orientation.z = vicon_msg(6);
-    pose.orientation.w = vicon_msg(3);
-#else
-
-    // zeroing the pose
-    Eigen::Vector3d     p;
-    Eigen::Quaterniond  q;
-    Eigen::Matrix3d     R;
-    
-    p = Eigen::Vector3d(vicon_msg.block<3,1>(0,0));
-    q = Eigen::Quaterniond(vicon_msg(3), vicon_msg(4), vicon_msg(5), vicon_msg(6)); // w,x,y,z
-
-    R = q.toRotationMatrix();
-
-    // Capture & Reset the first pose to the origin
-    bool init_vicon = (m_buf[device_id].vicon_path.poses.size() == 0);
-
-    // capture:
-#   if (FEATURE_ENABLE_VICON_ZEROING_WRT_BASE_SUPPORT)
-    if (init_vicon & (device_id == BASE_DEV)) // only init on base device;
-    {
-        // SO3 --proj--> SO2:
-        // Extract the angle about the z-axis (ensure SO2 with z axis aligned up)
-        // double theta = Utility::R2y_rad(R);
-        // R = Utility::y2R_rad(theta);
-        // T0_inv : for offset correction
-        // X---- NAh
-
-        m_buf[device_id].vicon_R0 = R.transpose();
-        m_buf[device_id].vicon_p0 = - p;
-        m_buf[device_id].vicon_inited = true;
-        // init EE from Base config:
-        m_buf[EE_DEV].vicon_inited = true;
-        m_buf[EE_DEV].vicon_R0 = m_buf[BASE_DEV].vicon_R0;
-        m_buf[EE_DEV].vicon_p0 = m_buf[BASE_DEV].vicon_p0;
-        // PRINT_DEBUG("vicon_R0 = \n%s", Lie::to_string(m_buf[BASE_DEV].vicon_R0).c_str());
-        // PRINT_DEBUG("vicon_p0 = %s", Lie::to_string(m_buf[BASE_DEV].vicon_p0).c_str());
-    }    
-#   else
-    if (init_vicon)
-    {
-        const Lie::SO3 R_corr_c2w(
-            (Lie::SO3() <<  1,  0,  0,
-                            0,  0, -1,
-                            0,  1,  0).finished()
-        );// convert from world axis to camera axis 
-        
-        if (device_id == EE_DEV)
-        {
-            R = R * R_corr_c2w;
-        }
-
-#   if (FEATURE_ENABLE_VICON_ZEROING_ENFORCE_SO2)
-        // enforce SO2 correction from base? (not SE2)
-        double yaw = Utility::R2y_rad(R);
-        R = Utility::y2R_rad(yaw); // to avoid pitch/roll bias
-#   endif //(FEATURE_ENABLE_VICON_ZEROING_ENFORCE_SO2)
-
-        m_buf[device_id].vicon_R0 = R.transpose();
-        m_buf[device_id].vicon_p0 = - p;
-        m_buf[device_id].vicon_inited = true;
-
-#   if (FEATURE_ENABLE_VICON_ZEROING_ORIENTATION_WRT_BASE_SUPPORT)
-        m_buf[EE_DEV].vicon_R0 = m_buf[BASE_DEV].vicon_R0; // EE pose should be based on base pose, compensate translation
-#   endif //(FEATURE_ENABLE_VICON_ZEROING_ORIENTATION_WRT_BASE_SUPPORT)
-    }
-#   endif // (FEATURE_ENABLE_VICON_ZEROING_WRT_BASE_SUPPORT)
-
-    // apply zeroing correction:
-    {
-        // offset position wrt initial position:
-        p = m_buf[device_id].vicon_p0 + p;
-        // correction on orientation:
-        p = m_buf[device_id].vicon_R0 * p;
-        R = m_buf[device_id].vicon_R0 * R;
-        // to quaternion:
-        q = Eigen::Quaterniond(R);
-    }
-
     // apply transformation to pose:
     pose.position.x = p(0);
     pose.position.y = p(1);
@@ -480,7 +389,6 @@ void queue_ViconOdometry_safe(const Vector7d_t &vicon_msg, const double t, const
     pose.orientation.y = q.y();
     pose.orientation.z = q.z();
     pose.orientation.w = q.w();
-#endif
     // push back
     geometry_msgs::PoseStamped pose_stamped;
     pose_stamped.header = header;
@@ -488,26 +396,9 @@ void queue_ViconOdometry_safe(const Vector7d_t &vicon_msg, const double t, const
     m_buf[device_id].vicon_guard.lock();
     m_buf[device_id].vicon_path.header = header;
     m_buf[device_id].vicon_path.header.frame_id = "world";
-#if (FEATURE_ENABLE_ARM_VICON_SUPPORT)
-    m_buf[device_id].latest_vicon_pose = pose;
-#endif //(FEATURE_ENABLE_ARM_VICON_SUPPORT)
-#if (FEATURE_ENABLE_VICON_ZEROING_SUPPORT)
-    if (m_buf[device_id].vicon_inited) // publish only once it is initialized
-        m_buf[device_id].vicon_path.poses.push_back(pose_stamped);
-#else
     m_buf[device_id].vicon_path.poses.push_back(pose_stamped);
-#endif //(!FEATURE_ENABLE_VICON_ZEROING_SUPPORT)
     m_buf[device_id].vicon_guard.unlock();
 }
-
-#if (FEATURE_ENABLE_ARM_VICON_SUPPORT)
-void getLatestViconPose_safe(geometry_msgs::Pose& pose, const int device_id)
-{
-    m_buf[device_id].vicon_guard.lock();
-    pose = m_buf[device_id].latest_vicon_pose;
-    m_buf[device_id].vicon_guard.unlock();
-}
-#endif //(FEATURE_ENABLE_ARM_VICON_SUPPORT)
 
 void pubViconOdometryPath_safe(const int device_id)
 {

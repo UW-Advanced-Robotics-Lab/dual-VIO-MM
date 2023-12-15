@@ -17,11 +17,15 @@
 
 // --- Configuration:
 #define ARM_MODEL_CONFIG_L_SHOULDER          ((double)(0.346))
-#define ARM_MODEL_CONFIG_L_ARM               ((double)(0.55))
 #define ARM_MODEL_CONFIG_L_ELBOW             ((double)(0.32))
 #define ARM_MODEL_CONFIG_L_WRIST             ((double)(0.06))
+#if 1 // [Dec 13 2023, 1213]
+#define ARM_MODEL_CONFIG_W_ELBOW_JNT         ((double)(0.055))
+#define ARM_MODEL_CONFIG_L_ARM               ((double)(0.559734))
+#else
 #define ARM_MODEL_CONFIG_W_ELBOW_JNT         ((double)(0.045))
-
+#define ARM_MODEL_CONFIG_L_ARM               ((double)(0.55))
+#endif
 class ArmModel { 
 public:
     ArmModel();

@@ -64,12 +64,8 @@ void pubOdometryPath_safe(const int device_id);
 
 #if (FEATURE_ENABLE_VICON_SUPPORT)
 // vicon:
-void queue_ViconOdometry_safe(const Vector7d_t &vicon_msg, const double t, const int device_id);
+void queue_ViconOdometry_safe(const double t, const int device_id, const Eigen::Quaterniond q, const Vector3d p);
 void pubViconOdometryPath_safe(const int device_id);
-// vicon arm:
-#   if (FEATURE_ENABLE_ARM_VICON_SUPPORT)
-void getLatestViconPose_safe(geometry_msgs::Pose& pose, const int device_id);
-#   endif //(FEATURE_ENABLE_ARM_VICON_SUPPORT)
 #endif
 
 void queue_KeyPoses_unsafe(const Estimator &estimator, const std_msgs::Header &header);

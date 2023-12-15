@@ -131,6 +131,10 @@ class Estimator
     Matrix3d ric[2];
     Vector3d tic[2];
 
+    // rectify odometry into one global world frame:
+    Matrix3d world_R = Lie::SO3::Identity();
+    Vector3d world_p = Lie::R3::Identity();
+
     Vector3d        Ps[(WINDOW_SIZE + 1)];
     Vector3d        Vs[(WINDOW_SIZE + 1)];
     Matrix3d        Rs[(WINDOW_SIZE + 1)];

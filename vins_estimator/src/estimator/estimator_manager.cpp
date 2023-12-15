@@ -318,36 +318,101 @@ void EstimatorManager::processMeasurements_thread()
                 // queue vicon to publisher later:
                 for(size_t id = BASE_DEV; id < MAX_NUM_DEVICES; id++)
                 {
-#   if (FEATURE_ENABLE_VICON_ONLY_AFTER_INIT_SFM)
-                //NOTE: If Enabled, the vicon will aligned based on the first initialization, skipping all initialization process
-#       if (FEATURE_ENABLE_VICON_ONLY_AFTER_INIT_BOTH_SFM)
-                    if ((pEsts[BASE_DEV]->_status & Estimator::STATUS_INITIALIZING) &&
-                        (pEsts[  EE_DEV]->_status & Estimator::STATUS_INITIALIZING) && 
-                        (!this->m_vicon[id].started)) // once it starts, it will not be stopped
-#       else
-                    if ((pEsts[id]->_status & Estimator::STATUS_INITIALIZING) && 
-                        (!this->m_vicon[id].started))
-#       endif //(FEATURE_ENABLE_VICON_ONLY_AFTER_INIT_BOTH_SFM)
-                    {
-                        // do not process till SFM initialized
-                        continue; //
-                    }
-#   endif //(FEATURE_ENABLE_VICON_ONLY_AFTER_INIT_SFM)
                     this->m_vicon[id].guard.lock();
                     while(! this->m_vicon[id].data.empty())
                     {
+                        const double t = this->m_vicon[id].data.front().first;
                         // vicon time alignment (aligning with the imaging accusition time)
-                        if (this->m_vicon[id].data.front().first < feature[id].first)
+                        if (t < feature[id].first)
                         {
                             this->m_vicon[id].data.pop(); // popping :)
                         }
                         else
                         {
-                            queue_ViconOdometry_safe(
-                                this->m_vicon[id].data.front().second, 
-                                this->m_vicon[id].data.front().first, 
-                                id);
-                            this->m_vicon[id].started = true;
+                            Lie::R3 p; Lie::Qd q; Lie::SO3 R;
+                            // fetch vicon data:
+                            Vector7d_t T_pq = this->m_vicon[id].data.front().second;
+                            // conversion:
+                            p = Lie::R3(T_pq.block<3,1>(0,0));
+                            q = Lie::Qd(T_pq(3), T_pq(4), T_pq(5), T_pq(6)); // w,x,y,z
+                            R = q.toRotationMatrix();
+
+#   if (FEATURE_ENABLE_VICON_ZEROING_WRT_BASE_SUPPORT)
+                            // only zeroing on base device; and zeroing EE wrt base:
+                            if ((!this->m_vicon[id].started) & (id == BASE_DEV)) 
+                            {
+                                this->m_vicon[id].dR0 = R.transpose();
+                                this->m_vicon[id].dP0 = - p;
+                                // init EE from Base config:
+                                this->m_vicon[EE_DEV].dR0 = this->m_vicon[BASE_DEV].dR0;
+                                this->m_vicon[EE_DEV].dP0 = this->m_vicon[BASE_DEV].dP0;
+                                // PRINT_DEBUG("dR0 = \n%s", Lie::to_string(m_vicon[BASE_DEV].dR0).c_str());
+                                // PRINT_DEBUG("dP0 = %s", Lie::to_string(m_vicon[BASE_DEV].dP0).c_str());
+                            }    
+#   else  //TODO? - not tested yet, moved from viz.cpp on  2023 dec 14
+                            if ((!this->m_vicon[id].started)) 
+                            {
+                                R = q.toRotationMatrix();
+                                const Lie::SO3 R_corr_c2w(
+                                    (Lie::SO3() <<  1,  0,  0,
+                                                    0,  0, -1,
+                                                    0,  1,  0).finished()
+                                );// convert from world axis to camera axis 
+                                
+                                if (id == EE_DEV)
+                                {
+                                    R = R * R_corr_c2w;
+                                }
+
+                        #   if (FEATURE_ENABLE_VICON_ZEROING_ENFORCE_SO2)
+                                // enforce SO2 correction from base? (not SE2)
+                                double yaw = Utility::R2y_rad(R);
+                                R = Utility::y2R_rad(yaw); // to avoid pitch/roll bias
+                        #   endif //(FEATURE_ENABLE_VICON_ZEROING_ENFORCE_SO2)
+
+                                this->m_vicon[id].dR0 = R.transpose();
+                                this->m_vicon[id].dP0 = - p;
+
+                        #   if (FEATURE_ENABLE_VICON_ZEROING_ORIENTATION_WRT_BASE_SUPPORT)
+                                this->m_vicon[EE_DEV].dR0 = this->m_vicon[BASE_DEV].dR0; // EE pose should be based on base pose, compensate translation
+                        #   endif //(FEATURE_ENABLE_VICON_ZEROING_ORIENTATION_WRT_BASE_SUPPORT)
+                            }
+#   endif // (FEATURE_ENABLE_VICON_ZEROING_WRT_BASE_SUPPORT)
+
+                            // apply zeroing correction:
+                            {
+                                // offset position wrt initial position:
+                                p = this->m_vicon[id].dP0 + p;
+                                // correction on orientation:
+                                p = this->m_vicon[id].dR0 * p;
+                                R = this->m_vicon[id].dR0 * R;
+                            }
+
+                            if (!this->m_vicon[id].started) // only once
+                            {
+                                this->m_vicon[id].R0 = R; //cache
+                                this->m_vicon[id].P0 = p; //cache
+                            }
+
+#   if (FEATURE_ZERO_VICON_WRT_VINS)
+                            // rebase wrt VINS now:
+                            if (this->arm_prev_data.init_dT_t_inited)
+                            {
+                                // offset position wrt initial position:
+                                p = this->arm_prev_data.init_dT_t.block<3,1>(0,3) + p;
+                                // correction on orientation:
+                                p = this->arm_prev_data.init_dT_t.block<3,3>(0,0) * p;
+                                R = this->arm_prev_data.init_dT_t.block<3,3>(0,0) * R;
+                            }
+#   endif // (FEATURE_ZERO_VICON_WRT_VINS)
+                            // to quaternion:
+                            q = Lie::Qd(R);
+                            // output:
+                            queue_ViconOdometry_safe(t, id, q, p);
+                            // cache:
+                            this->m_vicon[id].prev_R0 = R;
+                            this->m_vicon[id].prev_P0 = p;
+                            this->m_vicon[id].started = true; // set flag
                             break; // break the while loop
                         }
                     }
@@ -397,10 +462,10 @@ void EstimatorManager::inputIMU(const size_t DEV_ID, const double t, const Vecto
 }
 
 #if (FEATURE_ENABLE_VICON_SUPPORT)
-void EstimatorManager::inputVicon_safe(const size_t DEV_ID, const pair<double, Vector7d_t> &_vicon_msg)
+void EstimatorManager::inputVicon_safe(const size_t DEV_ID, const pair<double, Vector7d_t> &_T_pq)
 {
     std::lock_guard<std::mutex> lock(this->m_vicon[BASE_DEV].guard);
-    this->m_vicon[DEV_ID].data.push(_vicon_msg);
+    this->m_vicon[DEV_ID].data.push(_T_pq);
 }
 #endif // (FEATURE_ENABLE_VICON_SUPPORT)
 
@@ -516,7 +581,7 @@ void EstimatorManager::_postProcessArmJnts_unsafe(const double t, const Vector7d
         PRINT_WARN("ArmOdometry: no previous data available!");
         pArm->getEndEffectorPose_unsafely(arm_prev_data.arm_g_st);
     }
-    // compute arm odometry:
+    else // compute arm odometry:
     {
         // placeholders:
         Lie::SE3 T_c, T_b, T_e, T_e2, T_b2;
@@ -527,50 +592,58 @@ void EstimatorManager::_postProcessArmJnts_unsafe(const double t, const Vector7d
         
         /* 1. Fetch Pose Reference */
         g_st = arm_prev_data.arm_g_st;
-        
+
+        /* Compute Arm Link Transformation Map */
+        Lie::SE3 T_gst = Tc_b * g_st * Te;   //--> EE
+        Lie::SE3 T_gst_inv = T_gst.inverse();//--> BASE
+
 #   if (FEATURE_ENABLE_ARM_VICON_SUPPORT) 
         // stub previously published Ground Truth Vicon data:
-        geometry_msgs::Pose pose;
         /* BASE --> EE */
-        if (if_estimator_ready[BASE_DEV])
+        if (if_estimator_ready[BASE_DEV] && this->m_vicon[BASE_DEV].started)
         {
-            getLatestViconPose_safe(pose, BASE_DEV);
-            p_c = Eigen::Vector3d(pose.position.x, pose.position.y, pose.position.z);
-            R_c = Eigen::Quaterniond(pose.orientation.w, pose.orientation.x, pose.orientation.y, pose.orientation.z).toRotationMatrix();
+            R_c = this->m_vicon[BASE_DEV].prev_R0;
+            p_c = this->m_vicon[BASE_DEV].prev_P0;
             T_c = Lie::SE3_from_SO3xR3((R_c * R_corr_w2r), p_c); // vicon is aligned with world axis -> robot axis
         }
         else
         {
-            T_c = Lie::SE3_from_SO3xR3((R_corr_w2r), p_c);
+            ROS_WARN("VIN[BASE]-->ARM[EE]: no previous data available!");
+            T_c = Lie::SE3_from_SO3xR3((R_corr_w2r), Lie::R3::Zero());
         }
         /* EE --> BASE */
-        if (if_estimator_ready[EE_DEV])
+        if (if_estimator_ready[EE_DEV] && this->m_vicon[EE_DEV].started)
         {
-            getLatestViconPose_safe(pose, EE_DEV);
-            p_c2 = Eigen::Vector3d(pose.position.x, pose.position.y, pose.position.z);
-            R_c2 = Eigen::Quaterniond(pose.orientation.w, pose.orientation.x, pose.orientation.y, pose.orientation.z).toRotationMatrix();
+            R_c2 = this->m_vicon[EE_DEV].prev_R0;
+            p_c2 = this->m_vicon[EE_DEV].prev_P0;
             T_e2 = Lie::SE3_from_SO3xR3((R_c2 * R_corr_w2r), p_c2); // robot axis
         }
         else
         {
-            T_e2 =Lie::SE3_from_SO3xR3((R_corr_w2r), p_c);
+            ROS_WARN("VIN[EE]-->ARM[BASE]: no previous data available!");
+            T_e2 =Lie::SE3_from_SO3xR3((R_corr_w2r), Lie::R3::Zero());
         }
+
 #   else 
         // feed in previously optimized estimator latest state:
-        /* BASE --> EE */
+        /* fetch BASE */
         if (if_estimator_ready[BASE_DEV])
         {
             p_c = m_data.last_P[BASE_DEV]; // previous frame
             R_c = m_data.last_R[BASE_DEV]; // previous frame
             // convert frame axis -(R_corr_c2w)-> world frame axis -(R_corr_w2r)-> robot frame axis:
             T_c = Lie::SE3_from_SO3xR3(((R_c * R_corr_c2w) * R_corr_w2r), p_c);// a coordinate transformation is needed
+            // // ensure its plannar motion only, to minimize the effect of pitch/roll:
+            // double yaw = Utility::R2y_rad(T_c.block<3,3>(0,0));
+            // T_c.block<3,3>(0,0) = Utility::y2R_rad(yaw);
+            // T_c(2,3) = 0; // z = 0
         }
         else
         {
             p_c = Lie::R3::Zero();
             T_c = Lie::SE3_from_SO3xR3(R_corr_w2r, Lie::R3::Zero());
         }
-        /* EE --> BASE */
+        /* fetch EE */
         if (if_estimator_ready[EE_DEV])
         {
             p_c2 = m_data.last_P[EE_DEV]; // previous frame
@@ -583,10 +656,6 @@ void EstimatorManager::_postProcessArmJnts_unsafe(const double t, const Vector7d
             T_e2 = Lie::SE3_from_SO3xR3(R_corr_w2r, Lie::R3::Zero());
         }
 #   endif // (!FEATURE_ENABLE_ARM_VICON_SUPPORT)
-
-        /* Compute Arm Link Transformation Map */
-        Lie::SE3 T_gst = Tc_b * g_st * Te;
-        Lie::SE3 T_gst_inv = T_gst.inverse();
         
         /* 2. Apply Arm Pose */
         /* BASE --> EE */
@@ -601,8 +670,20 @@ void EstimatorManager::_postProcessArmJnts_unsafe(const double t, const Vector7d
             // camera @ EE calib @ zero config is aligned with world axis
             // T_b2 = T_e2; // to ee
             T_b2 = T_e2 * T_gst_inv * T_corr_r2c; // camera axis
+
         }
-        
+
+# if (FEATURE_ENABLE_ARM_ODOMETRY_EE_TO_BASE_ENFORCE_SE2 || HACK_ON)
+        {
+            // for base, project to SO2: due to arm kinematics parameterization inaccuracies, and 
+            //      EE estimation inaccuracies, we will have a config that is non-ideal
+            // SO3 --proj--> SO2:
+            double yaw = Utility::R2y_rad(T_b2.block<3,3>(0,0) * R_corr_c2w); // to world
+            T_b2.block<3,3>(0,0) = Utility::y2R_rad(yaw); // camera axis
+            T_b2(2,3) = 0;
+            T_b2 = T_b2 * T_corr_w2c; // camera axis
+        }
+# endif //(FEATURE_ENABLE_ARM_ODOMETRY_EE_TO_BASE_ENFORCE_SO2)
 #   if ((FEATURE_ENABLE_ARM_ODOMETRY_WRT_TO_BASE))
         //Nope:
         this->arm_prev_data.arm_pose_ts_inited = true;
@@ -612,52 +693,83 @@ void EstimatorManager::_postProcessArmJnts_unsafe(const double t, const Vector7d
         /* BASE --> EE */
         if (!this->arm_prev_data.arm_pose_st_inited)
         {   
-            // if (if_estimator_ready[BASE_DEV]) // NO
-            if (if_estimator_ready[  EE_DEV]) // if EE is ready (valid), we may set current Tb-->T_e as the initial config
+            if (if_estimator_ready[BASE_DEV]) 
             {
-                PRINT_WARN("> Arm st 0 inited !");
-                this->arm_prev_data.arm_pose_st_inited = true;
-                this->arm_prev_data.arm_pose_st_0 = T_corr_w2c * Lie::inverse_SE3(T_e); // world/cam_EE
-                // ensure its plannar motion only, to minimize the effect of pitch/roll:
-                double yaw = Utility::R2y_rad(this->arm_prev_data.arm_pose_st_0.block<3,3>(0,0));
-                this->arm_prev_data.arm_pose_st_0.block<3,3>(0,0) = Utility::y2R_rad(yaw);
+#if (ZEROING_WRT_TO_VINS)
+                if (if_estimator_ready[EE_DEV]) 
+                {
+                    /// TODO: I should find offset against the default camera pose : T_e x T_vins (against current vins pose)
+                    PRINT_INFO("> Arm st 0 inited with VINS alignment!");
+                    this->arm_prev_data.arm_pose_st_inited = true;
+                    this->arm_prev_data.arm_pose_st_0 = Lie::SE3_from_SO3xR3(R_c2, p_c2); // T_e2 @ world/cam_EE
+
+#   if (FEATURE_ZERO_VICON_WRT_VINS)
+                    // compute the delta of current Rp_vicon wrt Rp_vicon_0
+                    this->arm_prev_data.init_dT_t = this->arm_prev_data.arm_pose_st_0 * Lie::inverse_SO3xR3(this->m_vicon[EE_DEV].prev_R0, this->m_vicon[EE_DEV].prev_P0);
+                    this->arm_prev_data.init_dT_t_inited = true;
+#   endif // (FEATURE_ZERO_VICON_WRT_VINS)
+
+                    this->arm_prev_data.arm_pose_st_0 = this->arm_prev_data.arm_pose_st_0 * Lie::inverse_SE3(T_e); // world/cam_EE
+                }
+#else
+    #if (FEATURE_ENABLE_VICON_SUPPORT & FEATURE_ENABLE_VICON_FOR_ARM_INITIALIZEION)
+                if (this->m_vicon[EE_DEV].started)
+                {
+                    R_c2 = this->m_vicon[EE_DEV].R0.transpose();
+                    p_c2 = R_c2 * (this->m_vicon[EE_DEV].prev_P0 - this->m_vicon[EE_DEV].P0);
+                    R_c2 = R_c2 * this->m_vicon[EE_DEV].prev_R0;
+                    this->arm_prev_data.init_dT_t = Lie::SE3_from_SO3xR3(R_c2, p_c2);
+                    this->arm_prev_data.init_dT_t_inited = true;
+                    PRINT_INFO("> Arm st 0 inited with Vicon alignment!");
+                    this->arm_prev_data.arm_pose_st_inited = true;
+                    this->arm_prev_data.arm_pose_st_0 = this->arm_prev_data.init_dT_t * Lie::inverse_SE3(T_e); // world/cam_EE
+                }
+    #else
+                {
+                    PRINT_ERROR("> Arm st 0 inited without Vicon!");
+                    this->arm_prev_data.arm_pose_st_inited = true;
+                    this->arm_prev_data.arm_pose_st_0 = T_corr_w2c * Lie::inverse_SE3(T_e); // world/cam_EE
+                    // // ensure its plannar motion only, to minimize the effect of pitch/roll:
+                    // double yaw = Utility::R2y_rad(this->arm_prev_data.arm_pose_st_0.block<3,3>(0,0));
+                    // this->arm_prev_data.arm_pose_st_0.block<3,3>(0,0) = Utility::y2R_rad(yaw);
+                }
+    #endif 
+#endif 
             }
             else
             {
                 PRINT_ERROR("> Arm st 0 NOT inited !");
             }
         }
-        else
-        {
-            T_e = this->arm_prev_data.arm_pose_st_0 * T_e;
-            T_b = this->arm_prev_data.arm_pose_st_0 * T_b; 
-        }
-        
         /* EE --> BASE */
         if (!this->arm_prev_data.arm_pose_ts_inited)
         {
-            // if (if_estimator_ready[EE_DEV]) // NO
-            if (if_estimator_ready[BASE_DEV]) // if Base is ready (valid), we may set current Te-->T_b as the initial config
+            if (if_estimator_ready[EE_DEV]) 
             {
-                PRINT_WARN("> Arm ts 0 inited !");
-                this->arm_prev_data.arm_pose_ts_inited = true;
-                this->arm_prev_data.arm_pose_ts_0 = T_corr_w2c * Lie::inverse_SE3(T_b2); // cam_base
-                // this->arm_prev_data.arm_pose_ts_0 = T_c * T_corr_r2c * Lie::inverse_SE3(T_b2); // cam_base
-    // #   if (FEATURE_ENABLE_ARM_ODOMETRY_POSE_ZERO_ENFORCE_SO2)
-    //             double yaw = Utility::R2y_rad(this->arm_prev_data.arm_pose_ts_0.block<3,3>(0,0));
-    //             this->arm_prev_data.arm_pose_ts_0.block<3,3>(0,0) = Utility::y2R_rad(yaw); // to avoid pitch/roll bias
-    // #   elif (FEATURE_ENABLE_ARM_ODOMETRY_POSE_NO_ORIENTATION)
-    //             this->arm_prev_data.arm_pose_ts_0.block<3,3>(0,0) = Lie::SO3::Identity();
-    // #   endif //(FEATURE_ENABLE_ARM_ODOMETRY_POSE_ZERO_ENFORCE_SO2)
+#if (FEATURE_ENABLE_VICON_SUPPORT & FEATURE_ENABLE_VICON_FOR_ARM_INITIALIZEION)
+                if (this->m_vicon[BASE_DEV].started)
+                {
+                    R_c2 = this->m_vicon[BASE_DEV].R0.transpose();
+                    p_c2 = R_c2 * (this->m_vicon[BASE_DEV].prev_P0 - this->m_vicon[BASE_DEV].P0);
+                    R_c2 = R_c2 * this->m_vicon[BASE_DEV].prev_R0;
+                    this->arm_prev_data.init_dT_s = Lie::SE3_from_SO3xR3(R_c2, p_c2);
+                    this->arm_prev_data.init_dT_t_inited = true;
+                    PRINT_INFO("> Arm ts 0 inited with Vicon alignment!");
+                    this->arm_prev_data.arm_pose_ts_inited = true;
+                    this->arm_prev_data.arm_pose_ts_0 = this->arm_prev_data.init_dT_s * T_corr_w2c * Lie::inverse_SE3(T_b2); // cam_base
+                }
+                else
+#endif //(FEATURE_ENABLE_VICON_SUPPORT)
+                { 
+                    PRINT_ERROR("> Arm ts 0 inited without Vicon!");
+                    this->arm_prev_data.arm_pose_ts_inited = true;
+                    this->arm_prev_data.arm_pose_ts_0 = T_corr_w2c * Lie::inverse_SE3(T_b2); // cam_base
+                }
             }
             else
             {
                 PRINT_ERROR("> Arm ts 0 NOT inited !");
             }
-        }
-        else
-        {
-            T_b2 = this->arm_prev_data.arm_pose_ts_0 * T_b2; 
         }
 #   endif //  (!FEATURE_ENABLE_ARM_ODOMETRY_WRT_TO_BASE) 
         
@@ -666,24 +778,22 @@ void EstimatorManager::_postProcessArmJnts_unsafe(const double t, const Vector7d
         /* BASE --> EE */
         if (this->arm_prev_data.arm_pose_st_inited)
         {
+            // apply:
+            T_e = this->arm_prev_data.arm_pose_st_0 * T_e;
+            T_b = this->arm_prev_data.arm_pose_st_0 * T_b; 
             // - update arm pose:
             this->arm_prev_data.arm_pose_st = T_e;
             // PRINT_DEBUG("> ArmOdometry [%f]: \n R=\n%s \n p=\n%s", t, Lie::to_string(R).c_str(), Lie::to_string(p).c_str());
+# if(FEATURE_ENABLE_ARM_ODOMETRY_VIZ_ARM) // arm viz 
+            pArm->storeTransformations_unsafely(T_b); // for arm visualization
+# endif //(FEATURE_ENABLE_ARM_ODOMETRY_VIZ_ARM)
         }
 
-# if(FEATURE_ENABLE_ARM_ODOMETRY_VIZ_ARM) // arm viz 
-        pArm->storeTransformations_unsafely(T_b); // for arm visualization
-# endif //(FEATURE_ENABLE_ARM_ODOMETRY_VIZ_ARM)
         /* EE --> BASE */
         if (this->arm_prev_data.arm_pose_ts_inited)
         {
-# if (FEATURE_ENABLE_ARM_ODOMETRY_EE_TO_BASE_ENFORCE_SE2 || HACK_ON)
-            // for base, project to SO2:
-            // SO3 --proj--> SO2:
-            double yaw = Utility::R2y_rad(T_b2.block<3,3>(0,0) * R_corr_c2w);
-            T_b2.block<3,3>(0,0) = Utility::y2R_rad(yaw) * R_corr_c2w.transpose(); // camera axis
-            T_b2(2,3) = 0;
-# endif //(FEATURE_ENABLE_ARM_ODOMETRY_EE_TO_BASE_ENFORCE_SO2)
+            // apply:
+            T_b2 = this->arm_prev_data.arm_pose_ts_0 * T_b2; 
             this->arm_prev_data.arm_pose_ts = T_b2;
         }
 
