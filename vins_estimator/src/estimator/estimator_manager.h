@@ -88,6 +88,12 @@ typedef struct{
             Lie::SE3    init_dT_t;
             Lie::SE3    init_dT_s;
 
+            Lie::SE3    init_T_c1;
+            Lie::SE3    init_T_c2;
+
+            bool        init_T_c1_inited = false;  
+            bool        init_T_c2_inited = false;  
+
             bool        arm_pose_st_ready = false;
             bool        arm_pose_ts_ready = false;
             bool        arm_pose_st_inited = false;

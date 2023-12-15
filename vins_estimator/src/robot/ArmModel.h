@@ -16,12 +16,12 @@
 #define ARM_NUM_LINKS       (ARM_NUM_DOF + 1U + FEATURE_ENABLE_CAMERA_TOOL_TIPS)
 
 // --- Configuration:
-#define ARM_MODEL_CONFIG_L_SHOULDER          ((double)(0.346))
-#define ARM_MODEL_CONFIG_L_ELBOW             ((double)(0.32))
-#define ARM_MODEL_CONFIG_L_WRIST             ((double)(0.06))
+// #define ARM_MODEL_CONFIG_L_SHOULDER          ((double)(0.346))
+#define ARM_MODEL_CONFIG_L_ELBOW             ((double)(0.300))
+#define ARM_MODEL_CONFIG_L_WRIST             ((double)(0.0609))
 #if 1 // [Dec 13 2023, 1213]
-#define ARM_MODEL_CONFIG_W_ELBOW_JNT         ((double)(0.055))
-#define ARM_MODEL_CONFIG_L_ARM               ((double)(0.559734))
+#define ARM_MODEL_CONFIG_W_ELBOW_JNT         ((double)(0.045))
+#define ARM_MODEL_CONFIG_L_ARM               ((double)(0.55))
 #else
 #define ARM_MODEL_CONFIG_W_ELBOW_JNT         ((double)(0.045))
 #define ARM_MODEL_CONFIG_L_ARM               ((double)(0.55))
