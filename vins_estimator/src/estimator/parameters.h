@@ -36,6 +36,8 @@ using namespace std;
 #define TODO                (0U)
 #define HACK_ON             (1U)
 #define HACK_OFF            (0U)
+#define ALWAYS_ON             (1U)
+#define ALWAYS_OFF            (0U)
 
 #define NO_IMG              (cv::Mat())
 
@@ -105,10 +107,11 @@ using namespace std;
 // ----------------------------------------------------------------
 // IMPORTANT GROUP MODE SELECTION FOR EVAL:
 #define USER_PARAMS                 (IMPLEMENTED) // indicates as USER_PARAMS, do not disable
-#define FLAG_OURS                            (DISABLED) // To toggle between our tightly-coupled solution vs baseline
+#define FLAG_OURS                            ((USER_PARAMS) & (DISABLED)) // To toggle between our tightly-coupled solution vs baseline
+// Sub items:
 #define ZEROING_WRT_TO_BASE                  ((USER_PARAMS) & (DISABLED)) // enable tp debug raw odometry offset from base
-#define ZEROING_WRT_TO_VINS                  ((USER_PARAMS) & (DISABLED)) // instead align against vins
 #define USER_VICON_DEBUG_ARM                 ((USER_PARAMS) & (DISABLED)) // enable to debug arm config (TODO: the BASE->EE seems not working?)
+#define ZEROING_WRT_TO_VINS                  ((USER_PARAMS) & (ALWAYS_ON)) // [ON PLZ] instead align against vins
 #define ZEROING_WRT_TO_VICON                 (!ZEROING_WRT_TO_VINS) // enable to align against initial vicon frame position
 
 // MAJOR DEPLOYMENT VERSION:
@@ -198,11 +201,11 @@ using namespace std;
     #define         FEATURE_ENABLE_ARM_ODOMETRY_WRT_TO_BASE                 (ZEROING_WRT_TO_BASE) // init first pose with arm odometry
     //              - enabled [default]: consider relative poses with respect to the first frame
     //              - disabled: to see direct comparison vs vicon
-    #define         FEATURE_ENABLE_ARM_ODOMETRY_EE_TO_BASE                  (( ENABLED))
+    #define         FEATURE_ENABLE_ARM_ODOMETRY_EE_TO_BASE                  ((ALWAYS_ON))
     //                  - apply arm odometry to estimate base from ee
-    #define         FEATURE_ENABLE_ARM_ODOMETRY_EE_TO_BASE_ENFORCE_SE2      (( ENABLED) & (!USER_VICON_DEBUG_ARM))
-    #define         FEATURE_ENABLE_ARM_ODOMETRY_POSE_ZERO_ENFORCE_SO2       ((DISABLED) & (!USER_VICON_DEBUG_ARM))
-    #define         FEATURE_ENABLE_ARM_ODOMETRY_POSE_NO_ORIENTATION         (( ENABLED) & (!USER_VICON_DEBUG_ARM))
+    #define         FEATURE_ENABLE_ARM_ODOMETRY_EE_TO_BASE_ENFORCE_SE2      ((ALWAYS_ON) & (!USER_VICON_DEBUG_ARM))
+    // #define         FEATURE_ENABLE_ARM_ODOMETRY_POSE_ZERO_ENFORCE_SO2       ((DISABLED) & (!USER_VICON_DEBUG_ARM))
+    // #define         FEATURE_ENABLE_ARM_ODOMETRY_POSE_NO_ORIENTATION         (( ENABLED) & (!USER_VICON_DEBUG_ARM))
     //                  - enforcing SO2 projection for arm odometry to estimate base from ee
     #define         FEATURE_ENABLE_ARM_ODOMETRY_FACTOR_TO_BASE              ((FLAG_OURS) & ( ENABLED))
     //                  - apply arm odometry factor to base

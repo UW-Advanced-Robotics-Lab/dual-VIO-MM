@@ -404,6 +404,15 @@ void EstimatorManager::processMeasurements_thread()
                                 p = this->arm_prev_data.init_dT_t.block<3,3>(0,0) * p;
                                 R = this->arm_prev_data.init_dT_t.block<3,3>(0,0) * R;
                             }
+                            // rebase wrt VINS now:
+                            if (this->arm_prev_data.init_dT_s_inited)
+                            {
+                                // offset position wrt initial position:
+                                p = this->arm_prev_data.init_dT_s.block<3,1>(0,3) + p;
+                                // correction on orientation:
+                                p = this->arm_prev_data.init_dT_s.block<3,3>(0,0) * p;
+                                R = this->arm_prev_data.init_dT_s.block<3,3>(0,0) * R;
+                            }
 #   endif // (FEATURE_ZERO_VICON_WRT_VINS)
                             // to quaternion:
                             q = Lie::Qd(R);
@@ -631,12 +640,18 @@ void EstimatorManager::_postProcessArmJnts_unsafe(const double t, const Vector7d
         {
             p_c = m_data.last_P[BASE_DEV]; // previous frame
             R_c = m_data.last_R[BASE_DEV]; // previous frame
+
+# if (FEATURE_ENABLE_ARM_ODOMETRY_EE_TO_BASE_ENFORCE_SE2)
+            // correct T_c
+            T_c = Lie::SE3_from_SO3xR3(((R_c * R_corr_c2w)), p_c);
+            // ensure its plannar motion only, to minimize the effect of pitch/roll:
+            double yaw = Utility::R2y_rad(T_c.block<3,3>(0,0)); // to world
+            T_c.block<3,3>(0,0) = Utility::y2R_rad(yaw) * R_corr_w2r; // camera axis
+            T_c(2,3) = 0;
+# else
             // convert frame axis -(R_corr_c2w)-> world frame axis -(R_corr_w2r)-> robot frame axis:
             T_c = Lie::SE3_from_SO3xR3(((R_c * R_corr_c2w) * R_corr_w2r), p_c);// a coordinate transformation is needed
-            // // ensure its plannar motion only, to minimize the effect of pitch/roll:
-            // double yaw = Utility::R2y_rad(T_c.block<3,3>(0,0));
-            // T_c.block<3,3>(0,0) = Utility::y2R_rad(yaw);
-            // T_c(2,3) = 0; // z = 0
+# endif // (FEATURE_ENABLE_ARM_ODOMETRY_EE_TO_BASE_ENFORCE_SE2)
         }
         else
         {
@@ -673,7 +688,8 @@ void EstimatorManager::_postProcessArmJnts_unsafe(const double t, const Vector7d
 
         }
 
-# if (FEATURE_ENABLE_ARM_ODOMETRY_EE_TO_BASE_ENFORCE_SE2 || HACK_ON)
+# if (FEATURE_ENABLE_ARM_ODOMETRY_EE_TO_BASE_ENFORCE_SE2)
+        // correct T_b2
         {
             // for base, project to SO2: due to arm kinematics parameterization inaccuracies, and 
             //      EE estimation inaccuracies, we will have a config that is non-ideal
@@ -684,6 +700,7 @@ void EstimatorManager::_postProcessArmJnts_unsafe(const double t, const Vector7d
             T_b2 = T_b2 * T_corr_w2c; // camera axis
         }
 # endif //(FEATURE_ENABLE_ARM_ODOMETRY_EE_TO_BASE_ENFORCE_SO2)
+
 #   if ((FEATURE_ENABLE_ARM_ODOMETRY_WRT_TO_BASE))
         //Nope:
         this->arm_prev_data.arm_pose_ts_inited = true;
@@ -701,7 +718,7 @@ void EstimatorManager::_postProcessArmJnts_unsafe(const double t, const Vector7d
                     /// TODO: I should find offset against the default camera pose : T_e x T_vins (against current vins pose)
                     PRINT_INFO("> Arm st 0 inited with VINS alignment!");
                     this->arm_prev_data.arm_pose_st_inited = true;
-                    this->arm_prev_data.arm_pose_st_0 = Lie::SE3_from_SO3xR3(R_c2, p_c2); // T_e2 @ world/cam_EE
+                    this->arm_prev_data.arm_pose_st_0 = T_e2 * T_corr_r2w; // T_e2 @ world/cam_EE
 
 #   if (FEATURE_ZERO_VICON_WRT_VINS)
                     // compute the delta of current Rp_vicon wrt Rp_vicon_0
@@ -746,32 +763,49 @@ void EstimatorManager::_postProcessArmJnts_unsafe(const double t, const Vector7d
         {
             if (if_estimator_ready[EE_DEV]) 
             {
-#if (FEATURE_ENABLE_VICON_SUPPORT & FEATURE_ENABLE_VICON_FOR_ARM_INITIALIZEION)
+#if (ZEROING_WRT_TO_VINS)
+                if (if_estimator_ready[BASE_DEV]) 
+                {
+                    /// TODO: I should find offset against the default camera pose : T_e x T_vins (against current vins pose)
+                    PRINT_INFO("> Arm st 0 inited with VINS alignment!");
+                    this->arm_prev_data.arm_pose_ts_inited = true;
+
+#   if (FEATURE_ZERO_VICON_WRT_VINS)
+                    // compute the delta of current Rp_vicon wrt Rp_vicon_0
+                    this->arm_prev_data.init_dT_s = T_c * T_corr_r2w * Lie::inverse_SO3xR3(this->m_vicon[BASE_DEV].prev_R0, this->m_vicon[BASE_DEV].prev_P0);
+                    this->arm_prev_data.init_dT_s_inited = true;
+#   endif // (FEATURE_ZERO_VICON_WRT_VINS)
+
+                    this->arm_prev_data.arm_pose_ts_0 = T_c * T_corr_r2c * Lie::inverse_SE3(T_b2); // cam_base
+                }
+#else
+    #if (FEATURE_ENABLE_VICON_SUPPORT & FEATURE_ENABLE_VICON_FOR_ARM_INITIALIZEION)
                 if (this->m_vicon[BASE_DEV].started)
                 {
-                    R_c2 = this->m_vicon[BASE_DEV].R0.transpose();
-                    p_c2 = R_c2 * (this->m_vicon[BASE_DEV].prev_P0 - this->m_vicon[BASE_DEV].P0);
-                    R_c2 = R_c2 * this->m_vicon[BASE_DEV].prev_R0;
-                    this->arm_prev_data.init_dT_s = Lie::SE3_from_SO3xR3(R_c2, p_c2);
-                    this->arm_prev_data.init_dT_t_inited = true;
+                    R_c = this->m_vicon[BASE_DEV].R0.transpose();
+                    p_c = R_c * (this->m_vicon[BASE_DEV].prev_P0 - this->m_vicon[BASE_DEV].P0);
+                    R_c = R_c * this->m_vicon[BASE_DEV].prev_R0;
+                    this->arm_prev_data.init_dT_s = Lie::SE3_from_SO3xR3(R_c, p_c);
+                    this->arm_prev_data.init_dT_s_inited = true;
                     PRINT_INFO("> Arm ts 0 inited with Vicon alignment!");
                     this->arm_prev_data.arm_pose_ts_inited = true;
                     this->arm_prev_data.arm_pose_ts_0 = this->arm_prev_data.init_dT_s * T_corr_w2c * Lie::inverse_SE3(T_b2); // cam_base
                 }
                 else
-#endif //(FEATURE_ENABLE_VICON_SUPPORT)
+    #endif //(FEATURE_ENABLE_VICON_SUPPORT)
                 { 
                     PRINT_ERROR("> Arm ts 0 inited without Vicon!");
                     this->arm_prev_data.arm_pose_ts_inited = true;
                     this->arm_prev_data.arm_pose_ts_0 = T_corr_w2c * Lie::inverse_SE3(T_b2); // cam_base
                 }
+#   endif //  (!FEATURE_ENABLE_ARM_ODOMETRY_WRT_TO_BASE) 
+#endif 
             }
             else
             {
                 PRINT_ERROR("> Arm ts 0 NOT inited !");
             }
         }
-#   endif //  (!FEATURE_ENABLE_ARM_ODOMETRY_WRT_TO_BASE) 
         
         this->arm_prev_data.arm_pose_header = arm_prev_data.t_header;
 
@@ -794,6 +828,14 @@ void EstimatorManager::_postProcessArmJnts_unsafe(const double t, const Vector7d
         {
             // apply:
             T_b2 = this->arm_prev_data.arm_pose_ts_0 * T_b2; 
+// # if (FEATURE_ENABLE_ARM_ODOMETRY_EE_TO_BASE_ENFORCE_SE2)
+//             // correct T_c;
+//             // ensure its plannar motion only, to minimize the effect of pitch/roll:
+//             double yaw = Utility::R2y_rad(T_b2.block<3,3>(0,0) * R_corr_c2w); // to world
+//             T_b2.block<3,3>(0,0) = Utility::y2R_rad(yaw); 
+//             T_b2(2,3) = 0;
+//             T_b2 = T_b2 * T_corr_w2c; // camera axis
+// # endif
             this->arm_prev_data.arm_pose_ts = T_b2;
         }
 
