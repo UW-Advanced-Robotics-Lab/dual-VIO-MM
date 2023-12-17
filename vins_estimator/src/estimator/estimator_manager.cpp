@@ -668,7 +668,7 @@ void EstimatorManager::_postProcessArmJnts_unsafe(const double t, const Vector7d
             T_c2 = Lie::SE3_from_SO3xR3(R_corr_w2r, Lie::R3::Zero());
         }
 #   endif // (!FEATURE_ENABLE_ARM_VICON_SUPPORT)
-        
+
         /* 2. Apply Arm Pose */
         /* BASE --> EE */
         {
@@ -733,6 +733,9 @@ void EstimatorManager::_postProcessArmJnts_unsafe(const double t, const Vector7d
 #   endif // (FEATURE_ZERO_VICON_WRT_VINS)
 
                     this->arm_prev_data.arm_pose_st_0 = this->arm_prev_data.arm_pose_st_0 * Lie::inverse_SE3(T_e); // world/cam_EE
+#   if (!FEATURE_ENABLE_ARM_CORRECTION_ORIENT) // do not apply orientation correction
+                    this->arm_prev_data.arm_pose_st_0.block<3,3>(0,0) = Lie::SO3::Identity();
+#   endif //(!FEATURE_ENABLE_ARM_CORRECTION_ORIENT)
                 }
 #else
     #if (FEATURE_ENABLE_VICON_SUPPORT & FEATURE_ENABLE_VICON_FOR_ARM_INITIALIZEION)
@@ -783,6 +786,9 @@ void EstimatorManager::_postProcessArmJnts_unsafe(const double t, const Vector7d
 #   endif // (FEATURE_ZERO_VICON_WRT_VINS)
 
                     this->arm_prev_data.arm_pose_ts_0 = T_c * T_corr_r2c * Lie::inverse_SE3(T_b2); // cam_base
+#   if (!FEATURE_ENABLE_ARM_CORRECTION_ORIENT) // do not apply orientation correction
+                    this->arm_prev_data.arm_pose_ts_0.block<3,3>(0,0) = Lie::SO3::Identity();
+#   endif //(!FEATURE_ENABLE_ARM_CORRECTION_ORIENT)
                 }
 #else
     #if (FEATURE_ENABLE_VICON_SUPPORT & FEATURE_ENABLE_VICON_FOR_ARM_INITIALIZEION)

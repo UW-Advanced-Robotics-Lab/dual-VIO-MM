@@ -107,12 +107,13 @@ using namespace std;
 // ----------------------------------------------------------------
 // IMPORTANT GROUP MODE SELECTION FOR EVAL:
 #define USER_PARAMS                 (IMPLEMENTED) // indicates as USER_PARAMS, do not disable
-#define FLAG_OURS                            ((USER_PARAMS) & ( ENABLED)) // To toggle between our tightly-coupled solution vs baseline
+#define FLAG_OURS                            ((USER_PARAMS) & (DISABLED)) // To toggle between our tightly-coupled solution vs baseline
 // Sub items:
 #define ZEROING_WRT_TO_BASE                  ((USER_PARAMS) & (DISABLED)) // enable tp debug raw odometry offset from base
 #define USER_VICON_DEBUG_ARM                 ((USER_PARAMS) & (DISABLED)) // enable to debug arm config (TODO: the BASE->EE seems not working?)
 #define ZEROING_WRT_TO_VINS                  ((USER_PARAMS) & (ALWAYS_ON)) // [ON PLZ] instead align against vins
 #define ZEROING_WRT_TO_VICON                 (!ZEROING_WRT_TO_VINS) // enable to align against initial vicon frame position
+#define ZEROING_ORIENTATION_AGAINST_VINS     (ALWAYS_OFF) 
 
 // MAJOR DEPLOYMENT VERSION:
 #define FEATURE_MODE_RUNTIME                 (DISABLED) // enable: to disable unnecessary features
@@ -179,7 +180,7 @@ using namespace std;
     // vicon support:
     #define FEATURE_ENABLE_VICON_SUPPORT                                    (( ENABLED) || (USER_VICON_DEBUG_ARM)) // to feed vicon data and output as nav_msg::path for visualization
     #   define FEATURE_ZERO_VICON_WRT_VINS                                      ( ENABLED)
-    #   define FEATURE_ZERO_VICON_WRT_VINS_POSE                                 ( ENABLED)
+    #   define FEATURE_ZERO_VICON_WRT_VINS_POSE                                 (ZEROING_ORIENTATION_AGAINST_VINS)
     #   define FEATURE_ENABLE_VICON_FOR_ARM_INITIALIZEION                       (ZEROING_WRT_TO_VICON) // to align vins against vicon 
     #   define FEATURE_ENABLE_VICON_ZEROING_SUPPORT                             ( ENABLED) // zeroing vicons independently
     #       define FEATURE_ENABLE_VICON_ZEROING_WRT_BASE_SUPPORT                (ZEROING_WRT_TO_BASE) // zeroing vicons wrt base
@@ -206,6 +207,7 @@ using namespace std;
     //                  - apply arm odometry to estimate base from ee
     #define         FEATURE_ENABLE_ARM_ODOMETRY_EE_TO_BASE_ENFORCE_SE2      ((ALWAYS_ON) & (!USER_VICON_DEBUG_ARM))
     #define         FEATURE_ENABLE_EE_CORRECTION_BEFORE_ARM_ODOMETRY        ((DISABLED))
+    #define         FEATURE_ENABLE_ARM_CORRECTION_ORIENT                    (ZEROING_ORIENTATION_AGAINST_VINS)
     // #define         FEATURE_ENABLE_ARM_ODOMETRY_POSE_ZERO_ENFORCE_SO2       ((DISABLED) & (!USER_VICON_DEBUG_ARM))
     // #define         FEATURE_ENABLE_ARM_ODOMETRY_POSE_NO_ORIENTATION         (( ENABLED) & (!USER_VICON_DEBUG_ARM))
     //                  - enforcing SO2 projection for arm odometry to estimate base from ee
