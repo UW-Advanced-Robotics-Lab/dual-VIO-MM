@@ -349,7 +349,7 @@ void EstimatorManager::processMeasurements_thread()
                                 // PRINT_DEBUG("dR0 = \n%s", Lie::to_string(m_vicon[BASE_DEV].dR0).c_str());
                                 // PRINT_DEBUG("dP0 = %s", Lie::to_string(m_vicon[BASE_DEV].dP0).c_str());
                             }    
-#   else  //TODO? - not tested yet, moved from viz.cpp on  2023 dec 14
+#   else 
                             if ((!this->m_vicon[id].started)) 
                             {
                                 R = q.toRotationMatrix();

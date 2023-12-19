@@ -187,7 +187,7 @@ using namespace std;
     #       define FEATURE_ENABLE_VICON_ZEROING_ENFORCE_SO2                     ( ENABLED) // enforcing SO2 to R
     // initialize vicon after sfm:
     //     - disable in ZEROING_WRT_TO_BASE: as we are basing vicon wrt base only
-    #       define FEATURE_ENABLE_VICON_ZEROING_ORIENTATION_WRT_BASE_SUPPORT    (FEATURE_ENABLE_VICON_ONLY_AFTER_INIT_BOTH_SFM)
+    #       define FEATURE_ENABLE_VICON_ZEROING_ORIENTATION_WRT_BASE_SUPPORT    (ALWAYS_OFF)
     // TODO: we should try to initialize when one is not inited/ stationary
 
     // arm odometry support:
