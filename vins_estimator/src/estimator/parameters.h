@@ -107,7 +107,7 @@ using namespace std;
 // ----------------------------------------------------------------
 // IMPORTANT GROUP MODE SELECTION FOR EVAL:
 #define USER_PARAMS                 (IMPLEMENTED) // indicates as USER_PARAMS, do not disable
-#define FLAG_OURS                            ((USER_PARAMS) & (DISABLED)) // To toggle between our tightly-coupled solution vs baseline
+#define FLAG_OURS                            ((USER_PARAMS) & ( ENABLED)) // To toggle between our tightly-coupled solution vs baseline
 // Sub items:
 #define ZEROING_WRT_TO_BASE                  ((USER_PARAMS) & (DISABLED)) // enable tp debug raw odometry offset from base
 #define USER_VICON_DEBUG_ARM                 ((USER_PARAMS) & (DISABLED)) // enable to debug arm config (TODO: the BASE->EE seems not working?)
