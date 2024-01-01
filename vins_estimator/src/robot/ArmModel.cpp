@@ -111,7 +111,19 @@ ArmModel::~ArmModel()
     
 }
 
-#if 1 // [Dec 13 2023, 1213]
+#if 1 // [Dec 21 2023, 1221]
+// TODO: we may make the config file for the arm model
+const Lie::SE3 T0_summit = Lie::SE3::Identity();
+// -> robot frame:
+const Lie::R3 summit_dP_wam = Lie::R3(0.141983,0,0.748879);       // vicon : vins-research-pkg/research-project/analysis/camera_report.py
+const Lie::R3 summit_dP_cam_base = Lie::R3(0.330148,0.0,0.392077);  // vicon : vins-research-pkg/research-project/analysis/camera_report.py
+#if (FEATURE_ENABLE_CAMERA_TOOL_TIPS)
+const Lie::R3 wam_dP_cam_ee = Lie::R3(0,0,0);
+#else
+const Lie::R3 wam_dP_cam_ee = Lie::R3(-0.106302,0,0.006038);   // vicon : vins-research-pkg/research-project/analysis/camera_report.py
+// const Lie::R3 wam_dP_cam_ee = Lie::R3(-0.106302,0,0.014592);   // vicon : vins-research-pkg/research-project/analysis/camera_report.py
+#endif //(FEATURE_ENABLE_CAMERA_TOOL_TIPS)
+#elif 1 // [Dec 13 2023, 1213]
 // TODO: we may make the config file for the arm model
 const Lie::SE3 T0_summit = Lie::SE3::Identity();
 // -> robot frame:
