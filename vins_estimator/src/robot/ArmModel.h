@@ -15,9 +15,13 @@
 #define ARM_NUM_DOF         (7U)
 #define ARM_NUM_LINKS       (ARM_NUM_DOF + 1U + FEATURE_ENABLE_CAMERA_TOOL_TIPS)
 
+#define FEATUER_USE_ARM_MODEL_ON_DEC_1221_2023  (0U)
+#define FEATUER_USE_ARM_MODEL_ON_DEC_1213_2023  (1U) // <--- [Submission]
+#define FEATUER_USE_ARM_MODEL_ON_DEC_1207_2023  (1U)
+
 // --- Configuration:
 // #define ARM_MODEL_CONFIG_L_SHOULDER          ((double)(0.346))
-#if 1 // [Dec  2023, 1213]
+#if (FEATUER_USE_ARM_MODEL_ON_DEC_1221_2023 || FEATUER_USE_ARM_MODEL_ON_DEC_1213_2023) // [Dec  2023, 1213]
 #define ARM_MODEL_CONFIG_L_ELBOW             ((double)(0.300))
 #define ARM_MODEL_CONFIG_L_WRIST             ((double)(0.0609))
 #define ARM_MODEL_CONFIG_W_ELBOW_JNT         ((double)(0.045))

@@ -85,6 +85,7 @@ const link_t ARM_LINKS[ARM_NUM_LINKS] = {
         .tip_frame_ub = 0,
     },
 #if (FEATURE_ENABLE_CAMERA_TOOL_TIPS)
+#   if (FEATUER_USE_ARM_MODEL_ON_DEC_1221_2023)
     { // F8-->F9
         .name = "camera_EE",
         // .tip_frame_Tq = Lie::R3(-0.185091,0,0.052259),
@@ -94,6 +95,25 @@ const link_t ARM_LINKS[ARM_NUM_LINKS] = {
         .tip_frame_lb = 0,
         .tip_frame_ub = 0,
     },
+#   elif (FEATUER_USE_ARM_MODEL_ON_DEC_1213_2023)
+    { // F8-->F9
+        .name = "camera_EE",
+        .tip_frame_Tq = Lie::R3(-0.105301,0,0.026472), // z - ARM_MODEL_CONFIG_L_WRIST
+        .tip_frame_Tw = Lie::R3(0,0,1),
+        .tip_frame_Tt = 0, //
+        .tip_frame_lb = 0,
+        .tip_frame_ub = 0,
+    },
+#   else
+    { // F8-->F9
+        .name = "camera_EE",
+        .tip_frame_Tq = Lie::R3(-0.103501,0,-0.01), // z - ARM_MODEL_CONFIG_L_WRIST
+        .tip_frame_Tw = Lie::R3(0,0,1),
+        .tip_frame_Tt = 0, //
+        .tip_frame_lb = 0,
+        .tip_frame_ub = 0,
+    },
+#   endif // (FEATUER_USE_ARM_MODEL_ON_DEC_1221_2023)
 #endif //(FEATURE_ENABLE_CAMERA_TOOL_TIPS)
 };
 
@@ -111,7 +131,7 @@ ArmModel::~ArmModel()
     
 }
 
-#if 1 // [Dec 21 2023, 1221]
+#if (FEATUER_USE_ARM_MODEL_ON_DEC_1221_2023) // [Dec 21 2023, 1221]
 // TODO: we may make the config file for the arm model
 const Lie::SE3 T0_summit         = Lie::SE3::Identity();
 // -> robot frame:
@@ -123,7 +143,7 @@ const Lie::R3 wam_dP_cam_ee = Lie::R3(0,0,0);
 const Lie::R3 wam_dP_cam_ee = Lie::R3(-0.092647,0,0.006);   // vicon : vins-research-pkg/research-project/analysis/camera_report.py
 // const Lie::R3 wam_dP_cam_ee = Lie::R3(-0.106302,0,0.014592);   // vicon : vins-research-pkg/research-project/analysis/camera_report.py
 #endif //(FEATURE_ENABLE_CAMERA_TOOL_TIPS)
-#elif 1 // [Dec 13 2023, 1213]
+#elif (FEATUER_USE_ARM_MODEL_ON_DEC_1213_2023) // [Dec 13 2023, 1213]
 // TODO: we may make the config file for the arm model
 const Lie::SE3 T0_summit = Lie::SE3::Identity();
 // -> robot frame:
@@ -134,7 +154,7 @@ const Lie::R3 wam_dP_cam_ee = Lie::R3(0,0,0);
 #else
 const Lie::R3 wam_dP_cam_ee = Lie::R3(-0.105301,0,0.026472);   // vicon : vins-research-pkg/research-project/analysis/camera_report.py
 #endif //(FEATURE_ENABLE_CAMERA_TOOL_TIPS)
-#elif 1 // [Dec 2023, 1207]
+#elif (FEATUER_USE_ARM_MODEL_ON_DEC_1207_2023) // [Dec 2023, 1207]
 // TODO: we may make the config file for the arm model
 const Lie::SE3 T0_summit = Lie::SE3::Identity();
 // -> robot frame:

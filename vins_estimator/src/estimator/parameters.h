@@ -96,12 +96,22 @@ using namespace std;
 #define IF_NUMERICAL_UNSRABLE(jacob)            (bool)(((jacob).maxCoeff() > (NUMERICAL_UNSTABLE_COEF_THRESHOLD)) || ((jacob).minCoeff() < -(NUMERICAL_UNSTABLE_COEF_THRESHOLD)))
 
 // [Arm] TODO: add to config file: TODO: Time Decay based 
-#define ESTIMATOR_ARM_FACTOR_TO_EE              (double)(250.0) // 100.0
-#define ESTIMATOR_ARM_FACTOR_TO_EE_Q            (double)(100.0) 
-#define ESTIMATOR_ARM_FACTOR_TO_EE_Z            (double)(200.0) // 200.0
-#define ESTIMATOR_ARM_FACTOR_TO_BASE            (double)(30.0)  //  20.0
-#define ESTIMATOR_ARM_FACTOR_TO_BASE_Q          (double)(10.0) 
-#define ESTIMATOR_ARM_FACTOR_TO_BASE_Z          (double)(20.0) // 200.0
+#define FEATUER_USE_ARM_MODEL_ON_DEC_1213_2023  (1U) // <--- [Submission]
+#if (FEATUER_USE_ARM_MODEL_ON_DEC_1213_2023)
+    #define ESTIMATOR_ARM_FACTOR_TO_EE              (double)(250.0) // 100.0
+    #define ESTIMATOR_ARM_FACTOR_TO_EE_Q            (double)(10.0) 
+    #define ESTIMATOR_ARM_FACTOR_TO_EE_Z            (double)(200.0) // 200.0
+    #define ESTIMATOR_ARM_FACTOR_TO_BASE            (double)(10.0)  //  20.0
+    #define ESTIMATOR_ARM_FACTOR_TO_BASE_Q          (double)(10.0) 
+    #define ESTIMATOR_ARM_FACTOR_TO_BASE_Z          (double)(20.0) // 200.0
+#else // [Dev Tuning Settings]:
+    #define ESTIMATOR_ARM_FACTOR_TO_EE              (double)(250.0) // 100.0
+    #define ESTIMATOR_ARM_FACTOR_TO_EE_Q            (double)(100.0) 
+    #define ESTIMATOR_ARM_FACTOR_TO_EE_Z            (double)(200.0) // 200.0
+    #define ESTIMATOR_ARM_FACTOR_TO_BASE            (double)(30.0)  //  20.0
+    #define ESTIMATOR_ARM_FACTOR_TO_BASE_Q          (double)(10.0) 
+    #define ESTIMATOR_ARM_FACTOR_TO_BASE_Z          (double)(20.0) // 200.0
+#endif
 // ----------------------------------------------------------------
 // : Feature Definitions :
 // ----------------------------------------------------------------
