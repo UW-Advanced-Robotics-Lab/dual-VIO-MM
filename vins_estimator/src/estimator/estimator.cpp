@@ -847,7 +847,7 @@ bool Estimator::initialStructure()
         cv::Mat D; // no distortion
         // Initial Guess:
         const bool ININITAL_GUESS = true;
-        // translate  imu body frame --> camera frame
+        // translate camera frame (world) --> camera frame (body)
         Matrix3d R_inital = (Q[i].inverse()).toRotationMatrix();
         Vector3d P_inital = - R_inital * T[i];
         // translate init guess variables:
@@ -864,7 +864,7 @@ bool Estimator::initialStructure()
             PRINT_ERROR("solve pnp fail!");
             return false;
         }
-        // translate  camera frame --> imu body frame
+        // translate  camera frame (body) --> imu body frame (world)
         cv::Rodrigues(rvec, r);
         MatrixXd R_pnp,tmp_R_pnp;
         cv::cv2eigen(r, tmp_R_pnp);
